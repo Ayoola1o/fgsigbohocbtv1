@@ -1,0 +1,5 @@
+
+> faith-immaculate-academy-cbt@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+4:00:10 PM [express] serving on port 5000

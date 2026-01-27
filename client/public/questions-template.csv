@@ -1,0 +1,4 @@
+questionText,questionType,subject,difficulty,options,correctAnswer,points
+"What is 2+2?",multiple-choice,Math,easy,"A|B|C|D",4,1
+"Water's chemical formula?",short-answer,Chemistry,medium,,H2O,2
+"Is the sky blue?",true-false,Science,easy,,true,1
