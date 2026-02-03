@@ -107,6 +107,20 @@ export const deleteQuestion = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, "questions", id));
 };
 
+export const updateQuestion = async (id: string, updates: Partial<Question>): Promise<void> => {
+    const cleanUpdates = cleanData(updates);
+    await updateDoc(doc(db, "questions", id), cleanUpdates);
+};
+
+export const updateQuestionsBulk = async (ids: string[], updates: Partial<Question>): Promise<void> => {
+    const batch = writeBatch(db);
+    const cleanUpdates = cleanData(updates);
+    ids.forEach(id => {
+        batch.update(doc(db, "questions", id), cleanUpdates);
+    });
+    await batch.commit();
+};
+
 export const deleteQuestionsBulk = async (ids: string[]): Promise<void> => {
     const batch = writeBatch(db);
     ids.forEach(id => {
@@ -147,7 +161,11 @@ export const createExam = async (exam: InsertExam): Promise<Exam> => {
 
     if ((!exam.questionIds || exam.questionIds.length === 0) && exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0) {
         const allQuestions = await getQuestions();
-        const pool = allQuestions.filter(q => q.classLevel === exam.classLevel && (!exam.subject || q.subject === exam.subject));
+        const pool = allQuestions.filter(q =>
+            q.classLevel === exam.classLevel &&
+            (!exam.subject || q.subject === exam.subject) &&
+            (!exam.department || q.department === exam.department)
+        );
 
         // Store ALL matching questions in the pool so sessions can pick random subsets
         finalExam.questionIds = pool.map(q => q.id);

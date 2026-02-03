@@ -227,7 +227,7 @@ export default function AdminExamDetails() {
                 <select
                   id="classLevel"
                   value={formData.classLevel}
-                  onChange={e => setFormData({ ...formData, classLevel: e.target.value })}
+                  onChange={e => setFormData({ ...formData, classLevel: e.target.value, department: ["SS1", "SS2", "SS3"].includes(e.target.value) ? formData.department : "" })}
                   className="w-full border rounded-md px-3 py-2 bg-background"
                   required
                 >
@@ -260,6 +260,25 @@ export default function AdminExamDetails() {
                 </select>
               </div>
             </div>
+
+            {["SS1", "SS2", "SS3"].includes(formData.classLevel) && (
+              <div className="space-y-2">
+                <Label htmlFor="department">Department *</Label>
+                <select
+                  id="department"
+                  value={formData.department || ""}
+                  onChange={e => setFormData({ ...formData, department: e.target.value })}
+                  className="w-full border rounded-md px-3 py-2 bg-background"
+                  required
+                >
+                  <option value="">Select Department</option>
+                  <option value="Science">Science</option>
+                  <option value="Commercial">Commercial</option>
+                  <option value="Art">Art</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
+            )}
 
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
@@ -330,8 +349,10 @@ export default function AdminExamDetails() {
                     availableQuestions={questions?.filter(q =>
                       q.examType === "Theory" &&
                       q.classLevel === formData.classLevel &&
-                      q.subject === formData.subject
+                      q.subject === formData.subject &&
+                      (!formData.department || q.department === formData.department)
                     ) || []}
+
                   />
                 </div>
               </div>
@@ -364,6 +385,6 @@ export default function AdminExamDetails() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }

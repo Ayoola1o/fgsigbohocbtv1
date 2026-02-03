@@ -201,47 +201,110 @@ export default function AdminStudentProfile() {
                 </Button>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-none shadow-lg">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-blue-100 flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4" /> PERFORMANCE INDEX
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-4xl font-black">{averageScore}%</div>
-                        <p className="text-xs text-blue-100 mt-1 opacity-80">Cumulative Average Score</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-white shadow-md border-slate-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <FileText className="h-4 w-4" /> TOTAL EXAMS
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-4xl font-black text-slate-800">{studentResults.length}</div>
-                        <p className="text-xs text-muted-foreground mt-1">Exams Completed to Date</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-white shadow-md border-slate-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <GraduationCap className="h-4 w-4" /> ACADEMIC STATUS
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xl font-bold text-slate-800">
-                            {Number(averageScore) >= 50 ? "Satisfactory" : "Needs Improvement"}
+            {/* Premium Profile Header & Stats */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Student Profile Card */}
+                <Card className="lg:col-span-1 shadow-xl border-none overflow-hidden bg-white h-fit">
+                    <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600 relative">
+                        <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2">
+                            <div className="h-20 w-20 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center shadow-md">
+                                <span className="text-2xl font-bold text-slate-400">
+                                    {student.name.charAt(0)}
+                                </span>
+                            </div>
                         </div>
-                        <Badge className={`mt-2 ${Number(averageScore) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} border-none`}>
-                            {student.classLevel} Student
-                        </Badge>
+                    </div>
+                    <CardContent className="pt-12 pb-6 px-6 text-center space-y-4">
+                        <div>
+                            <h2 className="font-bold text-xl text-slate-800">{student.name}</h2>
+                            <p className="text-sm text-muted-foreground font-medium">{student.studentId}</p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Class</span>
+                                <Badge variant="outline" className="font-bold">{student.classLevel}</Badge>
+                            </div>
+                            {student.department && (
+                                <div className="flex justify-between items-center py-1">
+                                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Department</span>
+                                    <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
+                                        {student.department}
+                                    </Badge>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center py-1">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</span>
+                                <Badge className={Number(averageScore) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                                    {Number(averageScore) >= 50 ? "Active" : "Probation"}
+                                </Badge>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
+
+                {/* Stats Grid */}
+                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none shadow-lg relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <TrendingUp className="h-24 w-24" />
+                        </div>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-indigo-100 flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4" /> PERFORMANCE INDEX
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-5xl font-black tracking-tight">{averageScore}%</div>
+                            <p className="text-sm text-indigo-100 mt-2 font-medium opacity-90">Cumulative Average</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-white shadow-md border-slate-200 group hover:border-blue-300 transition-colors">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold text-slate-500 flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-blue-500" /> EXAMS TAKEN
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-4xl font-black text-slate-800">{studentResults.length}</div>
+                            <p className="text-xs text-muted-foreground mt-1">Total Completed Assessments</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-white shadow-md border-slate-200 group hover:border-green-300 transition-colors">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold text-slate-500 flex items-center gap-2">
+                                <GraduationCap className="h-4 w-4 text-green-500" /> ACADEMIC STANDING
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-slate-800">
+                                {Number(averageScore) >= 75 ? "Excellent" : Number(averageScore) >= 50 ? "Good" : "Weak"}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">Based on current performance</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Additional Quick Stats Row if needed, or leave empty space */}
+                    <Card className="md:col-span-3 bg-slate-50 border-slate-200 shadow-inner">
+                        <CardContent className="p-6 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-white rounded-full shadow-sm">
+                                    <Eye className="h-6 w-6 text-slate-400" />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-slate-700">Quick Actions</p>
+                                    <p className="text-xs text-muted-foreground">Manage this student's records</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" className="bg-white">Edit Details</Button>
+                                <Button variant="outline" size="sm" className="bg-white text-red-600 hover:bg-red-50 hover:text-red-700 border-red-100">Reset Password</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
             {/* History Table */}

@@ -69,8 +69,14 @@ export async function apiRequest<T = unknown>(
     return fb.getQuestionsByIds(data.ids) as T;
   }
   let match = matchPath("/api/questions/:id", url);
+  if (match && method === "PATCH") {
+    return fb.updateQuestion(match.id, data) as T;
+  }
   if (match && method === "DELETE") {
     return fb.deleteQuestion(match.id) as T;
+  }
+  if (method === "PATCH" && url === "/api/questions/bulk") {
+    return fb.updateQuestionsBulk(data.ids, data.updates) as T;
   }
 
   // Exams

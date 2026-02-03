@@ -38,10 +38,12 @@ export default function AdminResults() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterExamId, setFilterExamId] = useState<string>("ALL");
   const [filterClassLevel, setFilterClassLevel] = useState<string>("ALL");
+  const [filterDepartment, setFilterDepartment] = useState<string>("ALL");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
   });
+
 
   const { data: results, isLoading: resultsLoading, error: resultsError } = useQuery<Result[]>({
     queryKey: ["/api/results"],
@@ -73,14 +75,17 @@ export default function AdminResults() {
 
       const student = students?.find(s => s.studentId === result.studentId);
       const classLevelMatch = filterClassLevel === "ALL" || student?.classLevel === filterClassLevel;
+      const departmentMatch = filterDepartment === "ALL" || student?.department === filterDepartment;
+
 
       const completedDate = new Date(result.completedAt);
       const dateMatch = (!dateRange.from || completedDate >= dateRange.from) &&
         (!dateRange.to || completedDate <= dateRange.to);
 
-      return examMatch && searchMatch && classLevelMatch && dateMatch;
+      return examMatch && searchMatch && classLevelMatch && departmentMatch && dateMatch;
     }
   );
+
 
   const getExamTitle = (examId: string) => {
     return exams?.find((e) => e.id === examId)?.title || "Unknown Exam";
@@ -589,6 +594,24 @@ export default function AdminResults() {
                   </Select>
                 </div>
 
+                {/* Department Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Department</label>
+                  <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Departments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Departments</SelectItem>
+                      <SelectItem value="Science">Science</SelectItem>
+                      <SelectItem value="Commercial">Commercial</SelectItem>
+                      <SelectItem value="Art">Art</SelectItem>
+                      <SelectItem value="Others">Others</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+
                 {/* Date Range Picker */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Date Range</label>
@@ -635,8 +658,12 @@ export default function AdminResults() {
                   <Button variant="ghost" size="sm" onClick={() => {
                     setSearchQuery("");
                     setFilterExamId("ALL");
+                    setSearchQuery("");
+                    setFilterExamId("ALL");
                     setFilterClassLevel("ALL");
+                    setFilterDepartment("ALL");
                     setDateRange({ from: undefined, to: undefined });
+
                   }}>
                     Reset Filters
                   </Button>
@@ -678,7 +705,7 @@ export default function AdminResults() {
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="w-12 print:hidden">
+                  <TableHead className="font-bold print:hidden w-10">
                     <input
                       type="checkbox"
                       checked={filteredResults.length > 0 && Array.from(selectedResultIds).length === filteredResults.length}
@@ -686,15 +713,16 @@ export default function AdminResults() {
                       className="h-4 w-4 rounded border-gray-300"
                     />
                   </TableHead>
-                  <TableHead className="font-bold">Student</TableHead>
-                  <TableHead className="font-bold">Class</TableHead>
-                  <TableHead className="font-bold">Exam</TableHead>
-                  <TableHead className="font-bold print:hidden">Score</TableHead>
+                  <TableHead className="font-bold max-w-[150px]">Student</TableHead>
+                  <TableHead className="font-bold">Cls</TableHead>
+                  <TableHead className="font-bold">Dept</TableHead>
+                  <TableHead className="font-bold max-w-[120px]">Exam</TableHead>
+                  <TableHead className="font-bold print:hidden">Scr</TableHead>
                   <TableHead className="font-bold hidden print:table-cell">Score (%)</TableHead>
-                  <TableHead className="font-bold print:hidden">Percentage</TableHead>
-                  <TableHead className="font-bold print:hidden">Status</TableHead>
-                  <TableHead className="font-bold print:hidden">Submitted</TableHead>
-                  <TableHead className="font-bold text-right print:hidden">Completed</TableHead>
+                  <TableHead className="font-bold print:hidden">%</TableHead>
+                  <TableHead className="font-bold print:hidden">Sts</TableHead>
+                  <TableHead className="font-bold hidden xl:table-cell print:hidden">Submitted</TableHead>
+                  <TableHead className="font-bold text-right hidden lg:table-cell print:hidden">Completed</TableHead>
                   <TableHead className="text-right print:hidden">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -717,21 +745,22 @@ export default function AdminResults() {
                             className="h-4 w-4 rounded border-gray-300"
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="max-w-[150px]">
                           <div
                             className="cursor-pointer"
                             onClick={() => setLocation(`/ admin / results / student / ${result.studentId}`)}
                           >
-                            <p className="font-semibold text-primary hover:underline transition-all">
+                            <p className="font-semibold text-primary hover:underline transition-all truncate" title={result.studentName}>
                               {result.studentName}
                             </p>
-                            <p className="text-xs text-muted-foreground font-mono">
+                            <p className="text-xs text-muted-foreground font-mono truncate">
                               {result.studentId}
                             </p>
                           </div>
                         </TableCell>
                         <TableCell className="font-medium text-muted-foreground">{student?.classLevel || '-'}</TableCell>
-                        <TableCell className="font-medium">{getExamTitle(result.examId)}</TableCell>
+                        <TableCell className="font-medium text-muted-foreground">{student?.department || '-'}</TableCell>
+                        <TableCell className="font-medium max-w-[120px] truncate" title={getExamTitle(result.examId)}>{getExamTitle(result.examId)}</TableCell>
 
                         {/* Score Column: Visible on Screen, Hidden on Print */}
                         <TableCell className="print:hidden">
@@ -767,7 +796,7 @@ export default function AdminResults() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="print:hidden">
+                        <TableCell className="print:hidden hidden xl:table-cell">
                           <Badge
                             variant="outline"
                             className={cn(
@@ -780,7 +809,7 @@ export default function AdminResults() {
                             {result.submissionType === 'student' ? 'Submitted' : 'Not Submitted'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right print:hidden">
+                        <TableCell className="text-right print:hidden hidden lg:table-cell">
                           <div className="text-sm">
                             <p className="font-medium">{format(new Date(result.completedAt), "dd MMM yyyy")}</p>
                             <p className="text-xs text-muted-foreground">

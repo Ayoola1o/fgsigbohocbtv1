@@ -32,13 +32,15 @@ import {
 } from "@/lib/api";
 
 export default function AdminStudents() {
-  const [studentsList, setStudentsList] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null }[]>([]);
+  const [studentsList, setStudentsList] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null }[]>([]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
   // Edit state
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null } | null>(null);
+  const [editingStudent, setEditingStudent] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null } | null>(null);
+
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string | null, name: string }>({ open: false, id: null, name: "" });
 
@@ -77,8 +79,10 @@ export default function AdminStudents() {
         studentId: editingStudent.studentId,
         // @ts-ignore
         classLevel: editingStudent.classLevel,
-        sex: editingStudent.sex
+        sex: editingStudent.sex,
+        department: editingStudent.department
       });
+
       setIsEditOpen(false);
       setEditingStudent(null);
       fetchStudents();
@@ -148,7 +152,18 @@ export default function AdminStudents() {
                 </select>
               </div>
               <div>
+                <label className="mb-1 block text-sm font-medium">Department (SSS Only)</label>
+                <select id="student-department" className="border rounded px-2 py-1 w-full">
+                  <option value="">Select</option>
+                  <option value="Science">Science</option>
+                  <option value="Commercial">Commercial</option>
+                  <option value="Art">Art</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
+              <div>
                 <label className="mb-1 block text-sm font-medium">Sex</label>
+
                 <select id="student-sex" className="border rounded px-2 py-1 w-full">
                   <option value="">Select</option>
                   <option value="M">M</option>
@@ -164,21 +179,26 @@ export default function AdminStudents() {
                   const idEl = document.getElementById("student-id") as HTMLInputElement | null;
                   const classLevelEl = document.getElementById("student-class-level") as HTMLSelectElement | null;
                   const sexEl = document.getElementById("student-sex") as HTMLSelectElement | null;
+                  const departmentEl = document.getElementById("student-department") as HTMLSelectElement | null;
                   const name = nameEl?.value?.trim();
                   const studentId = idEl?.value?.trim();
                   const classLevel = classLevelEl?.value || "";
                   const sex = sexEl?.value || "";
-                  if (!name || !studentId || !classLevel || !sex) {
+                  const department = departmentEl?.value || "";
+
+                  const isSSS = ["SS1", "SS2", "SS3"].includes(classLevel);
+                  if (!name || !studentId || !classLevel || !sex || (isSSS && !department)) {
                     toast({
                       title: "Missing Fields",
-                      description: "Please provide name, student id, class level, and sex",
+                      description: `Please provide name, student id, class level, sex${isSSS ? ", and department" : ""}`,
                       variant: "destructive"
                     });
                     return;
                   }
 
                   try {
-                    await addStudent({ name, studentId, classLevel, sex });
+                    await addStudent({ name, studentId, classLevel, sex, department });
+
                     toast({
                       title: "Student Added",
                       description: `${name} has been successfully added.`,
@@ -187,7 +207,9 @@ export default function AdminStudents() {
                     if (idEl) idEl.value = "";
                     if (classLevelEl) classLevelEl.value = "";
                     if (sexEl) sexEl.value = "";
+                    if (departmentEl) departmentEl.value = "";
                     fetchStudents();
+
                   } catch (e: any) {
                     console.error(e);
                     alert(e.message || "Failed to add student");
@@ -215,8 +237,9 @@ export default function AdminStudents() {
                       if (parts.length < 4) continue;
                       // skip header if it looks like header
                       if (i === 0 && /name/i.test(parts[0]) && /student/i.test(parts[1]) && /class/i.test(parts[2]) && /sex/i.test(parts[3])) continue;
-                      rows.push({ name: parts[0], studentId: parts[1], classLevel: parts[2], sex: parts[3] });
+                      rows.push({ name: parts[0], studentId: parts[1], classLevel: parts[2], sex: parts[3], department: parts[4] || "" });
                     }
+
                     if (rows.length === 0) {
                       alert("No valid rows found in CSV");
                       return;
@@ -250,8 +273,9 @@ export default function AdminStudents() {
                 variant="outline"
                 onClick={() => {
                   // Download CSV template
-                  const csvContent = 'name,studentId,classLevel,sex\nJohn Doe,student-001,JSS1,M\nJane Smith,student-002,SS2,F';
+                  const csvContent = 'name,studentId,classLevel,sex,department\nJohn Doe,student-001,JSS1,M,\nJane Smith,student-002,SS2,F,Science';
                   const blob = new Blob([csvContent], { type: 'text/csv' });
+
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
@@ -267,9 +291,10 @@ export default function AdminStudents() {
                 variant="outline"
                 onClick={() => {
                   // Export all students as CSV
-                  const header = 'name,studentId,classLevel,sex';
-                  const rows = studentsList.map(s => `${s.name},${s.studentId},${s.classLevel || ""},${s.sex || ""}`).join('\n');
+                  const header = 'name,studentId,classLevel,sex,department';
+                  const rows = studentsList.map(s => `${s.name},${s.studentId},${s.classLevel || ""},${s.sex || ""},${s.department || ""}`).join('\n');
                   const csvContent = `${header}\n${rows}`;
+
                   const blob = new Blob([csvContent], { type: 'text/csv' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -306,8 +331,9 @@ export default function AdminStudents() {
                     <tr className="text-left text-sm text-muted-foreground">
                       <th className="p-2">Name</th>
                       <th className="p-2">Student ID</th>
-                      <th className="p-2">Class Level</th>
+                      <th className="p-2">Class Level / Dept</th>
                       <th className="p-2">Sex</th>
+
                       <th className="p-2">Actions</th>
                     </tr>
                   </thead>
@@ -316,8 +342,12 @@ export default function AdminStudents() {
                       <tr key={s.id} className="border-t">
                         <td className="p-2">{s.name}</td>
                         <td className="p-2">{s.studentId}</td>
-                        <td className="p-2">{s.classLevel || "-"}</td>
+                        <td className="p-2 text-sm">
+                          <div>{s.classLevel || "-"}</div>
+                          {s.department && <div className="text-xs text-muted-foreground font-semibold">{s.department}</div>}
+                        </td>
                         <td className="p-2">{s.sex || "-"}</td>
+
                         <td className="p-2">
                           <Button
                             size="sm"
@@ -349,8 +379,10 @@ export default function AdminStudents() {
                                     <p><strong>Name:</strong> {s.name}</p>
                                     <p><strong>ID:</strong> {s.studentId}</p>
                                     <p><strong>Class:</strong> {s.classLevel || "-"}</p>
+                                    {s.department && <p><strong>Department:</strong> {s.department}</p>}
                                     <p><strong>Sex:</strong> {s.sex || "-"}</p>
                                   </div>
+
                                 ),
                               });
                             }}
@@ -431,8 +463,26 @@ export default function AdminStudents() {
                   <option value="GCE NECO">GCE NECO</option>
                 </select>
               </div>
+              {["SS1", "SS2", "SS3"].includes(editingStudent.classLevel || "") && (
+                <div>
+                  <Label htmlFor="edit-department">Department</Label>
+                  <select
+                    id="edit-department"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={editingStudent.department || ""}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, department: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="Science">Science</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Art">Art</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <Label htmlFor="edit-sex">Sex</Label>
+
                 <select
                   id="edit-sex"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

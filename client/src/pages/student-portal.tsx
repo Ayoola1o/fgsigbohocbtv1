@@ -82,7 +82,13 @@ export default function StudentPortal() {
           ) : exams && exams.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {exams
-                .filter((exam) => exam.isActive)
+                .filter((exam) => {
+                  if (!exam.isActive) return false;
+                  // If exam is general (no department), allow it
+                  if (!exam.department) return true;
+                  // If exam is specific to a department, student must match it
+                  return exam.department === student.department;
+                })
                 .map((exam) => (
                   <Card
                     key={exam.id}

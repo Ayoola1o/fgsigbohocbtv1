@@ -12,8 +12,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { CheckCircle, XCircle, Award, TrendingUp } from "lucide-react";
-import type { Result, Question, Exam } from "@shared/schema";
-import { getResult, getExam, getQuestionsByIds } from "@/lib/firebase-api";
+import type { Result, Question, Exam, Student } from "@shared/schema";
+import { getResult, getExam, getQuestionsByIds, getStudents } from "@/lib/firebase-api";
+
 
 export default function ExamResult() {
   const params = useParams<{ resultId: string }>();
@@ -59,6 +60,13 @@ export default function ExamResult() {
     },
     enabled: !!result,
   });
+
+  const { data: students } = useQuery<Student[]>({
+    queryKey: ["/api/students"],
+    queryFn: getStudents,
+  });
+
+  const student = students?.find(s => s.studentId === result?.studentId);
 
   if (resultLoading || !result) {
     return (
@@ -171,6 +179,15 @@ export default function ExamResult() {
                 <p className="text-sm text-muted-foreground">Student ID</p>
                 <p className="font-medium" data-testid="text-student-id">{result.studentId}</p>
               </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Class Level</p>
+                <p className="font-medium">{student?.classLevel || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Department</p>
+                <p className="font-medium">{student?.department || '-'}</p>
+              </div>
+
               <div>
                 <p className="text-sm text-muted-foreground">Exam Title</p>
                 <p className="font-medium">{exam?.title}</p>

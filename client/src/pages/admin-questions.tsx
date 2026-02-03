@@ -37,6 +37,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -48,7 +55,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, X, Upload, HelpCircle, Download } from "lucide-react";
+import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
 import { Loader2 } from "lucide-react";
@@ -57,11 +64,36 @@ import { Loader2 } from "lucide-react";
 export default function AdminQuestions() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [filterSubject, setFilterSubject] = useState<string>("");
+  const [filterDepartment, setFilterDepartment] = useState<string>("");
+
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkEditDialog, setBulkEditDialog] = useState<{
+    isOpen: boolean;
+    subject: string;
+    type: 'subjectName' | 'settings';
+    value?: any;
+  }>({ isOpen: false, subject: '', type: 'subjectName' });
 
   const { data: questions, isLoading } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: { ids: string[], updates: Partial<Question> }) => {
+      return apiRequest("PATCH", "/api/questions/bulk", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+      setBulkEditDialog(prev => ({ ...prev, isOpen: false }));
+      toast({ title: "Updated successfully", description: "Questions have been updated." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update questions.", variant: "destructive" });
+    },
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -69,7 +101,9 @@ export default function AdminQuestions() {
   const [csvClassLevel, setCsvClassLevel] = useState<string>("");
   const [csvSubject, setCsvSubject] = useState<string>("");
   const [csvTerm, setCsvTerm] = useState<string>("First Term");
+  const [csvDepartment, setCsvDepartment] = useState<string>("");
   const [csvExamType, setCsvExamType] = useState<string>("Objectives");
+
   const [showClassLevelDialog, setShowClassLevelDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ uploaded: number; total: number } | null>(null);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
@@ -111,7 +145,8 @@ export default function AdminQuestions() {
 
       const cols = hasHeader
         ? headerParts
-        : ["questionText", "questionType", "difficulty", "options", "correctAnswer", "points", "imageUrl", "classLevel", "term", "examType", "subject"];
+        : ["questionText", "questionType", "difficulty", "options", "correctAnswer", "points", "imageUrl", "classLevel", "term", "examType", "subject", "department"];
+
 
       const foundImages = new Set<string>();
 
@@ -225,7 +260,9 @@ export default function AdminQuestions() {
         if (rows[0].classLevel && ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"].includes(rows[0].classLevel)) setCsvClassLevel(rows[0].classLevel);
         if (rows[0].subject) setCsvSubject(rows[0].subject);
         if (rows[0].term) setCsvTerm(rows[0].term);
+        if (rows[0].department) setCsvDepartment(rows[0].department);
         if (rows[0].examType) setCsvExamType(rows[0].examType);
+
       }
 
       // Show class level dialog before setting preview rows
@@ -248,6 +285,12 @@ export default function AdminQuestions() {
     // Assign selected class level and subject to all rows
     if (!csvClassLevel || !csvSubject || !csvTerm || !csvExamType) {
       toast({ title: "Error", description: "Please select class level, term, exam type, and subject before uploading.", variant: "destructive" });
+      return;
+    }
+
+    const isSSS = ["SS1", "SS2", "SS3"].includes(csvClassLevel);
+    if (isSSS && !csvDepartment) {
+      toast({ title: "Error", description: "Please select a department for SSS classes.", variant: "destructive" });
       return;
     }
 
@@ -344,7 +387,9 @@ export default function AdminQuestions() {
         classLevel: row.classLevel || csvClassLevel,
         subject: row.subject || csvSubject,
         term: row.term || csvTerm,
+        department: row.department || csvDepartment,
         examType: row.examType || csvExamType,
+
         imageUrl,
         options: rowOptions,
         correctAnswer: rowCorrectAnswer
@@ -384,10 +429,10 @@ export default function AdminQuestions() {
     setPreviewRows([]);
     setCsvClassLevel("");
     setCsvSubject("");
-    setCsvClassLevel("");
-    setCsvSubject("");
     setCsvTerm("First Term");
+    setCsvDepartment("");
     setCsvExamType("Objectives");
+
     setShowClassLevelDialog(false);
     queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
   };
@@ -406,7 +451,7 @@ export default function AdminQuestions() {
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      return apiRequest("DELETE", `/api/questions`, { ids });
+      return apiRequest("DELETE", "/api/questions", { ids });
     },
     onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
@@ -414,7 +459,7 @@ export default function AdminQuestions() {
       toast({ title: "Questions deleted", description: `Deleted ${ids?.length || 0} question(s)` });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to delete questions", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to delete questions.", variant: "destructive" });
     },
   });
 
@@ -422,9 +467,12 @@ export default function AdminQuestions() {
     ? Array.from(new Set(questions.map((q) => q.subject)))
     : [];
 
-  const filteredQuestions = questions?.filter((q) =>
-    filterSubject && filterSubject !== "__all__" ? q.subject === filterSubject : true
-  );
+  const filteredQuestions = questions?.filter((q) => {
+    const subjectMatch = filterSubject && filterSubject !== "__all__" ? q.subject === filterSubject : true;
+    const departmentMatch = filterDepartment && filterDepartment !== "__all__" ? q.department === filterDepartment : true;
+    return subjectMatch && departmentMatch;
+  });
+
 
   const questionsBySubject = filteredQuestions
     ? filteredQuestions.reduce((acc, question) => {
@@ -450,8 +498,15 @@ export default function AdminQuestions() {
       const ids = Array.from(selectedIds);
       bulkDeleteMutation.mutate(ids);
     }
-    if (type === 'all' && questions) {
-      bulkDeleteMutation.mutate(questions.map(q => q.id));
+    if (type === 'all') {
+      if (id && questions) {
+        // Delete all in subject
+        const subjectIds = questions.filter(q => q.subject === id).map(q => q.id);
+        bulkDeleteMutation.mutate(subjectIds);
+      } else if (questions) {
+        // Delete ALL
+        bulkDeleteMutation.mutate(questions.map(q => q.id));
+      }
     }
     setDeleteDialogState(prev => ({ ...prev, isOpen: false }));
   };
@@ -569,6 +624,25 @@ export default function AdminQuestions() {
             </Button>
           </div>
 
+          <div className="flex gap-2">
+            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Departments</SelectItem>
+                <SelectItem value="Science">Science</SelectItem>
+                <SelectItem value="Commercial">Commercial</SelectItem>
+                <SelectItem value="Art">Art</SelectItem>
+                <SelectItem value="Others">Others</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+
+
+
+
           <div className="flex gap-2 ml-auto">
             {selectedIds.size > 0 && (
               <Button
@@ -635,7 +709,25 @@ export default function AdminQuestions() {
                 <option value="Others">Others</option>
               </select>
             </div>
+            {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
+              <div className="space-y-2">
+                <Label htmlFor="csv-department">Department *</Label>
+                <select
+                  id="csv-department"
+                  value={csvDepartment}
+                  onChange={e => setCsvDepartment(e.target.value)}
+                  className="border rounded px-2 py-1 w-full"
+                >
+                  <option value="">Select Department</option>
+                  <option value="Science">Science</option>
+                  <option value="Commercial">Commercial</option>
+                  <option value="Art">Art</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
+            )}
             <div className="space-y-2">
+
               <Label htmlFor="csv-exam-type">Exam Type *</Label>
               <select
                 id="csv-exam-type"
@@ -674,12 +766,13 @@ export default function AdminQuestions() {
                 </p>
                 <div className="text-sm font-medium mt-2">
                   Class: <Badge>{csvClassLevel}</Badge>, Term: <Badge>{csvTerm}</Badge>, Type: <Badge>{csvExamType}</Badge>, Subject: <Badge>{csvSubject}</Badge>
+                  {csvDepartment && <>, Dept: <Badge>{csvDepartment}</Badge></>}
                 </div>
+
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowClassLevelDialog(false)}>Cancel</Button>
             <Button variant="outline" onClick={() => setShowClassLevelDialog(false)}>Cancel</Button>
             <Button onClick={() => {
               setShowClassLevelDialog(false);
@@ -688,9 +781,10 @@ export default function AdminQuestions() {
               } else {
                 uploadPreview();
               }
-            }} disabled={!csvClassLevel || !csvSubject || !csvTerm || !csvExamType}>
+            }} disabled={!csvClassLevel || !csvSubject || !csvTerm || !csvExamType || (["SS1", "SS2", "SS3"].includes(csvClassLevel) && !csvDepartment)}>
               Next
             </Button>
+
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -832,7 +926,48 @@ export default function AdminQuestions() {
               <AccordionItem value={subject} key={subject} className="mb-4 rounded-lg border bg-card">
                 <AccordionTrigger className="p-6 text-left hover:no-underline">
                   <div className="flex w-full flex-col items-start">
-                    <h3 className="text-lg font-semibold text-card-foreground">{subject}</h3>
+                    <div className="flex w-full items-center justify-between pr-6">
+                      <h3 className="text-lg font-semibold text-card-foreground">{subject}</h3>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setBulkEditDialog({ isOpen: true, subject, type: 'subjectName', value: subject });
+                          }}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Subject Name
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setBulkEditDialog({ isOpen: true, subject, type: 'settings' });
+                          }}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Bulk Settings
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteDialogState({
+                                isOpen: true,
+                                type: 'all',
+                                count: subjectQuestions.length,
+                                id: subject // Using id to store subject name for context if needed
+                              });
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete All in Subject
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {subjectQuestions.length} Questions | Class Levels: {Array.from(classLevels).join(', ')}
                     </p>
@@ -958,6 +1093,11 @@ export default function AdminQuestions() {
                               </div>
                               <div className="flex gap-2 mt-1 flex-wrap">
                                 <Badge variant="outline" className="text-[10px] px-1 py-0">{question.classLevel}</Badge>
+                                {question.department && (
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                                    {question.department}
+                                  </Badge>
+                                )}
                                 <Badge variant="outline" className="text-[10px] px-1 py-0">{(question.term === "First Term" ? "1st" : question.term === "Second Term" ? "2nd" : question.term === "Third Term" ? "3rd" : "Oth")}</Badge>
                                 <Badge variant="outline" className="text-[10px] px-1 py-0">{(question.examType === "Objectives" ? "Obj" : "Theory")}</Badge>
                               </div>
@@ -981,14 +1121,24 @@ export default function AdminQuestions() {
                             <TableCell>{question.term || "First Term"}</TableCell>
                             <TableCell>{question.points}</TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setDeleteDialogState({ isOpen: true, type: 'single', id: question.id })}
-                                data-testid={`button-delete-${question.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setEditingQuestion(question)}
+                                  data-testid={`button-edit-${question.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setDeleteDialogState({ isOpen: true, type: 'single', id: question.id })}
+                                  data-testid={`button-delete-${question.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1046,40 +1196,196 @@ export default function AdminQuestions() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+
+      {/* Edit Question Dialog */}
+      <Dialog open={editingQuestion !== null} onOpenChange={(open) => !open && setEditingQuestion(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Question</DialogTitle>
+          </DialogHeader>
+          <QuestionForm
+            initialData={editingQuestion!}
+            onSuccess={() => {
+              setEditingQuestion(null);
+              queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Edit Subject Name Dialog */}
+      <Dialog
+        open={bulkEditDialog.isOpen && bulkEditDialog.type === 'subjectName'}
+        onOpenChange={(open) => !open && setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Subject Name</DialogTitle>
+            <DialogDescription>
+              This will update the subject name for all questions in "{bulkEditDialog.subject}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>New Subject Name</Label>
+              <Input
+                value={bulkEditDialog.value || ""}
+                onChange={(e) => setBulkEditDialog(prev => ({ ...prev, value: e.target.value }))}
+                placeholder="Enter new subject name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}>Cancel</Button>
+            <Button
+              disabled={bulkUpdateMutation.isPending || !bulkEditDialog.value}
+              onClick={() => {
+                const subjectQuestions = questions?.filter(q => q.subject === bulkEditDialog.subject) || [];
+                bulkUpdateMutation.mutate({
+                  ids: subjectQuestions.map(q => q.id),
+                  updates: { subject: bulkEditDialog.value }
+                });
+              }}
+            >
+              {bulkUpdateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Settings Dialog */}
+      <Dialog
+        open={bulkEditDialog.isOpen && bulkEditDialog.type === 'settings'}
+        onOpenChange={(open) => !open && setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk Update Settings</DialogTitle>
+            <DialogDescription>
+              Update Class Level, Term, or Exam Type for all questions in "{bulkEditDialog.subject}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Class Level</Label>
+                <Select
+                  value={bulkEditDialog.value?.classLevel || ""}
+                  onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), classLevel: val } }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
+                  <SelectContent>
+                    {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Term</Label>
+                <Select
+                  value={bulkEditDialog.value?.term || ""}
+                  onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), term: val } }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Term" /></SelectTrigger>
+                  <SelectContent>
+                    {["First Term", "Second Term", "Third Term", "Others"].map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Exam Type</Label>
+                <Select
+                  value={bulkEditDialog.value?.examType || ""}
+                  onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), examType: val } }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
+                  <SelectContent>
+                    {["Objectives", "Theory"].map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Select
+                  value={bulkEditDialog.value?.department || ""}
+                  onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), department: val } }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
+                  <SelectContent>
+                    {["Science", "Commercial", "Art", "Others"].map(d => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}>Cancel</Button>
+            <Button
+              disabled={bulkUpdateMutation.isPending || !bulkEditDialog.value}
+              onClick={() => {
+                const subjectQuestions = questions?.filter(q => q.subject === bulkEditDialog.subject) || [];
+                bulkUpdateMutation.mutate({
+                  ids: subjectQuestions.map(q => q.id),
+                  updates: bulkEditDialog.value
+                });
+              }}
+            >
+              {bulkUpdateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div >
   );
 }
 
-function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
+function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initialData?: Question }) {
   const { toast } = useToast();
-  const [formData, setFormData] = useState<InsertQuestion & { classLevel?: string; term?: string; examType?: string }>({
-    questionText: "",
-    questionType: "multiple-choice",
-    subject: "",
-    difficulty: "medium",
-    options: ["", "", "", ""],
-    correctAnswer: "",
-    points: 1,
-    classLevel: "JSS1",
-    term: "First Term",
-    examType: "Objectives",
-    imageUrl: "",
+  const [formData, setFormData] = useState<InsertQuestion & { classLevel?: string; term?: string; examType?: string; department?: string }>({
+    questionText: initialData?.questionText || "",
+    questionType: (initialData?.questionType as any) || "multiple-choice",
+    subject: initialData?.subject || "",
+    difficulty: (initialData?.difficulty as any) || "medium",
+    options: initialData?.options || ["", "", "", ""],
+    correctAnswer: initialData?.correctAnswer || "",
+    points: initialData?.points || 1,
+    classLevel: (initialData?.classLevel as any) || "JSS1",
+    term: (initialData?.term as any) || "First Term",
+    examType: (initialData?.examType as any) || "Objectives",
+    department: (initialData?.department as any) || "",
+    imageUrl: initialData?.imageUrl || "",
   });
   const [isUploading, setIsUploading] = useState(false);
 
-  const createQuestionMutation = useMutation({
-    mutationFn: (data: InsertQuestion) => apiRequest("POST", "/api/questions", data),
+  const questionMutation = useMutation({
+    mutationFn: (data: InsertQuestion) => {
+      if (initialData?.id) {
+        return apiRequest("PATCH", `/api/questions/${initialData.id}`, data);
+      }
+      return apiRequest("POST", "/api/questions", data);
+    },
     onSuccess: () => {
       toast({
-        title: "Question added",
-        description: "The question has been successfully added to the bank.",
+        title: initialData ? "Question updated" : "Question added",
+        description: initialData
+          ? "The question has been successfully updated."
+          : "The question has been successfully added to the bank.",
       });
       onSuccess();
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to add question. Please try again.",
+        description: `Failed to ${initialData ? "update" : "add"} question. Please try again.`,
         variant: "destructive",
       });
     },
@@ -1114,7 +1420,7 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
       }
     }
 
-    createQuestionMutation.mutate(submitData);
+    questionMutation.mutate(submitData);
   };
 
   const updateOption = (index: number, value: string) => {
@@ -1124,14 +1430,13 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const addOption = () => {
-    setFormData({
-      ...formData,
-      options: [...(formData.options || []), ""],
-    });
+    if ((formData.options || []).length < 5) {
+      setFormData({ ...formData, options: [...(formData.options || []), ""] });
+    }
   };
 
   const removeOption = (index: number) => {
-    const newOptions = formData.options?.filter((_, i) => i !== index);
+    const newOptions = (formData.options || []).filter((_, i) => i !== index);
     setFormData({ ...formData, options: newOptions });
   };
 
@@ -1139,52 +1444,25 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      toast({
-        title: "Invalid file",
-        description: "Please select an image file.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Image size should be less than 5MB.",
-        variant: "destructive",
-      });
-      return;
-    }
+    setIsUploading(true);
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
 
     try {
-      setIsUploading(true);
-      const uploadData = new FormData();
-      uploadData.append("file", file);
-
-      const res = await fetch("/api/upload", {
+      const response = await fetch("/api/upload", {
         method: "POST",
-        body: uploadData,
+        body: formDataUpload,
       });
 
-      if (!res.ok) {
-        throw new Error("Upload failed");
-      }
+      if (!response.ok) throw new Error("Upload failed");
 
-      const data = await res.json();
-      setFormData({ ...formData, imageUrl: data.url });
-
-      toast({
-        title: "Image uploaded",
-        description: "Image attached to question successfully.",
-      });
-    } catch (error: any) {
-      console.error("Upload error:", error);
+      const data = await response.json();
+      setFormData((prev) => ({ ...prev, imageUrl: data.url }));
+      toast({ title: "Image uploaded", description: "Image has been attached to the question." });
+    } catch (error) {
       toast({
         title: "Upload failed",
-        description: error.message || "Failed to upload image. Please try again.",
+        description: "Could not upload the image. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -1195,9 +1473,9 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <form onSubmit={handleSubmit}>
       <DialogHeader>
-        <DialogTitle>Add New Question</DialogTitle>
+        <DialogTitle>{initialData ? "Edit Question" : "Add New Question"}</DialogTitle>
         <DialogDescription>
-          Create a new question for your question bank
+          {initialData ? "Update the question details" : "Create a new question for your question bank"}
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-6 py-6">
@@ -1258,12 +1536,13 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
               }
             >
               <SelectTrigger data-testid="select-question-type">
-                <SelectValue />
+                <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="multiple-choice">Multiple Choice</SelectItem>
                 <SelectItem value="true-false">True/False</SelectItem>
                 <SelectItem value="short-answer">Short Answer</SelectItem>
+                <SelectItem value="theory">Theory</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1288,6 +1567,7 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
               value={formData.classLevel}
               onValueChange={(value: any) =>
                 setFormData({ ...formData, classLevel: value })
+
               }
             >
               <SelectTrigger data-testid="select-class-level">
@@ -1309,7 +1589,28 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="department">Department</Label>
+          <Select
+            value={formData.department}
+            onValueChange={(value: any) =>
+              setFormData({ ...formData, department: value })
+            }
+          >
+            <SelectTrigger data-testid="select-department">
+              <SelectValue placeholder="Select dept" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Science">Science</SelectItem>
+              <SelectItem value="Commercial">Commercial</SelectItem>
+              <SelectItem value="Art">Art</SelectItem>
+              <SelectItem value="Others">Others</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="grid gap-6 md:grid-cols-2">
+
           <div className="space-y-2">
             <Label htmlFor="term">Term *</Label>
             <Select
@@ -1359,7 +1660,7 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
               }
             >
               <SelectTrigger data-testid="select-difficulty">
-                <SelectValue />
+                <SelectValue placeholder="Select difficulty" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="easy">Easy</SelectItem>
@@ -1377,35 +1678,35 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
               min="1"
               value={formData.points}
               onChange={(e) =>
-                setFormData({ ...formData, points: parseInt(e.target.value) })
+                setFormData({ ...formData, points: parseInt(e.target.value) || 1 })
               }
               required
-              data-testid="input-points"
+              data-testid="input-question-points"
             />
           </div>
         </div>
 
-        {formData.questionType === "multiple-choice" && formData.examType !== "Theory" && (
-          <div className="space-y-2">
-            <Label>Answer Options *</Label>
-            <div className="space-y-2">
+        {formData.questionType === "multiple-choice" && (
+          <div className="space-y-4">
+            <Label>Options *</Label>
+            <div className="grid gap-4">
               {formData.options?.map((option, index) => (
                 <div key={index} className="flex gap-2">
                   <Input
                     placeholder={`Option ${index + 1}`}
                     value={option}
                     onChange={(e) => updateOption(index, e.target.value)}
+                    required
                     data-testid={`input-option-${index}`}
                   />
-                  {formData.options && formData.options.length > 2 && (
+                  {index > 1 && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       onClick={() => removeOption(index)}
-                      data-testid={`button-remove-option-${index}`}
                     >
-                      <X className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
@@ -1416,7 +1717,7 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
               variant="outline"
               size="sm"
               onClick={addOption}
-              data-testid="button-add-option"
+              disabled={(formData.options || []).length >= 5}
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Option
@@ -1459,7 +1760,7 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
                       <SelectItem key={index} value={option}>
                         {option}
                       </SelectItem>
-                    )) || []}
+                    ))}
                   {(!formData.options || formData.options.filter((o) => o && o.trim().length > 0).length === 0) && (
                     <div className="px-2 py-1.5 text-sm text-muted-foreground">
                       No options added yet
@@ -1485,12 +1786,14 @@ function QuestionForm({ onSuccess }: { onSuccess: () => void }) {
       <DialogFooter>
         <Button
           type="submit"
-          disabled={createQuestionMutation.isPending}
+          disabled={questionMutation.isPending}
           data-testid="button-submit-question"
         >
-          {createQuestionMutation.isPending ? "Adding..." : "Add Question"}
+          {questionMutation.isPending
+            ? (initialData ? "Updating..." : "Adding...")
+            : (initialData ? "Save Changes" : "Add Question")}
         </Button>
       </DialogFooter>
-    </form>
+    </form >
   );
 }

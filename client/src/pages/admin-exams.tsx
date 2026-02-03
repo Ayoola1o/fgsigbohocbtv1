@@ -121,7 +121,14 @@ export default function AdminExams() {
                     <Badge variant="secondary">{exam.subject}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{exam.classLevel}</Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline">{exam.classLevel}</Badge>
+                      {exam.department && (
+                        <Badge variant="secondary" className="text-[10px] w-fit">
+                          {exam.department}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -221,7 +228,9 @@ function ExamForm({
     questionIds: [] as string[],
     classLevel: "JSS1",
     term: "First Term",
+    department: "" as string,
     numberOfQuestionsToDisplay: undefined as number | undefined,
+
     theoryInstructions: "",
     examType: "Objectives" as "Objectives" | "Theory",
     theoryConfig: {
@@ -246,7 +255,9 @@ function ExamForm({
     // Basic filters
     let match = (formData.subject ? q.subject === formData.subject : true) &&
       (formData.classLevel ? q.classLevel === formData.classLevel : true) &&
-      (formData.term ? q.term === formData.term : true);
+      (formData.term ? q.term === formData.term : true) &&
+      (formData.department ? q.department === formData.department : true);
+
 
     // Exam Type filter (checkboxes)
     if (match) {
@@ -387,7 +398,7 @@ function ExamForm({
             <select
               id="classLevel"
               value={formData.classLevel}
-              onChange={e => setFormData({ ...formData, classLevel: e.target.value, subject: '', questionIds: [] })}
+              onChange={e => setFormData({ ...formData, classLevel: e.target.value, subject: '', questionIds: [], department: '' })}
               required
               className="border rounded px-2 py-1 w-full"
               data-testid="select-exam-class-level"
@@ -422,6 +433,27 @@ function ExamForm({
             </select>
           </div>
         </div>
+
+        {["SS1", "SS2", "SS3"].includes(formData.classLevel) && (
+          <div className="space-y-2">
+            <Label htmlFor="department">Department *</Label>
+            <select
+              id="department"
+              value={formData.department}
+              onChange={e => setFormData({ ...formData, department: e.target.value, questionIds: [] })}
+              required
+              className="border rounded px-2 py-1 w-full"
+              data-testid="select-exam-department"
+            >
+              <option value="">Select Department</option>
+              <option value="Science">Science</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Art">Art</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="title">Exam Title *</Label>
           <Input

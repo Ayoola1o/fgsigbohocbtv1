@@ -8,6 +8,8 @@ export const questionTypes = ["multiple-choice", "true-false", "short-answer", "
 export const difficultyLevels = ["easy", "medium", "hard"] as const;
 export const termOptions = ["First Term", "Second Term", "Third Term", "Others"] as const;
 export const examTypeOptions = ["Objectives", "Theory"] as const;
+export const departments = ["Science", "Commercial", "Art", "Others"] as const;
+
 
 
 // Questions Table
@@ -28,7 +30,9 @@ export const questions = pgTable("questions", {
   term: text("term").notNull().default("First Term"),
   examType: text("exam_type").notNull().default("Objectives"),
   imageUrl: text("image_url"),
+  department: text("department"),
 });
+
 
 export const insertQuestionSchema = createInsertSchema(questions).omit({
   id: true,
@@ -40,7 +44,9 @@ export const insertQuestionSchema = createInsertSchema(questions).omit({
   classLevel: z.enum(classLevels),
   term: z.enum(termOptions).default("First Term"),
   imageUrl: z.string().optional(),
+  department: z.enum(departments).optional(),
 });
+
 
 export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
 export type Question = typeof questions.$inferSelect;
@@ -62,8 +68,10 @@ export const exams = pgTable("exams", {
   examType: text("exam_type").notNull().default("Objectives"),
   theoryConfig: jsonb("theory_config").$type<any>(),
   isActive: boolean("is_active").notNull().default(true),
+  department: text("department"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
+
 
 export const insertExamSchema = createInsertSchema(exams).omit({
   id: true,
@@ -78,8 +86,10 @@ export const insertExamSchema = createInsertSchema(exams).omit({
   classLevel: z.enum(classLevels),
   term: z.enum(termOptions).default("First Term"),
   examType: z.enum(examTypeOptions).default("Objectives"),
+  department: z.enum(departments).optional(),
   theoryConfig: z.any().optional(),
 });
+
 
 export type InsertExam = z.infer<typeof insertExamSchema>;
 export type Exam = typeof exams.$inferSelect;
@@ -147,14 +157,18 @@ export const students = pgTable("students", {
   studentId: text("student_id").notNull().unique(),
   classLevel: text("class_level").notNull(),
   sex: text("sex"),
+  department: text("department"),
 });
+
 
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
 }).extend({
   classLevel: z.enum(classLevels),
   sex: z.enum(["M", "F"]).optional(),
+  department: z.enum(departments).optional(),
 });
+
 
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
 export type Student = typeof students.$inferSelect;
