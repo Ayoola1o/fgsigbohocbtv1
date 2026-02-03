@@ -7,3 +7,20 @@ vite.config.ts.*
 *.tar.gz
 .env
 .env.local
+
+# Local Data & Uploads
+uploads/
+tmp/
+
+# Backups & Old Versions
+*.zip
+v3.1/
+v4.2/
+v4.2.3/
+igf/
+*.csv
+
+# System & Agent
+.gemini/
+server.pid
+server.log
