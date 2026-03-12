@@ -77,8 +77,13 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                     <div className="w-24 h-24 sm:w-28 sm:h-28 bg-blue-900 rounded-lg flex items-center justify-center text-white font-bold text-2xl sm:text-3xl border-2 border-blue-900 shadow-sm overflow-hidden shrink-0">
                         {schoolInfo.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
+                            // coerce logoUrl to string in case callers accidentally pass a module/object
                             <img
-                                src={schoolInfo.logoUrl}
+                                src={
+                                    typeof schoolInfo.logoUrl === "string"
+                                        ? schoolInfo.logoUrl
+                                        : String(schoolInfo.logoUrl)
+                                }
                                 alt={schoolInfo.name}
                                 className="w-full h-full object-contain bg-white"
                             />

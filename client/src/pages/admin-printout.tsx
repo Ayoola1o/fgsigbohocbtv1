@@ -77,7 +77,7 @@ export default function AdminPrintout() {
 
     return {
       schoolName: "Faith Immaculate Academy",
-      schoolLogoUrl: {logo}, // Placeholder
+      schoolLogoUrl: logo, // Placeholder (unused, kept for reference)
       examTitle: exam?.title || "Exam Result",
       candidate: {
         name: student.name,
@@ -162,7 +162,7 @@ export default function AdminPrintout() {
                 address: "IGBOHO, OYO STATE",
                 motto: "KNOWLEDGE AND GODLINESS",
                 logoText: "FIA",
-                logoUrl: {logo}
+                logoUrl: logo
               }}
               metadata={{
                 class: data.candidate.gradeLevel,
