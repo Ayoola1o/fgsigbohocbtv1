@@ -44,6 +44,67 @@ export default function AdminResults() {
     to: undefined,
   });
 
+  const writePrintWindowDocument = (printWindow: Window, title: string, extraHeadHtml = "") => {
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    ${extraHeadHtml}
+  </head>
+  <body>
+    <div id="print-root"></div>
+  </body>
+</html>`);
+    printWindow.document.close();
+  };
+
+  const cloneCurrentStylesIntoPrintWindow = (printWindow: Window) => {
+    const nodes = document.querySelectorAll('style, link[rel="stylesheet"]');
+    nodes.forEach((node) => {
+      try {
+        printWindow.document.head.appendChild(node.cloneNode(true));
+      } catch {
+        // ignore individual style clone failures
+      }
+    });
+  };
+
+  const waitForPrintRoot = (printWindow: Window, timeoutMs = 5000) => {
+    return new Promise<HTMLElement>((resolve, reject) => {
+      const start = Date.now();
+
+      const tick = () => {
+        try {
+          if (printWindow.closed) {
+            reject(new Error("Print window was closed."));
+            return;
+          }
+
+          const container = printWindow.document.getElementById("print-root");
+          if (container) {
+            resolve(container);
+            return;
+          }
+
+          if (Date.now() - start > timeoutMs) {
+            reject(new Error("Timed out waiting for #print-root"));
+            return;
+          }
+        } catch (err) {
+          // In some browsers, document access can throw briefly while navigating/writing.
+          // We'll keep retrying until timeout.
+        }
+
+        requestAnimationFrame(tick);
+      };
+
+      tick();
+    });
+  };
+
 
   const { data: results, isLoading: resultsLoading, error: resultsError } = useQuery<Result[]>({
     queryKey: ["/api/results"],
@@ -91,7 +152,7 @@ export default function AdminResults() {
     return exams?.find((e) => e.id === examId)?.title || "Unknown Exam";
   };
 
-  const handlePrint = (result: Result) => {
+  const handlePrint = async (result: Result) => {
     const exam = exams?.find(e => e.id === result.examId);
     const student = students?.find(s => s.studentId === result.studentId);
 
@@ -145,76 +206,57 @@ export default function AdminResults() {
     console.log("handlePrint: Opening print window...");
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      console.log("handlePrint: Print window opened, writing document...");
-      printWindow.document.write('<html><head><title>Print Result</title>');
-      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-      styles.forEach(style => {
-        printWindow.document.head.appendChild(style.cloneNode(true));
-      });
-      printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
-      printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
-
-      printWindow.document.close();
       printWindow.focus();
+      console.log("handlePrint: Print window opened, writing document...");
+      writePrintWindowDocument(printWindow, "Print Result");
 
-      // Use a timeout to allow the browser to process the document write
-      setTimeout(() => {
-        console.log("handlePrint: Starting polling for print-root...");
-        let attempts = 0;
-        const interval = setInterval(() => {
-          const container = printWindow.document.getElementById('print-root');
-          if (container) {
-            console.log("handlePrint: print-root found, rendering component...");
-            clearInterval(interval);
-            try {
-              const root = createRoot(container);
-              // @ts-ignore
-              root.render(<PrintReportTemplate
-                reportType="result-report"
-                schoolInfo={{
-                  name: "FAITH IMMACULATE ACADEMY",
-                  address: "IGBOHO, OYO STATE",
-                  motto: "KNOWLEDGE AND GODLINESS",
-                  logoText: "FIA"
-                }}
-                metadata={{
-                  class: printData.candidate.gradeLevel,
-                  exam: printData.examTitle,
-                  date: printData.candidate.date,
-                  session: "2025/2026 ACADEMIC SESSION"
-                }}
-                results={printData.subjectBreakdown.map((b: any) => ({
-                  id: b.questions.toString(),
-                  name: b.subject,
-                  class: printData.candidate.gradeLevel,
-                  subject: b.correct.toString(),
-                  score: b.percentage
-                }))}
-                onPrint={() => {
-                  console.log("handlePrint: Component triggered onPrint");
-                  setTimeout(() => printWindow.print(), 500);
-                }}
-              />);
-            } catch (err) {
-              console.error("handlePrint: Render error:", err);
-              toast({ title: "Print Error", description: "Failed to render print document.", variant: "destructive" });
-            }
-          } else if (attempts >= 50) { // Increased to 5 seconds
-            console.error("handlePrint: Print root element not found after 5s.");
-            clearInterval(interval);
-            toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
-            printWindow.close();
-          }
-          attempts++;
-        }, 100);
-      }, 100);
+      try {
+        const container = await waitForPrintRoot(printWindow, 7000);
+        cloneCurrentStylesIntoPrintWindow(printWindow);
+
+        const root = createRoot(container);
+        // @ts-ignore
+        root.render(<PrintReportTemplate
+          reportType="result-report"
+          schoolInfo={{
+            name: "FAITH IMMACULATE ACADEMY",
+            address: "IGBOHO, OYO STATE",
+            motto: "KNOWLEDGE AND GODLINESS",
+            logoText: "FIA",
+            logoUrl: "/igf/logo.png"
+          }}
+          metadata={{
+            class: printData.candidate.gradeLevel,
+            exam: printData.examTitle,
+            date: printData.candidate.date,
+            session: "2025/2026 ACADEMIC SESSION"
+          }}
+          results={printData.subjectBreakdown.map((b: any) => ({
+            id: b.subject,
+            name: b.subject,
+            class: printData.candidate.gradeLevel,
+            subject: printData.examTitle,
+            score: b.correct,
+            total: b.questions,
+            percentage: b.percentage
+          }))}
+          onPrint={() => {
+            console.log("handlePrint: Component triggered onPrint");
+            setTimeout(() => printWindow.print(), 500);
+          }}
+        />);
+      } catch (err) {
+        console.error("handlePrint: Could not prepare print document:", err);
+        toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
+        printWindow.close();
+      }
     } else {
       console.error("handlePrint: Pop-up blocked or window failed to open.");
       toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
     }
   };
 
-  const handlePrintBroadsheet = () => {
+  const handlePrintBroadsheet = async () => {
     if (filterExamId === "ALL" || !filteredResults || filteredResults.length === 0) {
       toast({ title: "Action Required", description: "Please select a specific exam to print a score sheet.", variant: "destructive" });
       return;
@@ -226,15 +268,7 @@ export default function AdminResults() {
       toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
       return;
     }
-
-    printWindow.document.write('<html><head><title>Score Sheet</title>');
-    const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-    styles.forEach(style => {
-      printWindow.document.head.appendChild(style.cloneNode(true));
-    });
-    printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
-    printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
-    printWindow.document.close();
+    writePrintWindowDocument(printWindow, "Score Sheet");
 
     const sorted = [...filteredResults].sort((a, b) => a.studentName.localeCompare(b.studentName));
     const studentResults = sorted.map(r => {
@@ -248,34 +282,38 @@ export default function AdminResults() {
       };
     });
 
-    const printInterval = setInterval(() => {
-      const container = printWindow.document.getElementById('print-root');
-      if (container) {
-        clearInterval(printInterval);
-        const root = createRoot(container);
-        root.render(
-          <PrintReportTemplate
-            reportType="score-sheet"
-            schoolInfo={{
-              name: "FAITH IMMACULATE ACADEMY",
-              address: "IGBOHO, OYO STATE",
-              motto: "KNOWLEDGE AND GODLINESS",
-              logoText: "FIA"
-            }}
-            metadata={{
-              class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
-              exam: exam?.title || "General Examination",
-              date: new Date().toLocaleDateString(),
-              session: "2025/2026 ACADEMIC SESSION"
-            }}
-            results={studentResults}
-            onPrint={() => {
-              setTimeout(() => printWindow.print(), 500);
-            }}
-          />
-        );
-      }
-    }, 100);
+    try {
+      const container = await waitForPrintRoot(printWindow, 7000);
+      cloneCurrentStylesIntoPrintWindow(printWindow);
+
+      const root = createRoot(container);
+      root.render(
+        <PrintReportTemplate
+          reportType="score-sheet"
+          schoolInfo={{
+            name: "FAITH IMMACULATE ACADEMY",
+            address: "IGBOHO, OYO STATE",
+            motto: "KNOWLEDGE AND GODLINESS",
+            logoText: "FIA",
+            logoUrl: "/igf/logo.png"
+          }}
+          metadata={{
+            class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
+            exam: exam?.title || "General Examination",
+            date: new Date().toLocaleDateString(),
+            session: "2025/2026 ACADEMIC SESSION"
+          }}
+          results={studentResults}
+          onPrint={() => {
+            setTimeout(() => printWindow.print(), 500);
+          }}
+        />
+      );
+    } catch (err) {
+      console.error("handlePrintBroadsheet: Could not prepare print document:", err);
+      toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
+      printWindow.close();
+    }
   };
 
   const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
@@ -295,7 +333,7 @@ export default function AdminResults() {
     setSelectedResultIds(next);
   };
 
-  const handleBulkPrint = () => {
+  const handleBulkPrint = async () => {
     const selected = results?.filter(r => selectedResultIds.has(r.id));
     if (!selected || selected.length === 0) {
       toast({ title: "Warning", description: "No results selected for bulk print.", variant: "default" });
@@ -350,14 +388,10 @@ export default function AdminResults() {
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write('<html><head><title>Print Report Cards</title>');
-      const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-      styles.forEach(style => {
-        printWindow.document.head.appendChild(style.cloneNode(true));
-      });
-      printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
-      printWindow.document.write(`
-        <style>
+      writePrintWindowDocument(
+        printWindow,
+        "Print Report Cards",
+        `<style>
            body { background-color: #f1f5f9; }
            @media print { 
              body { background-color: white; } 
@@ -365,74 +399,69 @@ export default function AdminResults() {
            }
            #print-root { display: flex; flex-direction: column; gap: 2rem; align-items: center; padding: 2rem; }
            .report-wrapper { width: 100%; max-width: 8.5in; }
-         </style>
-      `);
-      printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
+         </style>`
+      );
 
-      printWindow.document.close();
+      try {
+        const container = await waitForPrintRoot(printWindow, 7000);
+        cloneCurrentStylesIntoPrintWindow(printWindow);
 
-      printWindow.onload = () => {
-        let attempts = 0;
-        const interval = setInterval(() => {
-          const container = printWindow.document.getElementById('print-root');
-          if (container) {
-            clearInterval(interval);
-            const root = createRoot(container);
-            root.render(
-              <>
-                {/* Shared Print Button */}
-                <div className="fixed top-6 right-6 z-50 print:hidden">
-                  <Button
-                    onClick={() => printWindow.print()}
-                    className="shadow-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full px-6 transition-all hover:scale-105 flex items-center gap-2"
-                  >
-                    <Printer className="w-4 h-4" /> Print All ({printPayloads.length})
-                  </Button>
-                </div>
+        const root = createRoot(container);
+        root.render(
+          <>
+            {/* Shared Print Button */}
+            <div className="fixed top-6 right-6 z-50 print:hidden">
+              <Button
+                onClick={() => printWindow.print()}
+                className="shadow-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full px-6 transition-all hover:scale-105 flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" /> Print All ({printPayloads.length})
+              </Button>
+            </div>
 
-                {printPayloads.map((data, idx) => (
-                  <div key={idx} className="report-wrapper page-break">
-                    <PrintReportTemplate
-                      reportType="result-report"
-                      schoolInfo={{
-                        name: "FAITH IMMACULATE ACADEMY",
-                        address: "IGBOHO, OYO STATE",
-                        motto: "KNOWLEDGE AND GODLINESS",
-                        logoText: "FIA"
-                      }}
-                      metadata={{
-                        class: data.candidate.gradeLevel,
-                        exam: data.examTitle,
-                        date: data.candidate.date,
-                        session: "2025/2026 ACADEMIC SESSION"
-                      }}
-                      results={data.subjectBreakdown.map((b: any) => ({
-                        id: b.questions.toString(),
-                        name: b.subject,
-                        class: data.candidate.gradeLevel,
-                        subject: b.correct.toString(),
-                        score: b.percentage
-                      }))}
-                      showPrintButton={false}
-                    />
-                  </div>
-                ))}
-              </>
-            );
-          } else if (attempts >= 10) {
-            clearInterval(interval);
-            console.error("Print root element not found after polling.");
-            toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
-          }
-          attempts++;
-        }, 100);
-      };
+            {printPayloads.map((data, idx) => (
+              <div key={idx} className="report-wrapper page-break">
+                <PrintReportTemplate
+                  reportType="result-report"
+                  schoolInfo={{
+                    name: "FAITH IMMACULATE ACADEMY",
+                    address: "IGBOHO, OYO STATE",
+                    motto: "KNOWLEDGE AND GODLINESS",
+                    logoText: "FIA",
+                    logoUrl: "/igf/logo.png"
+                  }}
+                  metadata={{
+                    class: data.candidate.gradeLevel,
+                    exam: data.examTitle,
+                    date: data.candidate.date,
+                    session: "2025/2026 ACADEMIC SESSION"
+                  }}
+                  results={data.subjectBreakdown.map((b: any) => ({
+                    id: b.subject,
+                    name: b.subject,
+                    class: data.candidate.gradeLevel,
+                    subject: data.examTitle,
+                    score: b.correct,
+                    total: b.questions,
+                    percentage: b.percentage
+                  }))}
+                  showPrintButton={false}
+                />
+              </div>
+            ))}
+          </>
+        );
+      } catch (err) {
+        console.error("handleBulkPrint: Could not prepare print document:", err);
+        toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
+        printWindow.close();
+      }
     } else {
       toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
     }
   };
 
-  const handlePrintFullReport = () => {
+  const handlePrintFullReport = async () => {
     if (!filteredResults || filteredResults.length === 0) {
       toast({ title: "No Results", description: "There are no results to print.", variant: "destructive" });
       return;
@@ -443,15 +472,7 @@ export default function AdminResults() {
       toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
       return;
     }
-
-    printWindow.document.write('<html><head><title>Results Report</title>');
-    const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-    styles.forEach(style => {
-      printWindow.document.head.appendChild(style.cloneNode(true));
-    });
-    printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
-    printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
-    printWindow.document.close();
+    writePrintWindowDocument(printWindow, "Results Report");
 
     const studentResults = filteredResults.map(r => {
       const student = students?.find(s => s.studentId === r.studentId);
@@ -464,34 +485,38 @@ export default function AdminResults() {
       };
     });
 
-    const printInterval = setInterval(() => {
-      const container = printWindow.document.getElementById('print-root');
-      if (container) {
-        clearInterval(printInterval);
-        const root = createRoot(container);
-        root.render(
-          <PrintReportTemplate
-            reportType="score-sheet"
-            schoolInfo={{
-              name: "FAITH IMMACULATE ACADEMY",
-              address: "IGBOHO, OYO STATE",
-              motto: "KNOWLEDGE AND GODLINESS",
-              logoText: "FIA"
-            }}
-            metadata={{
-              class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
-              exam: filterExamId === "ALL" ? "Consolidated Report" : getExamTitle(filterExamId),
-              date: new Date().toLocaleDateString(),
-              session: "2025/2026 ACADEMIC SESSION"
-            }}
-            results={studentResults}
-            onPrint={() => {
-              setTimeout(() => printWindow.print(), 500);
-            }}
-          />
-        );
-      }
-    }, 100);
+    try {
+      const container = await waitForPrintRoot(printWindow, 7000);
+      cloneCurrentStylesIntoPrintWindow(printWindow);
+
+      const root = createRoot(container);
+      root.render(
+        <PrintReportTemplate
+          reportType="score-sheet"
+          schoolInfo={{
+            name: "FAITH IMMACULATE ACADEMY",
+            address: "IGBOHO, OYO STATE",
+            motto: "KNOWLEDGE AND GODLINESS",
+            logoText: "FIA",
+            logoUrl: "/igf/logo.png"
+          }}
+          metadata={{
+            class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
+            exam: filterExamId === "ALL" ? "Consolidated Report" : getExamTitle(filterExamId),
+            date: new Date().toLocaleDateString(),
+            session: "2025/2026 ACADEMIC SESSION"
+          }}
+          results={studentResults}
+          onPrint={() => {
+            setTimeout(() => printWindow.print(), 500);
+          }}
+        />
+      );
+    } catch (err) {
+      console.error("handlePrintFullReport: Could not prepare print document:", err);
+      toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
+      printWindow.close();
+    }
   };
 
   return (

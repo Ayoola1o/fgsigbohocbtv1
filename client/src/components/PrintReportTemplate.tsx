@@ -9,6 +9,7 @@ interface PrintReportTemplateProps {
         address: string;
         motto: string;
         logoText: string;
+        logoUrl?: string;
     };
     metadata: {
         class: string;
@@ -74,7 +75,16 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                 <div className="flex items-center border-b-4 border-blue-900 pb-4 mb-6">
                     {/* School Logo Area at Top Left */}
                     <div className="w-24 h-24 sm:w-28 sm:h-28 bg-blue-900 rounded-lg flex items-center justify-center text-white font-bold text-2xl sm:text-3xl border-2 border-blue-900 shadow-sm overflow-hidden shrink-0">
-                        {schoolInfo.logoText}
+                        {schoolInfo.logoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                                src={schoolInfo.logoUrl}
+                                alt={schoolInfo.name}
+                                className="w-full h-full object-contain bg-white"
+                            />
+                        ) : (
+                            schoolInfo.logoText
+                        )}
                     </div>
 
                     <div className="flex-1 text-center pr-24 sm:pr-28">
@@ -163,7 +173,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                     <tr key={index} className="hover:bg-gray-50">
                                         <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-mono">{index + 1}</td>
                                         <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-bold uppercase">
-                                            {reportType === 'score-sheet' ? res.name : res.subject}
+                                            {res.name}
                                         </td>
                                         <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-gray-600 font-mono">
                                             {reportType === 'score-sheet' ? res.id : res.total || '-'}

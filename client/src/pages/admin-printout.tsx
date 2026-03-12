@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ResultTemplate } from "@/components/ResultTemplate";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { Loader2 } from "lucide-react";
+import logo from "@/assets/igf/logo.png";
 
 export default function AdminPrintout() {
   const [selectedClassLevel, setSelectedClassLevel] = useState<string>("");
@@ -76,7 +77,7 @@ export default function AdminPrintout() {
 
     return {
       schoolName: "Faith Immaculate Academy",
-      schoolLogoUrl: "https://placehold.co/150x50/3b82f6/ffffff?text=FIA+CBT", // Placeholder
+      schoolLogoUrl: {logo}, // Placeholder
       examTitle: exam?.title || "Exam Result",
       candidate: {
         name: student.name,
@@ -160,7 +161,8 @@ export default function AdminPrintout() {
                 name: "FAITH IMMACULATE ACADEMY",
                 address: "IGBOHO, OYO STATE",
                 motto: "KNOWLEDGE AND GODLINESS",
-                logoText: "FIA"
+                logoText: "FIA",
+                logoUrl: {logo}
               }}
               metadata={{
                 class: data.candidate.gradeLevel,
@@ -169,11 +171,13 @@ export default function AdminPrintout() {
                 session: "2025/2026 ACADEMIC SESSION"
               }}
               results={data.subjectBreakdown.map((b: any) => ({
-                id: b.questions.toString(),
+                id: b.subject,
                 name: b.subject,
                 class: data.candidate.gradeLevel,
-                subject: b.correct.toString(),
-                score: b.percentage
+                subject: data.examTitle,
+                score: b.correct,
+                total: b.questions,
+                percentage: b.percentage
               }))}
               showPrintButton={false}
             />
