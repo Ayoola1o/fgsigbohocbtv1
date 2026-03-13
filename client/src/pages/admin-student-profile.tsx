@@ -140,7 +140,9 @@ export default function AdminStudentProfile() {
                                 name: b.subject,
                                 class: printData.candidate.gradeLevel,
                                 subject: b.correct.toString(),
-                                score: b.percentage
+                                score: b.correct,
+                                total: b.questions,
+                                percentage: b.percentage
                             }))}
                             onPrint={() => printWindow.print()}
                         />);

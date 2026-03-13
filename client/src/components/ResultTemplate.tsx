@@ -22,7 +22,9 @@ export const ResultTemplate = ({ data, onPrint, showPrintButton = true }: { data
                 name: b.subject,
                 class: data.candidate.gradeLevel,
                 subject: b.correct.toString(),
-                score: b.percentage
+                score: b.correct,
+                total: b.questions,
+                percentage: b.percentage
             }))}
             onPrint={onPrint}
             showPrintButton={showPrintButton}
