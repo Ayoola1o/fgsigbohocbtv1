@@ -77,13 +77,8 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                     <div className="w-24 h-24 sm:w-28 sm:h-28 bg-blue-900 rounded-lg flex items-center justify-center text-white font-bold text-2xl sm:text-3xl border-2 border-blue-900 shadow-sm overflow-hidden shrink-0">
                         {schoolInfo.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            // coerce logoUrl to string in case callers accidentally pass a module/object
                             <img
-                                src={
-                                    typeof schoolInfo.logoUrl === "string"
-                                        ? schoolInfo.logoUrl
-                                        : String(schoolInfo.logoUrl)
-                                }
+                                src={schoolInfo.logoUrl}
                                 alt={schoolInfo.name}
                                 className="w-full h-full object-contain bg-white"
                             />
@@ -170,7 +165,9 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                     <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider">
                                         {reportType === 'score-sheet' ? 'Examination Title' : 'Correct'}
                                     </th>
-                                    <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20 sm:w-24">Score (%)</th>
+                                    <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20 sm:w-24">
+                                        {reportType === 'score-sheet' ? 'Score (%)' : 'Score (Correct / Total)'}
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -187,7 +184,9 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                             {reportType === 'score-sheet' ? res.subject : res.score}
                                         </td>
                                         <td className={`border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-bold ${res.percentage !== undefined ? (res.percentage >= 40 ? 'text-green-700' : 'text-red-600') : (res.score >= 40 ? 'text-green-700' : 'text-red-600')}`}>
-                                            {res.percentage !== undefined ? res.percentage.toFixed(0) : res.score}%
+                                            {reportType === 'score-sheet'
+                                                ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : res.score}%`
+                                                : `${res.score}/${res.total ?? '-'}`}
                                         </td>
                                     </tr>
                                 ))}

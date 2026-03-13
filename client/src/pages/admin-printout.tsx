@@ -75,9 +75,9 @@ export default function AdminPrintout() {
       });
     }
 
-    return {
+      return {
       schoolName: "Faith Immaculate Academy",
-      schoolLogoUrl: logo, // Placeholder (unused, kept for reference)
+      schoolLogoUrl: logo, // Placeholder (unused by template)
       examTitle: exam?.title || "Exam Result",
       candidate: {
         name: student.name,
@@ -187,3 +187,4 @@ export default function AdminPrintout() {
     </div>
   );
 }
+

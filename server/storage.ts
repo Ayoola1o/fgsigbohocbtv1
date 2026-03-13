@@ -155,7 +155,9 @@ export class MemStorage implements IStorage {
       classLevel: (insertQuestion as any).classLevel ?? null,
       term: (insertQuestion as any).term ?? "First Term",
       examType: (insertQuestion as any).examType ?? "Objectives",
-      imageUrl: insertQuestion.imageUrl ?? null
+      imageUrl: insertQuestion.imageUrl ?? null,
+      // department may be optional on the insert schema
+      department: (insertQuestion as any).department ?? null,
     };
     this.questions.set(id, question);
     return question;
@@ -222,6 +224,7 @@ export class MemStorage implements IStorage {
       examType: (insertExam as any).examType ?? "Objectives",
       theoryConfig: (insertExam as any).theoryConfig ?? null,
       isActive: true,
+      department: (insertExam as any).department ?? null,
       createdAt: new Date(),
     };
     this.exams.set(id, exam);
@@ -335,7 +338,8 @@ export class MemStorage implements IStorage {
       name: insertStudent.name,
       studentId: insertStudent.studentId,
       classLevel: insertStudent.classLevel,
-      sex: insertStudent.sex || null
+      sex: insertStudent.sex || null,
+      department: insertStudent.department || null,
     };
     this.students.set(id, student);
     this.saveStudentsToDisk();
