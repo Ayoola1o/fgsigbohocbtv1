@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Clock, BookOpen, Eye, Pencil, Trash2 } from "lucide-react";
+import { Plus, Clock, BookOpen, Eye, Pencil, Trash2, Search } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Exam, Question } from "@shared/schema";
 import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/components/theory-structure-editor";
@@ -36,6 +36,7 @@ export default function AdminExams() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: exams, isLoading } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
@@ -48,6 +49,13 @@ export default function AdminExams() {
   const { data: allExams } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
+
+  const filteredExams = exams?.filter(exam =>
+    exam.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    exam.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    exam.classLevel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (exam.department && exam.department.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   const deleteExamMutation = useMutation({
     mutationFn: (examId: string) => apiRequest("DELETE", `/api/exams/${examId}`, {}),
@@ -95,6 +103,24 @@ export default function AdminExams() {
             />
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Search Bar */}
+      <div className="flex items-center space-x-2 mb-6">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search exams by title, subject, class, or department..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        {searchQuery && (
+          <Button variant="outline" size="sm" onClick={() => setSearchQuery("")}>
+            Clear
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -199,14 +225,25 @@ export default function AdminExams() {
         <Card>
           <CardContent className="flex flex-col items-center py-12 text-center">
             <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="mb-2 text-lg font-semibold">No Exams Yet</h3>
+            <h3 className="mb-2 text-lg font-semibold">
+              {searchQuery ? "No Exams Found" : "No Exams Yet"}
+            </h3>
             <p className="mb-4 text-sm text-muted-foreground">
-              Get started by creating your first exam.
+              {searchQuery
+                ? "No exams match your search criteria. Try adjusting your search terms."
+                : "Get started by creating your first exam."
+              }
             </p>
-            <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-first-exam">
-              <Plus className="mr-2 h-4 w-4" />
-              Create First Exam
-            </Button>
+            {searchQuery ? (
+              <Button variant="outline" onClick={() => setSearchQuery("")}>
+                Clear Search
+              </Button>
+            ) : (
+              <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-first-exam">
+                <Plus className="mr-2 h-4 w-4" />
+                Create First Exam
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

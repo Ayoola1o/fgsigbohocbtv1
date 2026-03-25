@@ -62,6 +62,8 @@ export default function AdminResults() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resultToDelete, setResultToDelete] = useState<Result | null>(null);
 
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+
   const writePrintWindowDocument = (printWindow: Window, title: string, extraHeadHtml = "") => {
     printWindow.document.open();
     printWindow.document.write(`<!doctype html>
@@ -159,6 +161,25 @@ export default function AdminResults() {
       toast({
         title: "Error",
         description: "Failed to delete the result. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (resultIds: string[]) => Promise.all(resultIds.map(id => deleteResult(id))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/results"] });
+      setSelectedResultIds(new Set());
+      toast({
+        title: "Results deleted",
+        description: "The selected results have been successfully deleted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to delete some results. Please try again.",
         variant: "destructive",
       });
     },
@@ -719,12 +740,9 @@ export default function AdminResults() {
                   <Button variant="ghost" size="sm" onClick={() => {
                     setSearchQuery("");
                     setFilterExamId("ALL");
-                    setSearchQuery("");
-                    setFilterExamId("ALL");
                     setFilterClassLevel("ALL");
                     setFilterDepartment("ALL");
                     setDateRange({ from: undefined, to: undefined });
-
                   }}>
                     Reset Filters
                   </Button>
@@ -732,10 +750,19 @@ export default function AdminResults() {
 
                 <div className="flex gap-3">
                   {selectedResultIds.size > 0 && (
-                    <Button onClick={handleBulkPrint} variant="default">
-                      <Printer className="mr-2 h-4 w-4" />
-                      Print Selected ({selectedResultIds.size})
-                    </Button>
+                    <>
+                      <Button onClick={handleBulkPrint} variant="default">
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print Selected ({selectedResultIds.size})
+                      </Button>
+                      <Button 
+                        onClick={() => setBulkDeleteDialogOpen(true)} 
+                        variant="destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Selected ({selectedResultIds.size})
+                      </Button>
+                    </>
                   )}
 
                   <Button onClick={handlePrintFullReport} variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800">
@@ -965,6 +992,31 @@ export default function AdminResults() {
               className="bg-red-600 hover:bg-red-700"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Results</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedResultIds.size} selected result{selectedResultIds.size > 1 ? 's' : ''}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                bulkDeleteMutation.mutate(Array.from(selectedResultIds));
+                setBulkDeleteDialogOpen(false);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

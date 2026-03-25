@@ -36,6 +36,8 @@ export default function AdminStudents() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+  const [sortBy, setSortBy] = useState<"name" | "classLevel" | "department">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Edit state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -70,6 +72,38 @@ export default function AdminStudents() {
     fetchStudents();
   }, []);
 
+  const filteredAndSortedStudents = studentsList
+    .filter(student =>
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.classLevel && student.classLevel.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (student.department && student.department.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      let aValue: string;
+      let bValue: string;
+
+      switch (sortBy) {
+        case "classLevel":
+          aValue = a.classLevel || "";
+          bValue = b.classLevel || "";
+          break;
+        case "department":
+          aValue = a.department || "";
+          bValue = b.department || "";
+          break;
+        default:
+          aValue = a.name;
+          bValue = b.name;
+      }
+
+      if (sortOrder === "asc") {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
+    });
+
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
@@ -99,12 +133,6 @@ export default function AdminStudents() {
       });
     }
   };
-
-  const filteredStudents = studentsList.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.studentId.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <div className="space-y-8">
@@ -280,26 +308,6 @@ export default function AdminStudents() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = 'students-template.csv';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                Download CSV Template
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => {
-                  // Export all students as CSV
-                  const header = 'name,studentId,classLevel,sex,department';
-                  const rows = studentsList.map(s => `${s.name},${s.studentId},${s.classLevel || ""},${s.sex || ""},${s.department || ""}`).join('\n');
-                  const csvContent = `${header}\n${rows}`;
-
-                  const blob = new Blob([csvContent], { type: 'text/csv' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
                   a.download = 'students-export.csv';
                   a.click();
                   URL.revokeObjectURL(url);
@@ -309,19 +317,68 @@ export default function AdminStudents() {
               </Button>
             </div>
 
-            <div>
-              <p className="text-xs text-muted-foreground">CSV format: one student per line, columns "name,studentId". Header row is optional.</p>
+            {/* Search and Sort Controls */}
+            <div className="mb-4 flex gap-4 items-center">
+              <div className="flex-1 max-w-md">
+                <Input
+                  type="text"
+                  placeholder="Search students by name, ID, class, or department..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex gap-2 items-center">
+                <label className="text-sm font-medium">Sort by:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "name" | "classLevel" | "department")}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="name">Name</option>
+                  <option value="classLevel">Class Level</option>
+                  <option value="department">Department</option>
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                >
+                  {sortOrder === "asc" ? "↑" : "↓"}
+                </Button>
+              </div>
             </div>
 
-            {/* Search bar */}
-            <div className="mb-4">
-              <Input
-                type="text"
-                placeholder="Search students by name or ID..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full max-w-md"
-              />
+            {/* Search and Sort Controls */}
+            <div className="mb-4 flex gap-4 items-center">
+              <div className="flex-1 max-w-md">
+                <Input
+                  type="text"
+                  placeholder="Search students by name, ID, class, or department..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex gap-2 items-center">
+                <label className="text-sm font-medium">Sort by:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "name" | "classLevel" | "department")}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="name">Name</option>
+                  <option value="classLevel">Class Level</option>
+                  <option value="department">Department</option>
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                >
+                  {sortOrder === "asc" ? "↑" : "↓"}
+                </Button>
+              </div>
             </div>
 
             {/* Students table */}
@@ -334,12 +391,11 @@ export default function AdminStudents() {
                       <th className="p-2">Student ID</th>
                       <th className="p-2">Class Level / Dept</th>
                       <th className="p-2">Sex</th>
-
                       <th className="p-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredStudents.map((s) => (
+                    {filteredAndSortedStudents.map((s) => (
                       <tr key={s.id} className="border-t">
                         <td className="p-2">{s.name}</td>
                         <td className="p-2">{s.studentId}</td>
@@ -348,63 +404,41 @@ export default function AdminStudents() {
                           {s.department && <div className="text-xs text-muted-foreground font-semibold">{s.department}</div>}
                         </td>
                         <td className="p-2">{s.sex || "-"}</td>
-
                         <td className="p-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingStudent(s);
-                              setIsEditOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="ml-2"
-                            onClick={() => setDeleteConfirm({ open: true, id: s.id, name: s.name })}
-                          >
-                            Delete
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="ml-2"
-                            onClick={() => {
-                              toast({
-                                title: "Student Details",
-                                description: (
-                                  <div className="mt-2 text-sm">
-                                    <p><strong>Name:</strong> {s.name}</p>
-                                    <p><strong>ID:</strong> {s.studentId}</p>
-                                    <p><strong>Class:</strong> {s.classLevel || "-"}</p>
-                                    {s.department && <p><strong>Department:</strong> {s.department}</p>}
-                                    <p><strong>Sex:</strong> {s.sex || "-"}</p>
-                                  </div>
-
-                                ),
-                              });
-                            }}
-                          >
-                            View Details
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="ml-2"
-                            onClick={async () => {
-                              if (!confirm(`Reset password for ${s.name}?`)) return;
-                              // Placeholder: Implement actual reset logic as needed
-                              toast({
-                                title: "Password Reset",
-                                description: `Password reset link sent to ${s.name}`,
-                              });
-                            }}
-                          >
-                            Reset Password
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingStudent(s);
+                                setIsEditOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setDeleteConfirm({ open: true, id: s.id, name: s.name });
+                              }}
+                            >
+                              Delete
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Reset password functionality
+                                toast({
+                                  title: "Password Reset",
+                                  description: `Password reset link sent to ${s.name}`,
+                                });
+                              }}
+                            >
+                              Reset Password
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -157,46 +157,48 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                 <tr className="bg-gray-100">
                                     <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider w-8 sm:w-12">S/N</th>
                                     <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                                        {reportType === 'score-sheet' ? 'Student Name' : 'Subject'}
-                                    </th>
-                                    <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20 sm:w-24">
-                                        {reportType === 'score-sheet' ? 'ID No.' : 'Questions'}
+                                        Student Name
                                     </th>
                                     <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                                        {reportType === 'score-sheet' ? 'Examination Title' : 'Correct'}
+                                        Subject
                                     </th>
                                     <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20 sm:w-24">
-                                        {reportType === 'score-sheet' ? 'Score (%)' : 'Score (Correct / Total)'}
+                                        Score
+                                    </th>
+                                    <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-16 sm:w-20">
+                                        Position
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {results.map((res, index) => (
-                                    <tr key={index} className="hover:bg-gray-50">
-                                        <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-mono">{index + 1}</td>
-                                        <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-bold uppercase">
-                                            {res.name}
-                                        </td>
-                                        <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-gray-600 font-mono">
-                                            {reportType === 'score-sheet' ? res.id : res.total || '-'}
-                                        </td>
-                                        <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm uppercase">
-                                            {reportType === 'score-sheet' ? res.subject : res.score}
-                                        </td>
-                                        <td className={`border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-bold ${res.percentage !== undefined ? (res.percentage >= 40 ? 'text-green-700' : 'text-red-600') : (res.score >= 40 ? 'text-green-700' : 'text-red-600')}`}>
-                                            {reportType === 'score-sheet'
-                                                ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : res.score}%`
-                                                : `${res.score}/${res.total ?? '-'}`}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {/* Padding rows for professional look - reduced for result reports */}
-                                {[...Array(Math.max(0, (reportType === 'score-sheet' ? 12 : 6) - results.length))].map((_, i) => (
+                                {(() => {
+                                    // Sort results by score for position calculation
+                                    const sortedResults = [...results].sort((a, b) => (b.score || 0) - (a.score || 0));
+                                    return sortedResults.map((res, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-mono">{index + 1}</td>
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-bold uppercase">
+                                                {res.name}
+                                            </td>
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm uppercase">
+                                                {res.subject}
+                                            </td>
+                                            <td className={`border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-bold ${(res.score || 0) >= 40 ? 'text-green-700' : 'text-red-600'}`}>
+                                                {res.score || 0}/{res.total || 15}
+                                            </td>
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-bold">
+                                                {index + 1}{index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th'}
+                                            </td>
+                                        </tr>
+                                    ));
+                                })()}
+                                {/* Padding rows for professional look */}
+                                {[...Array(Math.max(0, 12 - results.length))].map((_, i) => (
                                     <tr key={`empty-${i}`} className="h-8 sm:h-10">
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
-                                        <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
+                                        <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2 text-center text-gray-300 font-mono">---</td>
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2 text-center text-gray-300 font-mono">---</td>
                                     </tr>
                                 ))}
