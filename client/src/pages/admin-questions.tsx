@@ -55,10 +55,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings } from "lucide-react";
+import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, FileText, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
-import { Loader2 } from "lucide-react";
 // consolidated React hooks and removed duplicated Dialog import above
 
 export default function AdminQuestions() {
@@ -108,18 +107,29 @@ export default function AdminQuestions() {
   const [uploadProgress, setUploadProgress] = useState<{ uploaded: number; total: number } | null>(null);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
 
+  const [deleteDialogState, setDeleteDialogState] = useState<{
+    isOpen: boolean;
+    type: 'single' | 'selected' | 'all';
+    id?: string;
+    count?: number;
+  }>({ isOpen: false, type: 'single' });
+
+  // Text/File Parsing States
+  const [parseText, setParseText] = useState<string>("");
+  const [parseType, setParseType] = useState<"obj" | "theory">("obj");
+  const [parseFile, setParseFile] = useState<File | null>(null);
+  const [parsedQuestions, setParsedQuestions] = useState<any[]>([]);
+  const [isParsing, setIsParsing] = useState(false);
+
   // Bulk Image Upload State
   const [missingImages, setMissingImages] = useState<string[]>([]);
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false);
   const [uploadedImageMap, setUploadedImageMap] = useState<Record<string, string>>({});
   const [imageUploadProgress, setImageUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const [deleteDialogState, setDeleteDialogState] = useState<{
-    isOpen: boolean;
-    type: 'single' | 'selected' | 'all';
-    id?: string; // for single
-    count?: number; // for display
-  }>({ isOpen: false, type: 'single' });
+  const [generateExamDialog, setGenerateExamDialog] = useState(false);
+  const [examTitle, setExamTitle] = useState("");
+  const [examDuration, setExamDuration] = useState(60);
 
   // wire file input change
   useEffect(() => {
@@ -463,6 +473,39 @@ export default function AdminQuestions() {
     },
   });
 
+  const createExamFromSelectedMutation = useMutation({
+    mutationFn: async (data: { title: string; duration: number; questionIds: string[] }) => {
+      const selectedQuestions = questions?.filter(q => selectedIds.has(q.id)) || [];
+      if (selectedQuestions.length === 0) throw new Error("No questions selected");
+
+      const examData = {
+        title: data.title,
+        description: `Generated from selected questions (${selectedQuestions.length} questions)`,
+        subject: selectedQuestions[0]?.subject || "Mixed",
+        duration: data.duration,
+        passingScore: 60,
+        questionIds: data.questionIds,
+        classLevel: selectedQuestions[0]?.classLevel || "Mixed",
+        term: selectedQuestions[0]?.term || "First Term",
+        department: selectedQuestions[0]?.department || "",
+        examType: selectedQuestions.every(q => q.examType === "Objectives") ? "Objectives" : "Mixed",
+      };
+
+      return apiRequest("POST", "/api/exams", examData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
+      setGenerateExamDialog(false);
+      setExamTitle("");
+      setExamDuration(60);
+      setSelectedIds(new Set());
+      toast({ title: "Exam created", description: "Exam has been generated from selected questions." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create exam.", variant: "destructive" });
+    },
+  });
+
   const subjects = questions
     ? Array.from(new Set(questions.map((q) => q.subject)))
     : [];
@@ -553,6 +596,139 @@ export default function AdminQuestions() {
     document.body.removeChild(link);
   };
 
+  const handleParseText = async () => {
+    if (!parseText.trim()) {
+      toast({ title: "Error", description: "Please enter text to parse", variant: "destructive" });
+      return;
+    }
+
+    setIsParsing(true);
+    try {
+      const meta = {
+        classLevel: csvClassLevel,
+        term: csvTerm,
+        subject: csvSubject,
+        department: csvDepartment,
+      };
+
+      const response = await apiRequest("POST", "/api/questions/parse-text", {
+        type: parseType,
+        text: parseText,
+        meta,
+      });
+
+      setParsedQuestions(response.questions);
+      toast({ title: "Success", description: `Parsed ${response.questions.length} questions` });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to parse text", variant: "destructive" });
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const downloadParsedCSV = () => {
+    if (parsedQuestions.length === 0) return;
+
+    const headers = [
+      "classLevel",
+      "term",
+      "examType",
+      "subject",
+      "questionText",
+      "questionType",
+      "difficulty",
+      "points",
+      "correctAnswer",
+      "options",
+      "department"
+    ];
+
+    const csvContent = headers.join(",") + "\n" +
+      parsedQuestions.map(q =>
+        headers.map(h => {
+          const val = (q as any)[h] || "";
+          // Escape quotes and wrap in quotes if contains comma or quote
+          const escaped = val.toString().replace(/"/g, '""');
+          return val.toString().includes(',') || val.toString().includes('"') || val.toString().includes('\n')
+            ? `"${escaped}"`
+            : escaped;
+        }).join(",")
+      ).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `parsed_questions_${csvSubject || 'unknown'}_${csvClassLevel || 'unknown'}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleParseFile = async () => {
+    if (!parseFile) {
+      toast({ title: "Error", description: "Please select a file to parse", variant: "destructive" });
+      return;
+    }
+
+    setIsParsing(true);
+    try {
+      const meta = {
+        classLevel: csvClassLevel,
+        term: csvTerm,
+        subject: csvSubject,
+        department: csvDepartment,
+      };
+
+      const formData = new FormData();
+      formData.append("file", parseFile);
+      formData.append("type", parseType);
+      formData.append("meta", JSON.stringify(meta));
+
+      const response = await fetch("/api/questions/parse-file", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to parse file");
+      }
+
+      const result = await response.json();
+      setParsedQuestions(result.questions);
+      toast({ title: "Success", description: `Parsed ${result.questions.length} questions` });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to parse file", variant: "destructive" });
+    } finally {
+      setIsParsing(false);
+      setParseFile(null);
+    }
+  };
+
+  const handleImportParsed = async () => {
+    if (parsedQuestions.length === 0) {
+      toast({ title: "Error", description: "No questions to import", variant: "destructive" });
+      return;
+    }
+
+    try {
+      // Transform parsed questions to match the expected format
+      const questionsToImport = parsedQuestions.map(q => ({
+        ...q,
+        options: typeof q.options === 'string' ? q.options.split('|').map((opt: string) => opt.trim()) : q.options,
+      }));
+
+      const response = await apiRequest("POST", "/api/questions/bulk", questionsToImport);
+      queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+      setParsedQuestions([]);
+      setParseText("");
+      toast({ title: "Success", description: `Imported ${response.insertedCount} questions` });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to import questions", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4">
@@ -624,6 +800,135 @@ export default function AdminQuestions() {
             </Button>
           </div>
 
+          {/* Parse Questions Section */}
+          <div className="flex gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileText className="mr-2 h-4 w-4" /> Parse Questions
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Parse Questions from Text or File</DialogTitle>
+                  <DialogDescription>
+                    Paste question text or upload a DOCX/PDF file to automatically extract and format questions.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  {/* Type Selection */}
+                  <div className="flex gap-4">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="parse-obj"
+                        name="parseType"
+                        value="obj"
+                        checked={parseType === "obj"}
+                        onChange={(e) => setParseType(e.target.value as "obj")}
+                      />
+                      <Label htmlFor="parse-obj">Objective Questions</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="parse-theory"
+                        name="parseType"
+                        value="theory"
+                        checked={parseType === "theory"}
+                        onChange={(e) => setParseType(e.target.value as "theory")}
+                      />
+                      <Label htmlFor="parse-theory">Theory Questions</Label>
+                    </div>
+                  </div>
+
+                  {/* Text Input */}
+                  <div>
+                    <Label htmlFor="parse-text">Paste Questions Text</Label>
+                    <Textarea
+                      id="parse-text"
+                      placeholder={`Example for Objective:\n1. What is the capital of France?\n(a) London\n(b) Paris\n(c) Berlin\n(d) Madrid\nAnswer: B\n\n2. What is 2 + 2?\n(a) 3\n(b) 4\n(c) 5\n(d) 6\nAnswer: B`}
+                      value={parseText}
+                      onChange={(e) => setParseText(e.target.value)}
+                      rows={10}
+                      className="mt-1"
+                    />
+                    <Button
+                      onClick={handleParseText}
+                      disabled={isParsing || !parseText.trim()}
+                      className="mt-2"
+                    >
+                      {isParsing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Parse Text
+                    </Button>
+                  </div>
+
+                  {/* File Upload */}
+                  <div>
+                    <Label>Or Upload File</Label>
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        type="file"
+                        accept=".docx,.pdf"
+                        onChange={(e) => setParseFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        id="parse-file"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => document.getElementById("parse-file")?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {parseFile ? parseFile.name : "Select DOCX/PDF"}
+                      </Button>
+                      <Button
+                        onClick={handleParseFile}
+                        disabled={isParsing || !parseFile}
+                      >
+                        {isParsing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Parse File
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Parsed Questions Preview */}
+                  {parsedQuestions.length > 0 && (
+                    <div>
+                      <Label>Parsed Questions ({parsedQuestions.length})</Label>
+                      <div className="mt-2 max-h-60 overflow-y-auto border rounded p-2">
+                        {parsedQuestions.map((q, i) => (
+                          <div key={i} className="mb-2 p-2 bg-muted rounded">
+                            <div className="font-medium">{q.questionText}</div>
+                            {q.options && Array.isArray(q.options) && (
+                              <div className="text-sm text-muted-foreground">
+                                Options: {q.options.join(", ")}
+                              </div>
+                            )}
+                            {q.correctAnswer && (
+                              <div className="text-sm text-green-600">
+                                Answer: {q.correctAnswer}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Button onClick={handleImportParsed}>
+                          Import {parsedQuestions.length} Questions
+                        </Button>
+                        <Button variant="outline" onClick={downloadParsedCSV}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download CSV
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
           <div className="flex gap-2">
             <Select value={filterDepartment} onValueChange={setFilterDepartment}>
               <SelectTrigger className="w-[180px]">
@@ -645,13 +950,23 @@ export default function AdminQuestions() {
 
           <div className="flex gap-2 ml-auto">
             {selectedIds.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setDeleteDialogState({ isOpen: true, type: 'selected', id: undefined })}
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> Delete Selected ({selectedIds.size})
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setGenerateExamDialog(true)}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Generate Exam ({selectedIds.size})
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteDialogState({ isOpen: true, type: 'selected', id: undefined })}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete Selected ({selectedIds.size})
+                </Button>
+              </>
             )}
             <Button
               variant="destructive"
@@ -723,6 +1038,7 @@ export default function AdminQuestions() {
                   <option value="Commercial">Commercial</option>
                   <option value="Art">Art</option>
                   <option value="Others">Others</option>
+                  <option value="General">General</option>
                 </select>
               </div>
             )}
@@ -1344,6 +1660,59 @@ export default function AdminQuestions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Generate Exam Dialog */}
+      <Dialog open={generateExamDialog} onOpenChange={setGenerateExamDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate Exam from Selected Questions</DialogTitle>
+            <DialogDescription>
+              Create a new exam using the {selectedIds.size} selected questions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="exam-title">Exam Title</Label>
+              <Input
+                id="exam-title"
+                placeholder="Enter exam title"
+                value={examTitle}
+                onChange={(e) => setExamTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="exam-duration">Duration (minutes)</Label>
+              <Input
+                id="exam-duration"
+                type="number"
+                min="1"
+                value={examDuration}
+                onChange={(e) => setExamDuration(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenerateExamDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!examTitle.trim()) {
+                  toast({ title: "Error", description: "Please enter an exam title.", variant: "destructive" });
+                  return;
+                }
+                createExamFromSelectedMutation.mutate({
+                  title: examTitle,
+                  duration: examDuration,
+                  questionIds: Array.from(selectedIds)
+                });
+              }}
+              disabled={createExamFromSelectedMutation.isPending}
+            >
+              {createExamFromSelectedMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Exam
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }
@@ -1605,6 +1974,7 @@ function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initi
               <SelectItem value="Commercial">Commercial</SelectItem>
               <SelectItem value="Art">Art</SelectItem>
               <SelectItem value="Others">Others</SelectItem>
+              <SelectItem value="General">General</SelectItem>
             </SelectContent>
           </Select>
         </div>

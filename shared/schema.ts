@@ -8,7 +8,7 @@ export const questionTypes = ["multiple-choice", "true-false", "short-answer", "
 export const difficultyLevels = ["easy", "medium", "hard"] as const;
 export const termOptions = ["First Term", "Second Term", "Third Term", "Others"] as const;
 export const examTypeOptions = ["Objectives", "Theory"] as const;
-export const departments = ["Science", "Commercial", "Art", "Others"] as const;
+export const departments = ["Science", "Commercial", "Art", "Others", "General"] as const;
 
 
 
@@ -30,7 +30,7 @@ export const questions = pgTable("questions", {
   term: text("term").notNull().default("First Term"),
   examType: text("exam_type").notNull().default("Objectives"),
   imageUrl: text("image_url"),
-  department: text("department"),
+  department: text("department").$type<string | null>(),
 });
 
 
@@ -67,8 +67,9 @@ export const exams = pgTable("exams", {
   theoryInstructions: text("theory_instructions"),
   examType: text("exam_type").notNull().default("Objectives"),
   theoryConfig: jsonb("theory_config").$type<any>(),
+  subExamIds: jsonb("sub_exam_ids").$type<string[]>().default([]),
   isActive: boolean("is_active").notNull().default(true),
-  department: text("department"),
+  department: text("department").$type<string | null>(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -82,6 +83,7 @@ export const insertExamSchema = createInsertSchema(exams).omit({
   passingScore: z.number().min(0).max(100),
   theoryInstructions: z.string().optional(),
   questionIds: z.array(z.string()).optional(),
+  subExamIds: z.array(z.string()).optional(),
   numberOfQuestionsToDisplay: z.number().optional(),
   classLevel: z.enum(classLevels),
   term: z.enum(termOptions).default("First Term"),
@@ -157,7 +159,7 @@ export const students = pgTable("students", {
   studentId: text("student_id").notNull().unique(),
   classLevel: text("class_level").notNull(),
   sex: text("sex"),
-  department: text("department"),
+  department: text("department").$type<string | null>(),
 });
 
 

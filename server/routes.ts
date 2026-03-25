@@ -8,6 +8,7 @@ import {
   type Question,
 } from "../shared/schema";
 import { z } from "zod";
+import { parseObjective, parseTheory, parseFile } from "./parser";
 import multer from "multer";
 import path from "path";
 import express from "express";
@@ -206,6 +207,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Parse text input into questions
+  app.post("/api/questions/parse-text", async (req, res) => {
+    try {
+      const { type, text, meta } = req.body as {
+        type: "obj" | "theory";
+        text: string;
+        meta: { classLevel: string; term: string; subject: string; department?: string };
+      };
+
+      if (!text || !meta) {
+        return res.status(400).json({ error: "Text and metadata are required" });
+      }
+
+      let parsedQuestions;
+      if (type === "obj") {
+        parsedQuestions = parseObjective(text, meta);
+      } else {
+        parsedQuestions = parseTheory(text, meta);
+      }
+
+      res.json({ questions: parsedQuestions });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to parse text" });
+    }
+  });
+
+  // Parse uploaded file into questions
+  app.post("/api/questions/parse-file", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const { type, meta } = req.body as {
+        type: "obj" | "theory";
+        meta: string; // JSON string
+      };
+
+      const parsedMeta = JSON.parse(meta);
+
+      const text = await parseFile(req.file.path);
+
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+
+      let parsedQuestions;
+      if (type === "obj") {
+        parsedQuestions = parseObjective(text, parsedMeta);
+      } else {
+        parsedQuestions = parseTheory(text, parsedMeta);
+      }
+
+      res.json({ questions: parsedQuestions });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to parse file" });
+    }
+  });
+
   app.delete("/api/questions/:id", async (req, res) => {
     try {
       await storage.deleteQuestion(req.params.id);
@@ -321,6 +380,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const examData = { ...validatedData, questionIds } as any;
+
+      // If this is a multi-exam composite, derive totals
+      if (validatedData.subExamIds && validatedData.subExamIds.length > 0) {
+        const subExams = await Promise.all(validatedData.subExamIds.map((id) => storage.getExam(id)));
+        const validSubExams = subExams.filter(Boolean) as any[];
+        examData.duration = validSubExams.reduce((sum, e) => sum + (e.duration || 0), 0);
+        examData.totalPoints = validSubExams.reduce((sum, e) => sum + (e.totalPoints || 0), 0);
+        examData.questionIds = [];
+      }
+
       const exam = await storage.createExam(examData);
       res.status(201).json(exam);
     } catch (error) {

@@ -45,6 +45,10 @@ export default function AdminExams() {
     queryKey: ["/api/questions"],
   });
 
+  const { data: allExams } = useQuery<Exam[]>({
+    queryKey: ["/api/exams"],
+  });
+
   const deleteExamMutation = useMutation({
     mutationFn: (examId: string) => apiRequest("DELETE", `/api/exams/${examId}`, {}),
     onSuccess: () => {
@@ -83,6 +87,7 @@ export default function AdminExams() {
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <ExamForm
               questions={questions || []}
+              exams={allExams || []}
               onSuccess={() => {
                 setIsCreateOpen(false);
                 queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
@@ -211,15 +216,51 @@ export default function AdminExams() {
 
 ;
 
+type ExamFormData = {
+  title: string;
+  description: string;
+  subject: string;
+  duration: number;
+  passingScore: number;
+  questionIds: string[];
+  classLevel: string;
+  term: string;
+  department: string;
+  subExamIds: string[];
+  numberOfQuestionsToDisplay?: number;
+  theoryInstructions: string;
+  examMode: "single" | "composite";
+  examType: "Objectives" | "Theory";
+  compositeSubjectCount: number;
+  compositeSubjects: Array<{
+    subject: string;
+    department: "General" | "Science" | "Art" | "Commercial" | "Others";
+    duration: number;
+    numberOfQuestions: number;
+  }>;
+  theoryConfig: {
+    mode: "manual" | "auto";
+    settings: {
+      includeAlphabet: boolean;
+      includeRoman: boolean;
+      totalMainQuestions: number;
+      randomizeComplexity: boolean;
+    };
+    structure: any[];
+  };
+};
+
 function ExamForm({
   questions,
+  exams,
   onSuccess,
 }: {
   questions: Question[];
+  exams: Exam[];
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ExamFormData>({
     title: "",
     description: "",
     subject: "",
@@ -229,10 +270,19 @@ function ExamForm({
     classLevel: "JSS1",
     term: "First Term",
     department: "" as string,
+    subExamIds: [] as string[],
     numberOfQuestionsToDisplay: undefined as number | undefined,
 
     theoryInstructions: "",
+    examMode: "single" as "single" | "composite",
     examType: "Objectives" as "Objectives" | "Theory",
+    compositeSubjectCount: 0,
+    compositeSubjects: [] as Array<{
+      subject: string;
+      department: "General" | "Science" | "Art" | "Commercial" | "Others";
+      duration: number;
+      numberOfQuestions: number;
+    }>,
     theoryConfig: {
       mode: "manual",
       settings: {
@@ -255,9 +305,16 @@ function ExamForm({
     // Basic filters
     let match = (formData.subject ? q.subject === formData.subject : true) &&
       (formData.classLevel ? q.classLevel === formData.classLevel : true) &&
-      (formData.term ? q.term === formData.term : true) &&
-      (formData.department ? q.department === formData.department : true);
+      (formData.term ? q.term === formData.term : true);
 
+    // Department filter
+    if (formData.department) {
+      if (formData.department === "General") {
+        match = match && (!q.department || q.department === "General");
+      } else {
+        match = match && q.department === formData.department;
+      }
+    }
 
     // Exam Type filter (checkboxes)
     if (match) {
@@ -267,6 +324,30 @@ function ExamForm({
 
     return match;
   });
+
+  const subjectOptions = Array.from(new Set(
+    questions
+      .filter(q => q.classLevel === formData.classLevel)
+      .map(q => q.subject)
+  ));
+
+  const getSubjectQuestionPool = (sub: { subject: string; department: string }) => {
+    if (!sub.subject) return [] as Question[];
+    return questions.filter(q => {
+      if (formData.classLevel && q.classLevel !== formData.classLevel) return false;
+      if (q.subject !== sub.subject) return false;
+      if (formData.term && q.term !== formData.term) return false;
+      if (sub.department === "General") {
+        if (q.department && q.department !== "General") return false;
+      } else if (sub.department) {
+        if (q.department !== sub.department) return false;
+      }
+      if (formData.examType === "Theory") {
+        return q.examType === "Theory" || q.questionType === "theory";
+      }
+      return (q.examType || "Objectives") === "Objectives";
+    });
+  };
 
   const createExamMutation = useMutation({
     mutationFn: (data: typeof formData) => apiRequest("POST", "/api/exams", { ...data, assignRandomQuestions }),
@@ -287,10 +368,125 @@ function ExamForm({
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const dataToSubmit: any = { ...formData };
+
+    if (formData.examMode === "composite" && formData.compositeSubjectCount > 0) {
+      if (!formData.compositeSubjectCount || formData.compositeSubjectCount <= 0) {
+        toast({ title: "Invalid composite setup", description: "Please set a valid number of subjects.", variant: "destructive" });
+        return;
+      }
+
+      if (formData.compositeSubjects.length !== formData.compositeSubjectCount) {
+        toast({ title: "Incomplete composite setup", description: "Please fill all subject entries.", variant: "destructive" });
+        return;
+      }
+
+      for (const sub of formData.compositeSubjects) {
+        if (!sub.subject || sub.duration <= 0 || sub.numberOfQuestions <= 0) {
+          toast({ title: "Invalid subject configuration", description: "Each composite subject must have a name, duration and question count.", variant: "destructive" });
+          return;
+        }
+      }
+
+      const subExamIds: string[] = [];
+      let totalDuration = 0;
+      let totalPoints = 0;
+
+      for (const sub of formData.compositeSubjects) {
+        const subjectQuestions = questions.filter((q) => {
+          if (q.classLevel !== formData.classLevel) return false;
+          if (q.subject !== sub.subject) return false;
+          if (formData.term && q.term !== formData.term) return false;
+
+          if (sub.department === "General") {
+            if (q.department && q.department !== "General") return false;
+          } else if (sub.department) {
+            if (q.department !== sub.department) return false;
+          }
+
+          if (formData.examType === "Theory") {
+            return q.examType === "Theory" || q.questionType === "theory";
+          }
+          return (q.examType || "Objectives") === "Objectives";
+        });
+
+        if (subjectQuestions.length < sub.numberOfQuestions) {
+          toast({
+            title: "Not enough questions",
+            description: `Not enough questions for ${sub.subject} (${subjectQuestions.length} available, ${sub.numberOfQuestions} requested).`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const shuffled = [...subjectQuestions];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        const selected = shuffled.slice(0, sub.numberOfQuestions);
+
+        const subExamPayload = {
+          title: `${formData.title} - ${sub.subject}`,
+          description: formData.description,
+          subject: sub.subject,
+          duration: sub.duration,
+          passingScore: formData.passingScore,
+          questionIds: selected.map(q => q.id),
+          classLevel: formData.classLevel,
+          term: formData.term,
+          department: sub.department === "General" ? "General" : sub.department,
+          examType: formData.examType,
+          subExamIds: [],
+          isActive: true,
+        };
+
+        try {
+          const createdSubExam = await apiRequest("POST", "/api/exams", subExamPayload);
+          subExamIds.push((createdSubExam as Exam).id);
+        } catch (error: any) {
+          toast({
+            title: "Error",
+            description: (error?.message ?? "Failed to create sub exam."),
+            variant: "destructive",
+          });
+          return;
+        }
+
+        totalDuration += sub.duration;
+        totalPoints += selected.reduce((sum, q) => sum + (q.points || 1), 0);
+      }
+
+      dataToSubmit.questionIds = [];
+      dataToSubmit.subExamIds = subExamIds;
+      dataToSubmit.subject = "Composite";
+      dataToSubmit.duration = totalDuration;
+      dataToSubmit.totalPoints = totalPoints;
+      dataToSubmit.department = "General";
+
+      createExamMutation.mutate(dataToSubmit);
+      return;
+    }
+
+    if (formData.subExamIds && formData.subExamIds.length > 0) {
+      dataToSubmit.questionIds = [];
+      const selectedSubExams = exams.filter((e) => formData.subExamIds.includes(e.id));
+      dataToSubmit.duration = selectedSubExams.reduce((sum, e) => sum + (e.duration || 0), 0);
+      dataToSubmit.totalPoints = selectedSubExams.reduce((sum, e) => sum + (e.totalPoints || 0), 0);
+      dataToSubmit.subject = "Composite";
+    }
+
+    if (formData.examMode === "composite" && (!formData.subExamIds || formData.subExamIds.length === 0)) {
+      toast({
+        title: "No sub-exams selected",
+        description: "Please select at least one sub-exam to create a composite exam.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (formData.examType === "Theory") {
       // In manual mode, we already have the structure in state.
@@ -369,27 +565,45 @@ function ExamForm({
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <>
       <DialogHeader>
         <DialogTitle>Create New Exam</DialogTitle>
         <DialogDescription>
           Fill in the details to create a new examination
         </DialogDescription>
       </DialogHeader>
-      <div className="space-y-6 py-6">
-        <div className="space-y-2">
-          <Label htmlFor="examType">Exam Type *</Label>
-          <select
-            id="examType"
-            value={formData.examType}
-            onChange={e => setFormData({ ...formData, examType: e.target.value as any })}
-            required
-            className="border rounded px-2 py-1 w-full"
-            data-testid="select-exam-type"
-          >
-            <option value="Objectives">Objectives (Multiple Choice)</option>
-            <option value="Theory">Theory (Nested Structure)</option>
-          </select>
+      <form id="exam-form" onSubmit={handleSubmit}>
+        <div className="space-y-6 py-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="examMode">Exam Mode *</Label>
+            <select
+              id="examMode"
+              value={formData.examMode}
+              onChange={e => setFormData({ ...formData, examMode: e.target.value as "single" | "composite" })}
+              required
+              className="border rounded px-2 py-1 w-full"
+              data-testid="select-exam-mode"
+            >
+              <option value="single">Single Exam</option>
+              <option value="composite">Composite Exam (Multi-subject)</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="examType">Exam Type *</Label>
+            <select
+              id="examType"
+              value={formData.examType}
+              onChange={e => setFormData({ ...formData, examType: e.target.value as any })}
+              required
+              className="border rounded px-2 py-1 w-full"
+              data-testid="select-exam-type"
+            >
+              <option value="Objectives">Objectives (Multiple Choice)</option>
+              <option value="Theory">Theory (Nested Structure)</option>
+            </select>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -398,7 +612,16 @@ function ExamForm({
             <select
               id="classLevel"
               value={formData.classLevel}
-              onChange={e => setFormData({ ...formData, classLevel: e.target.value, subject: '', questionIds: [], department: '' })}
+              onChange={e => {
+                const level = e.target.value;
+                setFormData(prev => ({
+                  ...prev,
+                  classLevel: level,
+                  subject: "",
+                  questionIds: [],
+                  department: "",
+                }));
+              }}
               required
               className="border rounded px-2 py-1 w-full"
               data-testid="select-exam-class-level"
@@ -450,6 +673,7 @@ function ExamForm({
               <option value="Commercial">Commercial</option>
               <option value="Art">Art</option>
               <option value="Others">Others</option>
+              <option value="General">General</option>
             </select>
           </div>
         )}
@@ -481,7 +705,7 @@ function ExamForm({
           />
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        {formData.examMode === "single" ? (
           <div className="space-y-2">
             <Label htmlFor="subject">Subject *</Label>
             <select
@@ -493,12 +717,137 @@ function ExamForm({
               data-testid="select-exam-subject"
             >
               <option value="">Select Subject</option>
-              {Array.from(new Set(questions.filter(q => q.classLevel === formData.classLevel).map(q => q.subject))).map(subject => (
+              {Array.from(new Set(questions.filter(q => 
+                q.classLevel === formData.classLevel && 
+                (!formData.department || q.department === formData.department || (formData.department === "General" && (!q.department || q.department === "General")))
+              ).map(q => q.subject))).map(subject => (
                 <option key={subject} value={subject}>{subject}</option>
               ))}
             </select>
+            <p className="text-xs text-muted-foreground">Single exam: the selected subject and question set will be used.</p>
           </div>
+        ) : (
+          <div className="space-y-4 border rounded p-4 bg-muted/50">
+            <p className="text-sm font-medium">Composite exam configuration</p>
 
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="compositeSubjectCount">Number of subjects *</Label>
+                <Input
+                  id="compositeSubjectCount"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={formData.compositeSubjectCount || ""}
+                  onChange={e => {
+                    const count = parseInt(e.target.value) || 0;
+                    setFormData(prev => {
+                      const adjusted = [...prev.compositeSubjects];
+                      while (adjusted.length < count) {
+                        adjusted.push({
+                          subject: "",
+                          department: "General",
+                          duration: 10,
+                          numberOfQuestions: 10,
+                        });
+                      }
+                      while (adjusted.length > count) adjusted.pop();
+                      return {
+                        ...prev,
+                        compositeSubjectCount: count,
+                        compositeSubjects: adjusted,
+                      };
+                    });
+                  }}
+                  required
+                />
+              </div>
+            </div>
+
+            {formData.compositeSubjects.map((sub, index) => (
+              <div key={index} className="space-y-2 rounded border p-3">
+                <p className="font-semibold">Subject {index + 1}</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Subject name *</Label>
+                    <select
+                      value={sub.subject}
+                      onChange={e => setFormData(prev => {
+                        const newSubjects = [...prev.compositeSubjects];
+                        newSubjects[index].subject = e.target.value;
+                        return { ...prev, compositeSubjects: newSubjects };
+                      })}
+                      className="border rounded px-2 py-1 w-full"
+                      required
+                    >
+                      <option value="">Select Subject</option>
+                      {subjectOptions.map(subject => (
+                        <option key={subject} value={subject}>{subject}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      {sub.subject ? `${getSubjectQuestionPool(sub).length} questions available` : "Choose subject to see availability"}
+                      {sub.subject && getSubjectQuestionPool(sub).length < sub.numberOfQuestions && (
+                        <span className="text-destructive"> - not enough questions for requested number</span>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>General or Department</Label>
+                    <select
+                      value={sub.department}
+                      onChange={e => setFormData(prev => {
+                        const newSubjects = [...prev.compositeSubjects];
+                        newSubjects[index].department = e.target.value as any;
+                        return { ...prev, compositeSubjects: newSubjects };
+                      })}
+                      className="border rounded px-2 py-1 w-full"
+                    >
+                      <option value="General">General</option>
+                      <option value="Science">Science</option>
+                      <option value="Art">Art</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Duration (minutes)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={sub.duration}
+                      onChange={e => setFormData(prev => {
+                        const newSubjects = [...prev.compositeSubjects];
+                        newSubjects[index].duration = parseInt(e.target.value) || 0;
+                        return { ...prev, compositeSubjects: newSubjects };
+                      })}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Number of questions</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={sub.numberOfQuestions}
+                      onChange={e => setFormData(prev => {
+                        const newSubjects = [...prev.compositeSubjects];
+                        newSubjects[index].numberOfQuestions = parseInt(e.target.value) || 0;
+                        return { ...prev, compositeSubjects: newSubjects };
+                      })}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <p className="text-xs text-muted-foreground">You can configure each SS1 subject as general or departmental plus duration and question count.</p>
+          </div>
+        )}
           <div className="space-y-2">
             <Label htmlFor="duration">Duration (minutes) *</Label>
             <Input
@@ -513,7 +862,6 @@ function ExamForm({
               data-testid="input-exam-duration"
             />
           </div>
-        </div>
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
@@ -746,96 +1094,106 @@ function ExamForm({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Select Questions * ({availableQuestions.length} available)</Label>
-            <div>
-              <Button variant="ghost" size="sm" onClick={selectAllQuestions} data-testid="button-select-all-questions">Select All</Button>
-            </div>
+        {formData.examMode === "composite" ? (
+          <div className="rounded-md border p-4 bg-muted/10">
+            <p className="text-sm text-muted-foreground">
+              Composite exam mode is active. Question-level selection is disabled; exam content comes from sub-exams.
+            </p>
           </div>
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-4">
-            {useSubjectSelectionLogic ? (
-              <>
-                <div className="mb-2">
-                  <Label>Filter by Subject:</Label>
-                  <select
-                    value={formData.subject}
-                    onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                    className="ml-2 border rounded px-2 py-1"
-                  >
-                    <option value="">All Subjects</option>
-                    {Array.from(new Set(questions.map(q => q.subject))).map(subject => (
-                      <option key={subject} value={subject}>{subject}</option>
-                    ))}
-                  </select>
-                </div>
-                {availableQuestions.length > 0 ? (
-                  availableQuestions
-                    .sort((a, b) => a.subject.localeCompare(b.subject))
-                    .map((question) => (
-                      <div key={question.id} className="flex items-start gap-3 rounded-md border p-3 hover-elevate">
-                        <input
-                          type="checkbox"
-                          id={`question-${question.id}`}
-                          checked={formData.questionIds.includes(question.id)}
-                          onChange={() => toggleQuestion(question.id)}
-                          className="mt-1"
-                          data-testid={`checkbox-question-${question.id}`}
-                        />
-                        <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
-                            <Badge variant="outline" className="text-xs">{question.examType || "Objectives"}</Badge>
-                            <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
-                          </div>
-                          <p className="mt-1">{question.questionText}</p>
-                        </Label>
-                      </div>
-                    ))
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Select Questions * ({availableQuestions.length} available)</Label>
+              <div>
+                <Button variant="ghost" size="sm" onClick={selectAllQuestions} data-testid="button-select-all-questions">Select All</Button>
+              </div>
+            </div>
+            <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-4">
+              {useSubjectSelectionLogic ? (
+                <>
+                  <div className="mb-2">
+                    <Label>Filter by Subject:</Label>
+                    <select
+                      value={formData.subject}
+                      onChange={e => setFormData({ ...formData, subject: e.target.value })}
+                      className="ml-2 border rounded px-2 py-1"
+                    >
+                      <option value="">All Subjects</option>
+                      {Array.from(new Set(questions.map(q => q.subject))).map(subject => (
+                        <option key={subject} value={subject}>{subject}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {availableQuestions.length > 0 ? (
+                    availableQuestions
+                      .sort((a, b) => a.subject.localeCompare(b.subject))
+                      .map((question) => (
+                        <div key={question.id} className="flex items-start gap-3 rounded-md border p-3 hover-elevate">
+                          <input
+                            type="checkbox"
+                            id={`question-${question.id}`}
+                            checked={formData.questionIds.includes(question.id)}
+                            onChange={() => toggleQuestion(question.id)}
+                            className="mt-1"
+                            data-testid={`checkbox-question-${question.id}`}
+                          />
+                          <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-sm">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
+                              <Badge variant="outline" className="text-xs">{question.examType || "Objectives"}</Badge>
+                              <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
+                            </div>
+                            <p className="mt-1">{question.questionText}</p>
+                          </Label>
+                        </div>
+                      ))
+                  ) : (
+                    <p className="text-center text-sm text-muted-foreground">No questions available for the selected Class Level and Subject.</p>
+                  )}
+                </>
+              ) : (
+                availableQuestions.length > 0 ? (
+                  availableQuestions.map((question) => (
+                    <div key={question.id} className="flex items-start gap-3 rounded-md border p-3 hover-elevate">
+                      <input
+                        type="checkbox"
+                        id={`question-${question.id}`}
+                        checked={formData.questionIds.includes(question.id)}
+                        onChange={() => toggleQuestion(question.id)}
+                        className="mt-1"
+                        data-testid={`checkbox-question-${question.id}`}
+                      />
+                      <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
+                          <Badge variant="outline" className="text-xs">{question.examType || "Objectives"}</Badge>
+                          <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
+                        </div>
+                        <p className="mt-1">{question.questionText}</p>
+                      </Label>
+                    </div>
+                  ))
                 ) : (
                   <p className="text-center text-sm text-muted-foreground">No questions available for the selected Class Level and Subject.</p>
-                )}
-              </>
-            ) : (
-              availableQuestions.length > 0 ? (
-                availableQuestions.map((question) => (
-                  <div key={question.id} className="flex items-start gap-3 rounded-md border p-3 hover-elevate">
-                    <input
-                      type="checkbox"
-                      id={`question-${question.id}`}
-                      checked={formData.questionIds.includes(question.id)}
-                      onChange={() => toggleQuestion(question.id)}
-                      className="mt-1"
-                      data-testid={`checkbox-question-${question.id}`}
-                    />
-                    <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
-                        <Badge variant="outline" className="text-xs">{question.examType || "Objectives"}</Badge>
-                        <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
-                      </div>
-                      <p className="mt-1">{question.questionText}</p>
-                    </Label>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center text-sm text-muted-foreground">No questions available for the selected Class Level and Subject.</p>
-              )
-            )}
+                )
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{formData.questionIds.length} question(s) selected</p>
           </div>
-          <p className="text-sm text-muted-foreground">{formData.questionIds.length} question(s) selected</p>
-        </div>
+        )}
       </div>
-      <DialogFooter>
-        <Button
-          type="submit"
-          disabled={createExamMutation.isPending}
-          data-testid="button-submit-exam"
-        >
-          {createExamMutation.isPending ? "Creating..." : "Create Exam"}
-        </Button>
-      </DialogFooter>
-    </form >
+    </form>
+    <DialogFooter>
+      <Button
+        type="submit"
+        disabled={createExamMutation.isPending}
+        data-testid="button-submit-exam"
+        form="exam-form"
+      >
+        {createExamMutation.isPending ? "Creating..." : "Create Exam"}
+      </Button>
+    </DialogFooter>
+    </>
   );
 }
 

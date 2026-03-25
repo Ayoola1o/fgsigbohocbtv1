@@ -159,6 +159,7 @@ export default function AdminStudents() {
                   <option value="Commercial">Commercial</option>
                   <option value="Art">Art</option>
                   <option value="Others">Others</option>
+                  <option value="General">General</option>
                 </select>
               </div>
               <div>
