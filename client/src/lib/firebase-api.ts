@@ -413,3 +413,7 @@ export const getResult = async (id: string): Promise<Result | null> => {
     const d = await getDoc(doc(db, "results", id));
     return d.exists() ? docToData<Result>(d) : null;
 };
+
+export const deleteResult = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, "results", id));
+};

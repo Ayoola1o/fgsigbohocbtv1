@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,16 +21,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon } from "lucide-react";
+import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Trash2 } from "lucide-react";
 import type { Result, Exam, Student } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { createRoot } from "react-dom/client";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { getResults } from "@/lib/firebase-api";
+import { getResults, deleteResult } from "@/lib/firebase-api";
+import { queryClient } from "@/lib/queryClient";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function AdminResults() {
   const { toast } = useToast();
@@ -43,6 +58,9 @@ export default function AdminResults() {
     from: undefined,
     to: undefined,
   });
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [resultToDelete, setResultToDelete] = useState<Result | null>(null);
 
   const writePrintWindowDocument = (printWindow: Window, title: string, extraHeadHtml = "") => {
     printWindow.document.open();
@@ -127,6 +145,24 @@ export default function AdminResults() {
 
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
   const { data: students } = useQuery<Student[]>({ queryKey: ["/api/students"] });
+
+  const deleteResultMutation = useMutation({
+    mutationFn: (resultId: string) => deleteResult(resultId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/results"] });
+      toast({
+        title: "Result deleted",
+        description: "The result has been successfully deleted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the result. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const filteredResults = results?.filter(
     (result) => {
@@ -857,6 +893,17 @@ export default function AdminResults() {
                             >
                               <Printer className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                setResultToDelete(result);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow >
@@ -893,6 +940,35 @@ export default function AdminResults() {
           </Card>
         )}
       </div >
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Result</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the result for{" "}
+              <strong>{resultToDelete?.studentName}</strong> ({resultToDelete?.studentId})?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (resultToDelete) {
+                  deleteResultMutation.mutate(resultToDelete.id);
+                  setDeleteDialogOpen(false);
+                  setResultToDelete(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div >
   );
 }
