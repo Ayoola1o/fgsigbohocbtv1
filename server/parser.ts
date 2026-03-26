@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import mammoth from "mammoth";
-import * as pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 
 interface Meta {
   classLevel: string;
@@ -61,7 +61,7 @@ export function parseObjective(text: string, meta: Meta): ParsedQuestion[] {
       difficulty: "medium",
       points: 1,
       correctAnswer,
-      options: options.join("|"),
+      options,
       department: meta.department,
     };
   });
@@ -108,8 +108,10 @@ export async function parseFile(filePath: string): Promise<string> {
     return result.value;
   } else if (ext === ".pdf") {
     const dataBuffer = fs.readFileSync(filePath);
-    const result = await pdfParse(dataBuffer);
-    return result.text;
+    const parser = new PDFParse({ data: dataBuffer });
+    const textResult = await parser.getText();
+    await parser.destroy();
+    return textResult.text;
   } else {
     throw new Error("Unsupported file type");
   }

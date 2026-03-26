@@ -260,7 +260,7 @@ export default function AdminStudents() {
                   try {
                     const text = await file.text();
                     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-                    const rows: { name?: string; studentId?: string; classLevel?: string; sex?: string }[] = [];
+                    const rows: { name?: string; studentId?: string; classLevel?: string; sex?: string; department?: string }[] = [];
                     for (let i = 0; i < lines.length; i++) {
                       const parts = lines[i].split(",").map((p) => p.trim());
                       if (parts.length < 4) continue;
@@ -315,38 +315,6 @@ export default function AdminStudents() {
               >
                 Export Students
               </Button>
-            </div>
-
-            {/* Search and Sort Controls */}
-            <div className="mb-4 flex gap-4 items-center">
-              <div className="flex-1 max-w-md">
-                <Input
-                  type="text"
-                  placeholder="Search students by name, ID, class, or department..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <div className="flex gap-2 items-center">
-                <label className="text-sm font-medium">Sort by:</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "name" | "classLevel" | "department")}
-                  className="border rounded px-2 py-1 text-sm"
-                >
-                  <option value="name">Name</option>
-                  <option value="classLevel">Class Level</option>
-                  <option value="department">Department</option>
-                </select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                >
-                  {sortOrder === "asc" ? "↑" : "↓"}
-                </Button>
-              </div>
             </div>
 
             {/* Search and Sort Controls */}

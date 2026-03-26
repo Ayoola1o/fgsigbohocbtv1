@@ -13,12 +13,12 @@ export const getStudents = async (): Promise<Student[]> => {
   return fbGetStudents();
 };
 
-export const addStudent = async (student: { name: string; studentId: string; classLevel: any; sex?: any }): Promise<Student> => {
+export const addStudent = async (student: { name: string; studentId: string; classLevel: any; sex?: any; department?: any }): Promise<Student> => {
   // @ts-ignore - classLevel type mismatch in schema vs usage, casting for now
   return fbCreateStudent(student);
 };
 
-export const uploadStudents = async (students: { name: string; studentId: string; classLevel: any; sex?: any }[]): Promise<Student[]> => {
+export const uploadStudents = async (students: { name: string; studentId: string; classLevel: any; sex?: any; department?: any }[]): Promise<Student[]> => {
   // @ts-ignore
   return fbCreateStudentsBulk(students);
 };

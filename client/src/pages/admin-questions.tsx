@@ -58,7 +58,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, FileText, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
-// consolidated React hooks and removed duplicated Dialog import above
+
+// API Response Types
+interface ParseTextResponse {
+  questions: Question[];
+}
+
+interface BulkImportResponse {
+  insertedCount: number;
+}
 
 export default function AdminQuestions() {
   const { toast } = useToast();
@@ -611,7 +619,7 @@ export default function AdminQuestions() {
         department: csvDepartment,
       };
 
-      const response = await apiRequest("POST", "/api/questions/parse-text", {
+      const response = await apiRequest<ParseTextResponse>("POST", "/api/questions/parse-text", {
         type: parseType,
         text: parseText,
         meta,
@@ -719,7 +727,7 @@ export default function AdminQuestions() {
         options: typeof q.options === 'string' ? q.options.split('|').map((opt: string) => opt.trim()) : q.options,
       }));
 
-      const response = await apiRequest("POST", "/api/questions/bulk", questionsToImport);
+      const response = await apiRequest<BulkImportResponse>("POST", "/api/questions/bulk", questionsToImport);
       queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
       setParsedQuestions([]);
       setParseText("");
