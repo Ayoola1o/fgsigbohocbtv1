@@ -342,7 +342,8 @@ export default function AdminResults() {
         name: r.studentName,
         class: student?.classLevel || filterClassLevel || "-",
         subject: exam?.title || "Examination",
-        score: r.percentage
+        score: r.score,
+        total: r.totalPoints
       };
     });
 
@@ -545,7 +546,9 @@ export default function AdminResults() {
         name: r.studentName,
         class: student?.classLevel || filterClassLevel || "-",
         subject: getExamTitle(r.examId),
-        score: r.percentage
+        score: r.score,
+        total: r.totalPoints,
+        percentage: r.percentage
       };
     });
 
