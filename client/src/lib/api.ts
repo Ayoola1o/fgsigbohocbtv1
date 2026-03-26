@@ -23,7 +23,7 @@ export const uploadStudents = async (students: { name: string; studentId: string
   return fbCreateStudentsBulk(students);
 };
 
-export const updateStudent = async (id: string, student: { name: string; studentId: string }): Promise<void> => {
+export const updateStudent = async (id: string, student: { name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null }): Promise<void> => {
   return fbUpdateStudent(id, student);
 };
 

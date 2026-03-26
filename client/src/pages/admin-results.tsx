@@ -51,6 +51,7 @@ export default function AdminResults() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [examSearchTerm, setExamSearchTerm] = useState("");
   const [filterExamId, setFilterExamId] = useState<string>("ALL");
   const [filterClassLevel, setFilterClassLevel] = useState<string>("ALL");
   const [filterDepartment, setFilterDepartment] = useState<string>("ALL");
@@ -208,6 +209,28 @@ export default function AdminResults() {
   const getExamTitle = (examId: string) => {
     return exams?.find((e) => e.id === examId)?.title || "Unknown Exam";
   };
+
+  const examMatches = exams?.filter(e => e.title.toLowerCase().includes(examSearchTerm.toLowerCase())) || [];
+
+  const updateExamFilterByTerm = (value: string) => {
+    const term = value.trim();
+    setExamSearchTerm(value);
+
+    if (!term || term.toLowerCase() === "all exams") {
+      setFilterExamId("ALL");
+      return;
+    }
+
+    const matchedExam = exams?.find(e => e.title.toLowerCase() === term.toLowerCase());
+    if (matchedExam) {
+      setFilterExamId(matchedExam.id);
+      return;
+    }
+
+    // while typing partial term, keep current exam filter until exact match selected
+  };
+
+  const filteredResultsCount = filteredResults?.length ?? 0;
 
   const handlePrint = async (result: Result) => {
     const exam = exams?.find(e => e.id === result.examId);
@@ -654,20 +677,28 @@ export default function AdminResults() {
                   </div>
                 </div>
 
-                {/* Exam Selection */}
+                {/* Exam Selection (Typeahead) */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Exam</label>
-                  <Select value={filterExamId} onValueChange={setFilterExamId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Exams" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Exams</SelectItem>
-                      {exams?.map(e => (
-                        <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Type exam name and select..."
+                      value={examSearchTerm}
+                      onChange={(e) => updateExamFilterByTerm(e.target.value)}
+                      className="pl-10"
+                      list="exam-suggestions"
+                    />
+                  </div>
+                  <datalist id="exam-suggestions">
+                    <option value="All Exams" />
+                    {examMatches.map(e => (
+                      <option key={e.id} value={e.title} />
+                    ))}
+                  </datalist>
+                  <div className="text-xs text-muted-foreground">
+                    {filterExamId === "ALL" ? "Showing results for all exams" : `${filteredResultsCount} students found for selected exam`}
+                  </div>
                 </div>
 
                 {/* Class Level Selection */}

@@ -42,6 +42,7 @@ export default function AdminStudents() {
   // Edit state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null } | null>(null);
+  const [advancedProfile, setAdvancedProfile] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null } | null>(null);
 
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string | null, name: string }>({ open: false, id: null, name: "" });
@@ -131,6 +132,26 @@ export default function AdminStudents() {
         description: "Failed to update student details.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleAdvancedUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!advancedProfile) return;
+    try {
+      await updateStudent(advancedProfile.id, {
+        name: advancedProfile.name,
+        studentId: advancedProfile.studentId,
+        classLevel: advancedProfile.classLevel,
+        sex: advancedProfile.sex,
+        department: advancedProfile.department,
+      });
+      toast({ title: "Profile Updated", description: "Advanced student profile saved successfully." });
+      setAdvancedProfile(null);
+      fetchStudents();
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Update Failed", description: "Failed to update advanced student profile.", variant: "destructive" });
     }
   };
 
@@ -387,6 +408,13 @@ export default function AdminStudents() {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => setAdvancedProfile(s)}
+                            >
+                              Advanced Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setDeleteConfirm({ open: true, id: s.id, name: s.name });
                               }}
@@ -415,6 +443,86 @@ export default function AdminStudents() {
               </div>
             </div>
           </div>
+
+          {advancedProfile && (
+            <div className="border border-gray-200 rounded-lg p-4 mt-6 bg-white">
+              <h3 className="text-lg font-semibold mb-3">Advanced Student Profile Edit</h3>
+              <form onSubmit={handleAdvancedUpdate} className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="adv-name">Name</Label>
+                  <Input
+                    id="adv-name"
+                    value={advancedProfile.name}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="adv-studentId">Student ID</Label>
+                  <Input
+                    id="adv-studentId"
+                    value={advancedProfile.studentId}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, studentId: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="adv-classLevel">Class Level</Label>
+                  <select
+                    id="adv-classLevel"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={advancedProfile.classLevel || ""}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, classLevel: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="JSS1">JSS1</option>
+                    <option value="JSS2">JSS2</option>
+                    <option value="JSS3">JSS3</option>
+                    <option value="SS1">SS1</option>
+                    <option value="SS2">SS2</option>
+                    <option value="SS3">SS3</option>
+                    <option value="WAEC">WAEC</option>
+                    <option value="NECO">NECO</option>
+                    <option value="GCE WAEC">GCE WAEC</option>
+                    <option value="GCE NECO">GCE NECO</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="adv-department">Department</Label>
+                  <select
+                    id="adv-department"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={advancedProfile.department || ""}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, department: e.target.value })}
+                  >
+                    <option value="">All</option>
+                    <option value="Science">Science</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Art">Art</option>
+                    <option value="Others">Others</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="adv-sex">Sex</Label>
+                  <select
+                    id="adv-sex"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={advancedProfile.sex || ""}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, sex: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="M">M</option>
+                    <option value="F">F</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2 flex gap-2">
+                  <Button type="submit">Save Advanced Profile</Button>
+                  <Button type="button" variant="outline" onClick={() => setAdvancedProfile(null)}>Cancel</Button>
+                </div>
+              </form>
+            </div>
+          )}
         </CardContent>
       </Card>
 
