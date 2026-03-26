@@ -69,10 +69,15 @@ export default function AdminStudentProfile() {
             subjects.forEach(subject => {
                 const subjectQuestions = examQuestions.filter(q => q.subject === subject);
                 let correctCount = 0;
+                let subjectScore = 0;
+                let subjectTotalPoints = 0;
 
                 subjectQuestions.forEach(q => {
+                    const qPoints = q.points || 1;
+                    subjectTotalPoints += qPoints;
                     if (result.correctAnswers && result.correctAnswers[q.id]) {
                         correctCount++;
+                        subjectScore += qPoints;
                     }
                 });
 
@@ -80,7 +85,9 @@ export default function AdminStudentProfile() {
                     subject,
                     questions: subjectQuestions.length,
                     correct: correctCount,
-                    percentage: subjectQuestions.length > 0 ? (correctCount / subjectQuestions.length) * 100 : 0
+                    score: subjectScore,
+                    total: subjectTotalPoints,
+                    percentage: subjectTotalPoints > 0 ? (subjectScore / subjectTotalPoints) * 100 : 0
                 });
             });
         }
@@ -139,9 +146,9 @@ export default function AdminStudentProfile() {
                                 id: b.questions.toString(),
                                 name: b.subject,
                                 class: printData.candidate.gradeLevel,
-                                subject: b.correct.toString(),
-                                score: b.correct,
-                                total: b.questions,
+                                subject: b.subject,
+                                score: b.score ?? b.correct ?? 0,
+                                total: b.total ?? b.questions ?? 0,
                                 percentage: b.percentage
                             }))}
                             onPrint={() => printWindow.print()}

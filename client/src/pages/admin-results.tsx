@@ -222,11 +222,16 @@ export default function AdminResults() {
       subjects.forEach(subject => {
         const subjectQuestions = examQuestions.filter(q => q.subject === subject);
         const totalQuestions = subjectQuestions.length;
+        let subjectScore = 0;
+        let subjectTotalPoints = 0;
         let correctCount = 0;
 
         subjectQuestions.forEach(q => {
+          const qPoints = q.points || 1;
+          subjectTotalPoints += qPoints;
           if (result.correctAnswers && result.correctAnswers[q.id]) {
-            correctCount++;
+            subjectScore += qPoints;
+            correctCount += 1;
           }
         });
 
@@ -234,7 +239,9 @@ export default function AdminResults() {
           subject,
           questions: totalQuestions,
           correct: correctCount,
-          percentage: totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
+          score: subjectScore,
+          total: subjectTotalPoints,
+          percentage: subjectTotalPoints > 0 ? (subjectScore / subjectTotalPoints) * 100 : 0,
         });
       });
     }
@@ -498,8 +505,8 @@ export default function AdminResults() {
                     name: b.subject,
                     class: data.candidate.gradeLevel,
                     subject: data.examTitle,
-                    score: b.correct,
-                    total: b.questions,
+                    score: b.score ?? b.correct ?? 0,
+                    total: b.total ?? b.questions ?? 0,
                     percentage: b.percentage
                   }))}
                   showPrintButton={false}

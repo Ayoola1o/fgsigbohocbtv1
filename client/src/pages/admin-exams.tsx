@@ -129,7 +129,7 @@ export default function AdminExams() {
             <Skeleton key={i} className="h-32 w-full" />
           ))}
         </div>
-      ) : exams && exams.length > 0 ? (
+      ) : filteredExams && filteredExams.length > 0 ? (
         <Card>
           <Table>
             <TableHeader>
@@ -145,7 +145,7 @@ export default function AdminExams() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {exams.map((exam) => (
+              {filteredExams?.map((exam) => (
                 <TableRow key={exam.id} data-testid={`row-exam-${exam.id}`}>
                   <TableCell className="font-medium">{exam.title}</TableCell>
                   <TableCell>
