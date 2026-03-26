@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
+import type { Result, Exam, Student } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 
 import {
   getStudents,
+  getResults,
+  getExams,
   addStudent,
   updateStudent,
   deleteStudent,
@@ -32,7 +35,7 @@ import {
 } from "@/lib/api";
 
 export default function AdminStudents() {
-  const [studentsList, setStudentsList] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null }[]>([]);
+  const [studentsList, setStudentsList] = useState<Student[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
@@ -41,9 +44,10 @@ export default function AdminStudents() {
 
   // Edit state
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null } | null>(null);
-  const [advancedProfile, setAdvancedProfile] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null } | null>(null);
-
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [advancedProfile, setAdvancedProfile] = useState<Student | null>(null);
+  const [resultsList, setResultsList] = useState<Result[]>([]);
+  const [examsList, setExamsList] = useState<Exam[]>([]);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string | null, name: string }>({ open: false, id: null, name: "" });
 
@@ -60,6 +64,24 @@ export default function AdminStudents() {
     setDeleteConfirm({ open: false, id: null, name: "" });
   };
 
+  const fetchResults = async () => {
+    try {
+      const data = await getResults();
+      setResultsList(data || []);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const fetchExams = async () => {
+    try {
+      const data = await getExams();
+      setExamsList(data || []);
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const fetchStudents = async () => {
     try {
       const data = await getStudents();
@@ -70,6 +92,8 @@ export default function AdminStudents() {
   };
 
   useEffect(() => {
+    fetchResults();
+    fetchExams();
     fetchStudents();
   }, []);
 
@@ -115,7 +139,8 @@ export default function AdminStudents() {
         // @ts-ignore
         classLevel: editingStudent.classLevel,
         sex: editingStudent.sex,
-        department: editingStudent.department
+        department: editingStudent.department,
+        restrictedExamIds: editingStudent.restrictedExamIds || []
       });
 
       setIsEditOpen(false);
@@ -145,13 +170,41 @@ export default function AdminStudents() {
         classLevel: advancedProfile.classLevel,
         sex: advancedProfile.sex,
         department: advancedProfile.department,
+        restrictedExamIds: advancedProfile.restrictedExamIds || [],
       });
       toast({ title: "Profile Updated", description: "Advanced student profile saved successfully." });
       setAdvancedProfile(null);
       fetchStudents();
+      fetchResults();
     } catch (err) {
       console.error(err);
       toast({ title: "Update Failed", description: "Failed to update advanced student profile.", variant: "destructive" });
+    }
+  };
+
+  const toggleExamRestriction = async (student: Student, examId: string) => {
+    const currentlyRestricted = student.restrictedExamIds?.includes(examId) || false;
+    const newRestricted = currentlyRestricted
+      ? (student.restrictedExamIds || []).filter((e) => e !== examId)
+      : Array.from(new Set([...(student.restrictedExamIds || []), examId]));
+
+    try {
+      await updateStudent(student.id, {
+        name: student.name,
+        studentId: student.studentId,
+        classLevel: student.classLevel,
+        sex: student.sex,
+        department: student.department,
+        restrictedExamIds: newRestricted,
+      });
+      toast({
+        title: currentlyRestricted ? "Unrestricted" : "Restricted",
+        description: `Student ${student.name} is now ${currentlyRestricted ? "unrestricted" : "restricted"} for exam retakes (exam ${examId}).`,
+      });
+      fetchStudents();
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Update Failed", description: "Failed to update retake restriction.", variant: "destructive" });
     }
   };
 
@@ -379,6 +432,7 @@ export default function AdminStudents() {
                       <th className="p-2">Name</th>
                       <th className="p-2">Student ID</th>
                       <th className="p-2">Class Level / Dept</th>
+                      <th className="p-2">Retake</th>
                       <th className="p-2">Sex</th>
                       <th className="p-2">Actions</th>
                     </tr>
@@ -391,6 +445,19 @@ export default function AdminStudents() {
                         <td className="p-2 text-sm">
                           <div>{s.classLevel || "-"}</div>
                           {s.department && <div className="text-xs text-muted-foreground font-semibold">{s.department}</div>}
+                        </td>
+                        <td className="p-2">
+                          {(() => {
+                            const completedIds = Array.from(new Set(resultsList.filter((r) => r.studentId === s.studentId).map((r) => r.examId)));
+                            const examsCompleted = completedIds.length;
+                            const restricted = (s.restrictedExamIds || []).filter((id: string) => completedIds.includes(id)).length;
+                            return (
+                              <div className="space-y-1 text-xs">
+                                <div className="font-semibold">Done: {examsCompleted}</div>
+                                <div className="text-muted-foreground">Blocked: {restricted}</div>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-2">{s.sex || "-"}</td>
                         <td className="p-2">
@@ -433,6 +500,24 @@ export default function AdminStudents() {
                               }}
                             >
                               Reset Password
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                const completedIds = Array.from(new Set(resultsList.filter((r) => r.studentId === s.studentId).map((r) => r.examId)));
+                                if (completedIds.length === 0) {
+                                  toast({ title: "No Completed Exams", description: "This student has not completed any exams yet.", variant: "default" });
+                                  return;
+                                }
+                                // Open advanced view and prefill restriction options
+                                setAdvancedProfile({
+                                  ...s,
+                                  restrictedExamIds: s.restrictedExamIds || [],
+                                });
+                              }}
+                            >
+                              Manage Retake
                             </Button>
                           </div>
                         </td>
@@ -516,6 +601,40 @@ export default function AdminStudents() {
                     <option value="F">F</option>
                   </select>
                 </div>
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-semibold mb-2">Retake Restriction</h4>
+                  {(examsList && examsList.length > 0) ? (
+                    <div className="space-y-2">
+                      {Array.from(new Set(resultsList.filter((r) => r.studentId === advancedProfile.studentId).map((r) => r.examId))).map((examId) => {
+                        const exam = examsList.find((e) => e.id === examId);
+                        if (!exam) return null;
+                        const currentlyRestricted = advancedProfile.restrictedExamIds?.includes(examId);
+                        return (
+                          <div key={examId} className="flex items-center justify-between rounded border p-2">
+                            <div>
+                              <div className="font-medium">{exam.title}</div>
+                              <div className="text-xs text-muted-foreground">{exam.classLevel} / {exam.subject}</div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={currentlyRestricted ? "outline" : "secondary"}
+                              onClick={() => {
+                                const updatedRestricted = currentlyRestricted
+                                  ? (advancedProfile.restrictedExamIds || []).filter((id) => id !== examId)
+                                  : Array.from(new Set([...(advancedProfile.restrictedExamIds || []), examId]));
+                                setAdvancedProfile({ ...advancedProfile, restrictedExamIds: updatedRestricted });
+                              }}
+                            >
+                              {currentlyRestricted ? "Unrestrict" : "Restrict"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No completed exams yet for this student.</p>
+                  )}
+                </div>
                 <div className="md:col-span-2 flex gap-2">
                   <Button type="submit">Save Advanced Profile</Button>
                   <Button type="button" variant="outline" onClick={() => setAdvancedProfile(null)}>Cancel</Button>
@@ -534,7 +653,7 @@ export default function AdminStudents() {
             <DialogDescription>Make changes to the student profile here.</DialogDescription>
           </DialogHeader>
           {editingStudent && (
-            <form onSubmit={handleUpdateStudent} className="space-y-4">
+            <form onSubmit={handleUpdateStudent} className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="edit-name">Name</Label>
                 <Input
@@ -605,6 +724,42 @@ export default function AdminStudents() {
                   <option value="F">F</option>
                 </select>
               </div>
+
+              <div className="md:col-span-2">
+                <h4 className="text-sm font-semibold mb-2">Retake Restriction Management</h4>
+                {(examsList && examsList.length > 0) ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto border rounded p-2">
+                    {Array.from(new Set(resultsList.filter((r) => r.studentId === editingStudent.studentId).map((r) => r.examId))).map((examId) => {
+                      const exam = examsList.find((e) => e.id === examId);
+                      if (!exam) return null;
+                      const currentlyRestricted = editingStudent.restrictedExamIds?.includes(examId);
+                      return (
+                        <div key={examId} className="flex items-center justify-between rounded border p-2 bg-gray-50">
+                          <div>
+                            <div className="font-medium text-sm">{exam.title}</div>
+                            <div className="text-xs text-muted-foreground">{exam.classLevel} / {exam.subject}</div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={currentlyRestricted ? "outline" : "secondary"}
+                            onClick={() => {
+                              const updatedRestricted = currentlyRestricted
+                                ? (editingStudent.restrictedExamIds || []).filter((id) => id !== examId)
+                                : Array.from(new Set([...(editingStudent.restrictedExamIds || []), examId]));
+                              setEditingStudent({ ...editingStudent, restrictedExamIds: updatedRestricted });
+                            }}
+                          >
+                            {currentlyRestricted ? "Unrestrict Retake" : "Restrict Retake"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No completed exams yet for this student.</p>
+                )}
+              </div>
+
               <DialogFooter>
                 <Button type="submit">Save Changes</Button>
               </DialogFooter>

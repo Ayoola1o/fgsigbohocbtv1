@@ -8,8 +8,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Clock, BookOpen, AlertTriangle, CheckCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Exam, ExamSession, Result } from "@shared/schema";
-import { createExamSession, getExam, getResults } from "@/lib/firebase-api";
+import type { Exam, ExamSession, Result, Student } from "@shared/schema";
+import { createExamSession, getExam, getResults, getStudents } from "@/lib/firebase-api";
 
 export default function ExamStart() {
   const params = useParams<{ id: string }>();
@@ -65,6 +65,14 @@ export default function ExamStart() {
     enabled: !!exam?.subExamIds && exam.subExamIds.length > 0,
   });
 
+  const { data: students } = useQuery<Student[]>({
+    queryKey: ["/api/students"],
+    queryFn: async () => {
+      return getStudents();
+    },
+    enabled: !!studentId,
+  });
+
   const { data: results } = useQuery<Result[]>({
     queryKey: ["/api/results"],
     queryFn: async () => {
@@ -72,6 +80,23 @@ export default function ExamStart() {
     },
     enabled: !!studentId,
   });
+
+  const student = students?.find((st) => st.studentId === studentId);
+
+  const hasCompletedExam = (examIdToCheck: string): boolean => {
+    return !!results?.some((r) => r.examId === examIdToCheck && r.studentId === studentId);
+  };
+
+  const isExamBlockedForStudent = (examIdToCheck: string): boolean => {
+    if (!hasCompletedExam(examIdToCheck)) return false;
+    if (!student) return true; // default to block if we can't resolve student status
+    if (!student.restrictedExamIds || student.restrictedExamIds.length === 0) return true;
+    return student.restrictedExamIds.includes(examIdToCheck);
+  };
+
+  const isCompletedAndAllowed = (examIdToCheck: string): boolean => {
+    return hasCompletedExam(examIdToCheck) && !isExamBlockedForStudent(examIdToCheck);
+  };
 
   const startExamMutation = useMutation({
     mutationFn: async (vars: { examToStartId: string; subIndex?: number; parentExamId?: string }) => {
@@ -154,9 +179,13 @@ export default function ExamStart() {
   }, [studentName, studentId, setLocation]);
 
   const compositeSubExamStatus = (subExams || []).map((sub, idx) => {
-    const completed = results?.some((r) => r.examId === sub.id && r.studentId === studentId) || false;
-    return { sub, idx, completed };
+    const completed = hasCompletedExam(sub.id);
+    const blocked = isExamBlockedForStudent(sub.id);
+    return { sub, idx, completed, blocked };
   });
+
+  const thisExamCompleted = exam ? hasCompletedExam(exam.id) : false;
+  const thisExamBlocked = exam ? isExamBlockedForStudent(exam.id) : false;
 
   const allCompositeCompleted = exam?.subExamIds && exam?.subExamIds.length > 0
     ? compositeSubExamStatus.filter((entry) => entry.completed).length >= exam.subExamIds.length
@@ -311,27 +340,32 @@ export default function ExamStart() {
                     <p className="text-xs text-muted-foreground">Select a subject to begin. Completed subjects are locked.</p>
                   </div>
 
-                  {compositeSubExamStatus.map(({ sub, idx, completed }) => (
-                    <div key={sub.id} className="flex items-center justify-between gap-3 rounded border p-3">
-                      <div>
-                        <p className="font-medium">{sub.title}</p>
-                        <p className="text-xs text-muted-foreground">{sub.questionIds?.length || 0} questions, {sub.duration} mins</p>
+                  {compositeSubExamStatus.map(({ sub, idx, completed, blocked }) => {
+                    const badgeLabel = blocked ? 'Blocked' : completed ? 'Completed (Retake allowed)' : 'Pending';
+                    const badgeClass = blocked ? 'bg-red-100 text-red-800' : completed ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700';
+                    const buttonLabel = blocked ? 'Blocked' : completed ? 'Retake' : 'Start';
+                    return (
+                      <div key={sub.id} className="flex items-center justify-between gap-3 rounded border p-3">
+                        <div>
+                          <p className="font-medium">{sub.title}</p>
+                          <p className="text-xs text-muted-foreground">{sub.questionIds?.length || 0} questions, {sub.duration} mins</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass}`}>
+                            {badgeLabel}
+                          </span>
+                          <Button
+                            size="sm"
+                            onClick={() => startExamMutation.mutate({ examToStartId: sub.id, parentExamId: exam.id, subIndex: idx })}
+                            disabled={blocked || startExamMutation.isPending}
+                            data-testid={`button-start-subject-${sub.id}`}
+                          >
+                            {buttonLabel}
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${completed ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-                          {completed ? 'Completed' : 'Pending'}
-                        </span>
-                        <Button
-                          size="sm"
-                          onClick={() => startExamMutation.mutate({ examToStartId: sub.id, parentExamId: exam.id, subIndex: idx })}
-                          disabled={completed || startExamMutation.isPending}
-                          data-testid={`button-start-subject-${sub.id}`}
-                        >
-                          {completed ? 'Done' : 'Start'}
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {allCompositeCompleted && (
                     <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3">
@@ -356,25 +390,35 @@ export default function ExamStart() {
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setLocation("/student-portal")}
-                    data-testid="button-cancel"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      console.log("Begin Exam Clicked. Mutation status:", startExamMutation.status);
-                      startExamMutation.mutate({ examToStartId: exam.id });
-                    }}
-                    disabled={startExamMutation.isPending}
-                    className="flex-1"
-                    data-testid="button-begin-exam"
-                  >
-                    {startExamMutation.isPending ? "Starting..." : (multiExamId ? `Begin Subject ${subIndex + 1}` : "Begin Exam")}
-                  </Button>
+                <div className="space-y-2">
+                  {thisExamCompleted && (
+                    <div className={`rounded-md px-3 py-2 ${thisExamBlocked ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}>
+                      {thisExamBlocked
+                        ? 'You have already completed this exam and retake is currently restricted by the administrator. Contact your administrator to unlock this exam for retake.'
+                        : 'You have completed this exam before, but retake is allowed by the administrator.'}
+                    </div>
+                  )}
+
+                  <div className="flex gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setLocation("/student-portal")}
+                      data-testid="button-cancel"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        console.log("Begin Exam Clicked. Mutation status:", startExamMutation.status);
+                        startExamMutation.mutate({ examToStartId: exam.id });
+                      }}
+                      disabled={startExamMutation.isPending || thisExamBlocked}
+                      className="flex-1"
+                      data-testid="button-begin-exam"
+                    >
+                      {startExamMutation.isPending ? "Starting..." : (multiExamId ? `Begin Subject ${subIndex + 1}` : thisExamBlocked ? "Blocked" : "Begin Exam")}
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

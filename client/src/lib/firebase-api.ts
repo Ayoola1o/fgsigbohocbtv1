@@ -1,4 +1,5 @@
 import { db } from "./firebase";
+import { queryClient } from "@/lib/queryClient";
 import {
     collection,
     getDocs,
@@ -207,8 +208,18 @@ export const getStudents = async (): Promise<Student[]> => {
     return snapshot.docs.map(d => docToData<Student>(d));
 };
 
+export const getStudentByStudentId = async (studentId: string): Promise<Student | null> => {
+    const q = query(collection(db, "students"), where("studentId", "==", studentId));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    return docToData<Student>(snapshot.docs[0]);
+};
+
 export const createStudent = async (student: InsertStudent): Promise<Student> => {
-    const data = cleanData(student);
+    const data = cleanData({
+        ...student,
+        restrictedExamIds: student.restrictedExamIds || [],
+    });
     const ref = await addDoc(collection(db, "students"), data);
     return { id: ref.id, ...data } as Student;
 };
@@ -392,6 +403,21 @@ export const submitExamSession = async (sessionId: string, answers: Record<strin
     const resultRef = doc(collection(db, "results"));
     const resultId = resultRef.id;
     const savePromise = setDoc(resultRef, cleanData(resultData));
+
+    // Update student restricted list on completed exam
+    try {
+        const student = await getStudentByStudentId(session.studentId);
+        if (student) {
+            const restrictedExamIds = student.restrictedExamIds || [];
+            if (!restrictedExamIds.includes(exam.id)) {
+                const updatedRestricted = [...restrictedExamIds, exam.id];
+                await updateStudent(student.id, { restrictedExamIds: updatedRestricted });
+                queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+            }
+        }
+    } catch (updateErr) {
+        console.error("submitExamSession: Failed to update student restricted exams", updateErr);
+    }
 
     // Proceed after 3s even if server hasn't acknowledged, to allow user to see result screen
     await Promise.race([

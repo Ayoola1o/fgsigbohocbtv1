@@ -160,6 +160,7 @@ export const students = pgTable("students", {
   classLevel: text("class_level").notNull(),
   sex: text("sex"),
   department: text("department").$type<string | null>(),
+  restrictedExamIds: jsonb("restricted_exam_ids").$type<string[]>().default(sql`'[]'::jsonb`),
 });
 
 
@@ -169,6 +170,7 @@ export const insertStudentSchema = createInsertSchema(students).omit({
   classLevel: z.enum(classLevels),
   sex: z.enum(["M", "F"]).optional(),
   department: z.enum(departments).optional(),
+  restrictedExamIds: z.array(z.string()).optional(),
 });
 
 
