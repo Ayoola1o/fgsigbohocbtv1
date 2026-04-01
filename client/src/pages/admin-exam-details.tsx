@@ -29,6 +29,10 @@ export default function AdminExamDetails() {
     queryKey: ["/api/questions"],
   });
 
+  const { data: allExams } = useQuery<any[]>({
+    queryKey: ["/api/exams"],
+  });
+
   const [formData, setFormData] = useState<any>(null);
 
   // Set initial form data when exam loads
@@ -36,6 +40,8 @@ export default function AdminExamDetails() {
     if (exam) {
       setFormData({
         ...exam,
+        examMode: Array.isArray(exam.subExamIds) && exam.subExamIds.length > 0 ? "composite" : "single",
+        subExamIds: exam.subExamIds || [],
         // Ensure theoryConfig has structure
         theoryConfig: exam.theoryConfig || {
           mode: "manual",
@@ -155,7 +161,13 @@ export default function AdminExamDetails() {
           <form
             onSubmit={e => {
               e.preventDefault();
-              updateExamMutation.mutate(formData);
+
+              const payload = { ...formData };
+              if (payload.examMode !== "composite") {
+                payload.subExamIds = [];
+              }
+
+              updateExamMutation.mutate(payload);
             }}
             className="space-y-8"
           >
@@ -223,11 +235,34 @@ export default function AdminExamDetails() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="examMode">Exam Mode *</Label>
+                <select
+                  id="examMode"
+                  value={formData.examMode || "single"}
+                  onChange={e => setFormData({ ...formData, examMode: e.target.value as "single" | "composite" })}
+                  className="w-full border rounded-md px-3 py-2 bg-background"
+                  required
+                >
+                  <option value="single">Single</option>
+                  <option value="composite">Composite (Multi-subject)</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="classLevel">Class Level *</Label>
                 <select
                   id="classLevel"
                   value={formData.classLevel}
-                  onChange={e => setFormData({ ...formData, classLevel: e.target.value, department: ["SS1", "SS2", "SS3"].includes(e.target.value) ? formData.department : "" })}
+                  onChange={e => {
+                    const level = e.target.value;
+                    setFormData((prev: any) => ({
+                      ...prev,
+                      classLevel: level,
+                      department: ["SS1", "SS2", "SS3"].includes(level) ? prev.department : "",
+                      examMode: level === "SS1" ? prev.examMode : "single",
+                      subExamIds: level === "SS1" ? prev.subExamIds : [],
+                    }));
+                  }}
                   className="w-full border rounded-md px-3 py-2 bg-background"
                   required
                 >
@@ -276,9 +311,38 @@ export default function AdminExamDetails() {
                   <option value="Commercial">Commercial</option>
                   <option value="Art">Art</option>
                   <option value="Others">Others</option>
+                  <option value="General">General</option>
                 </select>
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="subExamIds">Composite Sub-Exams</Label>
+              {formData.examMode !== "composite" ? (
+                <p className="text-sm text-muted-foreground">Set exam mode to Composite to pick sub-exams.</p>
+              ) : (
+                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                  {allExams?.filter((e) => e.id !== id && (!e.subExamIds || e.subExamIds.length === 0)).map((sub) => (
+                    <label key={sub.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={Array.isArray(formData.subExamIds) && formData.subExamIds.includes(sub.id)}
+                        onChange={(evt) => {
+                          const selected = new Set(formData.subExamIds || []);
+                          if (evt.target.checked) selected.add(sub.id);
+                          else selected.delete(sub.id);
+                          setFormData({ ...formData, subExamIds: Array.from(selected) });
+                        }}
+                      />
+                      {sub.title} ({sub.subject})
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Select sub-exams to form a multi-subject exam. Question-level settings will be ignored when this is set.
+              </p>
+            </div>
 
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
@@ -350,7 +414,8 @@ export default function AdminExamDetails() {
                       q.examType === "Theory" &&
                       q.classLevel === formData.classLevel &&
                       q.subject === formData.subject &&
-                      (!formData.department || q.department === formData.department)
+                      (!formData.department ||
+                        (formData.department === "General" ? (!q.department || q.department === "General") : q.department === formData.department))
                     ) || []}
 
                   />

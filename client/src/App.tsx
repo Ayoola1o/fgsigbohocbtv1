@@ -19,7 +19,7 @@ import AdminQuestions from "@/pages/admin-questions";
 import AdminResults from "@/pages/admin-results";
 import AdminStudents from "@/pages/admin-students";
 import AdminStudentProfile from "@/pages/admin-student-profile";
-// import AdminLoginPage from "@/pages/admin-login";
+import AdminLoginPage from "@/pages/admin-login";
 
 function Router() {
   return (
@@ -33,7 +33,7 @@ function Router() {
       <Route path="/exam/result/:resultId" component={ExamResult} />
 
       {/* Admin Routes */}
-      {/* <Route path="/admin/login" component={AdminLoginPage} /> */}
+      <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
         <AdminLayout>
           <AdminDashboard />

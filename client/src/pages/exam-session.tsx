@@ -29,6 +29,7 @@ import {
   getExamSession,
   getExam,
   getQuestionsByIds,
+  createExamSession,
   updateExamSession,
   submitExamSession
 } from "@/lib/firebase-api";
@@ -141,11 +142,26 @@ export default function ExamSessionPage() {
   const { examId, sessionId } = params;
   const { toast } = useToast();
 
+  const getInitialQueryParams = () => {
+    const urlSearch = window.location.search ? window.location.search : (window.location.hash.includes("?") ? window.location.hash.slice(window.location.hash.indexOf("?")) : "");
+    return new URLSearchParams(urlSearch);
+  };
+
+  const queryParams = getInitialQueryParams();
+  const multiExamId = queryParams.get("multiExamId") || "";
+  const multiExamSubIndex = Number(queryParams.get("subIndex") || "0");
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [showNextSubjectDialog, setShowNextSubjectDialog] = useState(false);
+  const [nextSubjectData, setNextSubjectData] = useState<{
+    nextExamId: string;
+    nextIndex: number;
+    totalSubjects: number;
+  } | null>(null);
 
   const { data: session, isLoading: sessionLoading } = useQuery<(ExamSession & { serverTime?: string }) | null>({
     queryKey: ["/api/exam-sessions", sessionId],
@@ -173,6 +189,16 @@ export default function ExamSessionPage() {
       return data;
     },
     enabled: !!session,
+  });
+
+  const { data: multiExam } = useQuery<Exam | null>({
+    queryKey: ["/api/exams", multiExamId],
+    queryFn: async () => {
+      if (!multiExamId) return null;
+      const data = await getExam(multiExamId);
+      return data;
+    },
+    enabled: !!multiExamId,
   });
 
   const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
@@ -213,14 +239,44 @@ export default function ExamSessionPage() {
         throw err;
       }
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       console.log("submitExamMutation: Success/Proceeding", result);
       queryClient.invalidateQueries({ queryKey: ["/api/exam-sessions"] });
+
+      const chain = multiExam && multiExam.subExamIds && multiExam.subExamIds.length > 0;
+      const nextIndex = chain ? multiExamSubIndex + 1 : -1;
+      const hasNext = chain && multiExam && typeof nextIndex === 'number' && nextIndex < (multiExam.subExamIds?.length || 0);
+
       toast({
         title: "Exam Submitted",
-        description: "Your exam has been successfully submitted. You may now leave.",
+        description: hasNext
+          ? "Your subject is complete. Next subject is ready."
+          : "Your exam has been successfully submitted. You may now leave.",
       });
-      setLocation("/");
+
+      if (hasNext && multiExam) {
+        const nextExamId = multiExam.subExamIds![nextIndex];
+        console.log("Showing next subject dialog for exam:", nextExamId);
+        setNextSubjectData({
+          nextExamId,
+          nextIndex: nextIndex + 1,
+          totalSubjects: multiExam.subExamIds!.length,
+        });
+        setShowNextSubjectDialog(true);
+        return;
+      }
+
+      if (multiExamId) {
+        toast({
+          title: "Composite Completed",
+          description: "All subjects are complete. You will be logged out now.",
+        });
+        localStorage.removeItem("student_user");
+        setLocation("/student-login");
+        return;
+      }
+
+      setLocation("/student-portal");
     },
     onError: (error) => {
       console.error("Failed to submit exam:", error);
@@ -238,6 +294,53 @@ export default function ExamSessionPage() {
       submitExamMutation.mutate({ submissionType: 'auto', answers });
     }
   }, [submitExamMutation, answers]);
+
+  const handleNextSubjectConfirm = async () => {
+    console.log("Confirm clicked, closing dialog");
+    if (!nextSubjectData || !multiExam || !session) return;
+
+    setShowNextSubjectDialog(false);
+
+    // Delay the async operation to allow dialog to close smoothly
+    setTimeout(async () => {
+      try {
+        const nextSession = await createExamSession({
+          examId: nextSubjectData.nextExamId,
+          studentName: session.studentName ?? "",
+          studentId: session.studentId ?? "",
+          answers: {},
+          currentQuestionIndex: 0,
+        });
+
+        setLocation(`/exam/${nextSubjectData.nextExamId}/session/${nextSession.id}?studentName=${encodeURIComponent(session.studentName || "")}&studentId=${encodeURIComponent(session.studentId || "")}&multiExamId=${multiExam.id}&subIndex=${nextSubjectData.nextIndex - 1}`);
+      } catch (err) {
+        console.error("Failed to create next sub-exam session:", err);
+        toast({
+          title: "Next Subject Error",
+          description: "Could not start the next subject. Returning to dashboard.",
+          variant: "destructive",
+        });
+        setLocation("/student-portal");
+      }
+    }, 100);
+  };
+
+  const handleNextSubjectCancel = () => {
+    console.log("Cancel clicked, closing dialog");
+    setShowNextSubjectDialog(false);
+    // Delay navigation to allow dialog to close smoothly
+    setTimeout(() => {
+      if (multiExamId) {
+        const params = new URLSearchParams({
+          studentName: session?.studentName || "",
+          studentId: session?.studentId || "",
+        });
+        setLocation(`/exam/${multiExamId}/start?${params.toString()}`);
+      } else {
+        setLocation("/student-portal");
+      }
+    }, 100);
+  };
 
   // Track if we've initialized the session state to prevent overwriting user input
   const isInitialized = useRef<boolean>(false);
@@ -631,6 +734,33 @@ export default function ExamSessionPage() {
               data-testid="button-confirm-submit"
             >
               {submitExamMutation.isPending ? "Submitting..." : "Submit Exam"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Next Subject Dialog */}
+      <AlertDialog open={showNextSubjectDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Subject Completed - About to Begin Next Exam</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-foreground">
+              <p>You have successfully completed this subject.</p>
+              <p>About to begin the next subject exam.</p>
+              <p>Would you like to continue?</p>
+              {nextSubjectData && (
+                <p className="font-medium">
+                  Progress: {nextSubjectData.nextIndex} / {nextSubjectData.totalSubjects}
+                </p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleNextSubjectCancel}>
+              Return to Dashboard
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleNextSubjectConfirm}>
+              Continue to Next Subject
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

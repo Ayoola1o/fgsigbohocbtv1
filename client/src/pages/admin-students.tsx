@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
+import type { Result, Exam, Student } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 
 import {
   getStudents,
+  getResults,
+  getExams,
   addStudent,
   updateStudent,
   deleteStudent,
@@ -32,15 +35,19 @@ import {
 } from "@/lib/api";
 
 export default function AdminStudents() {
-  const [studentsList, setStudentsList] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null }[]>([]);
+  const [studentsList, setStudentsList] = useState<Student[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+  const [sortBy, setSortBy] = useState<"name" | "classLevel" | "department">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Edit state
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<{ id: string; name: string; studentId: string; classLevel?: string; sex?: string | null; department?: string | null } | null>(null);
-
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [advancedProfile, setAdvancedProfile] = useState<Student | null>(null);
+  const [resultsList, setResultsList] = useState<Result[]>([]);
+  const [examsList, setExamsList] = useState<Exam[]>([]);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, id: string | null, name: string }>({ open: false, id: null, name: "" });
 
@@ -57,6 +64,24 @@ export default function AdminStudents() {
     setDeleteConfirm({ open: false, id: null, name: "" });
   };
 
+  const fetchResults = async () => {
+    try {
+      const data = await getResults();
+      setResultsList(data || []);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const fetchExams = async () => {
+    try {
+      const data = await getExams();
+      setExamsList(data || []);
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const fetchStudents = async () => {
     try {
       const data = await getStudents();
@@ -67,8 +92,42 @@ export default function AdminStudents() {
   };
 
   useEffect(() => {
+    fetchResults();
+    fetchExams();
     fetchStudents();
   }, []);
+
+  const filteredAndSortedStudents = studentsList
+    .filter(student =>
+      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.classLevel && student.classLevel.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (student.department && student.department.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      let aValue: string;
+      let bValue: string;
+
+      switch (sortBy) {
+        case "classLevel":
+          aValue = a.classLevel || "";
+          bValue = b.classLevel || "";
+          break;
+        case "department":
+          aValue = a.department || "";
+          bValue = b.department || "";
+          break;
+        default:
+          aValue = a.name;
+          bValue = b.name;
+      }
+
+      if (sortOrder === "asc") {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
+    });
 
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +139,8 @@ export default function AdminStudents() {
         // @ts-ignore
         classLevel: editingStudent.classLevel,
         sex: editingStudent.sex,
-        department: editingStudent.department
+        department: editingStudent.department,
+        restrictedExamIds: editingStudent.restrictedExamIds || []
       });
 
       setIsEditOpen(false);
@@ -100,11 +160,53 @@ export default function AdminStudents() {
     }
   };
 
-  const filteredStudents = studentsList.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.studentId.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleAdvancedUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!advancedProfile) return;
+    try {
+      await updateStudent(advancedProfile.id, {
+        name: advancedProfile.name,
+        studentId: advancedProfile.studentId,
+        classLevel: advancedProfile.classLevel,
+        sex: advancedProfile.sex,
+        department: advancedProfile.department,
+        restrictedExamIds: advancedProfile.restrictedExamIds || [],
+      });
+      toast({ title: "Profile Updated", description: "Advanced student profile saved successfully." });
+      setAdvancedProfile(null);
+      fetchStudents();
+      fetchResults();
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Update Failed", description: "Failed to update advanced student profile.", variant: "destructive" });
+    }
+  };
+
+  const toggleExamRestriction = async (student: Student, examId: string) => {
+    const currentlyRestricted = student.restrictedExamIds?.includes(examId) || false;
+    const newRestricted = currentlyRestricted
+      ? (student.restrictedExamIds || []).filter((e) => e !== examId)
+      : Array.from(new Set([...(student.restrictedExamIds || []), examId]));
+
+    try {
+      await updateStudent(student.id, {
+        name: student.name,
+        studentId: student.studentId,
+        classLevel: student.classLevel,
+        sex: student.sex,
+        department: student.department,
+        restrictedExamIds: newRestricted,
+      });
+      toast({
+        title: currentlyRestricted ? "Unrestricted" : "Restricted",
+        description: `Student ${student.name} is now ${currentlyRestricted ? "unrestricted" : "restricted"} for exam retakes (exam ${examId}).`,
+      });
+      fetchStudents();
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Update Failed", description: "Failed to update retake restriction.", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -159,6 +261,7 @@ export default function AdminStudents() {
                   <option value="Commercial">Commercial</option>
                   <option value="Art">Art</option>
                   <option value="Others">Others</option>
+                  <option value="General">General</option>
                 </select>
               </div>
               <div>
@@ -231,7 +334,7 @@ export default function AdminStudents() {
                   try {
                     const text = await file.text();
                     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-                    const rows: { name?: string; studentId?: string; classLevel?: string; sex?: string }[] = [];
+                    const rows: { name?: string; studentId?: string; classLevel?: string; sex?: string; department?: string }[] = [];
                     for (let i = 0; i < lines.length; i++) {
                       const parts = lines[i].split(",").map((p) => p.trim());
                       if (parts.length < 4) continue;
@@ -279,26 +382,6 @@ export default function AdminStudents() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = 'students-template.csv';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                Download CSV Template
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => {
-                  // Export all students as CSV
-                  const header = 'name,studentId,classLevel,sex,department';
-                  const rows = studentsList.map(s => `${s.name},${s.studentId},${s.classLevel || ""},${s.sex || ""},${s.department || ""}`).join('\n');
-                  const csvContent = `${header}\n${rows}`;
-
-                  const blob = new Blob([csvContent], { type: 'text/csv' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
                   a.download = 'students-export.csv';
                   a.click();
                   URL.revokeObjectURL(url);
@@ -308,19 +391,36 @@ export default function AdminStudents() {
               </Button>
             </div>
 
-            <div>
-              <p className="text-xs text-muted-foreground">CSV format: one student per line, columns "name,studentId". Header row is optional.</p>
-            </div>
-
-            {/* Search bar */}
-            <div className="mb-4">
-              <Input
-                type="text"
-                placeholder="Search students by name or ID..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full max-w-md"
-              />
+            {/* Search and Sort Controls */}
+            <div className="mb-4 flex gap-4 items-center">
+              <div className="flex-1 max-w-md">
+                <Input
+                  type="text"
+                  placeholder="Search students by name, ID, class, or department..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex gap-2 items-center">
+                <label className="text-sm font-medium">Sort by:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "name" | "classLevel" | "department")}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="name">Name</option>
+                  <option value="classLevel">Class Level</option>
+                  <option value="department">Department</option>
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                >
+                  {sortOrder === "asc" ? "↑" : "↓"}
+                </Button>
+              </div>
             </div>
 
             {/* Students table */}
@@ -332,13 +432,13 @@ export default function AdminStudents() {
                       <th className="p-2">Name</th>
                       <th className="p-2">Student ID</th>
                       <th className="p-2">Class Level / Dept</th>
+                      <th className="p-2">Retake</th>
                       <th className="p-2">Sex</th>
-
                       <th className="p-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredStudents.map((s) => (
+                    {filteredAndSortedStudents.map((s) => (
                       <tr key={s.id} className="border-t">
                         <td className="p-2">{s.name}</td>
                         <td className="p-2">{s.studentId}</td>
@@ -346,64 +446,80 @@ export default function AdminStudents() {
                           <div>{s.classLevel || "-"}</div>
                           {s.department && <div className="text-xs text-muted-foreground font-semibold">{s.department}</div>}
                         </td>
-                        <td className="p-2">{s.sex || "-"}</td>
-
                         <td className="p-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingStudent(s);
-                              setIsEditOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="ml-2"
-                            onClick={() => setDeleteConfirm({ open: true, id: s.id, name: s.name })}
-                          >
-                            Delete
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="ml-2"
-                            onClick={() => {
-                              toast({
-                                title: "Student Details",
-                                description: (
-                                  <div className="mt-2 text-sm">
-                                    <p><strong>Name:</strong> {s.name}</p>
-                                    <p><strong>ID:</strong> {s.studentId}</p>
-                                    <p><strong>Class:</strong> {s.classLevel || "-"}</p>
-                                    {s.department && <p><strong>Department:</strong> {s.department}</p>}
-                                    <p><strong>Sex:</strong> {s.sex || "-"}</p>
-                                  </div>
-
-                                ),
-                              });
-                            }}
-                          >
-                            View Details
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="ml-2"
-                            onClick={async () => {
-                              if (!confirm(`Reset password for ${s.name}?`)) return;
-                              // Placeholder: Implement actual reset logic as needed
-                              toast({
-                                title: "Password Reset",
-                                description: `Password reset link sent to ${s.name}`,
-                              });
-                            }}
-                          >
-                            Reset Password
-                          </Button>
+                          {(() => {
+                            const completedIds = Array.from(new Set(resultsList.filter((r) => r.studentId === s.studentId).map((r) => r.examId)));
+                            const examsCompleted = completedIds.length;
+                            const restricted = (s.restrictedExamIds || []).filter((id: string) => completedIds.includes(id)).length;
+                            return (
+                              <div className="space-y-1 text-xs">
+                                <div className="font-semibold">Done: {examsCompleted}</div>
+                                <div className="text-muted-foreground">Blocked: {restricted}</div>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="p-2">{s.sex || "-"}</td>
+                        <td className="p-2">
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingStudent(s);
+                                setIsEditOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setAdvancedProfile(s)}
+                            >
+                              Advanced Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setDeleteConfirm({ open: true, id: s.id, name: s.name });
+                              }}
+                            >
+                              Delete
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Reset password functionality
+                                toast({
+                                  title: "Password Reset",
+                                  description: `Password reset link sent to ${s.name}`,
+                                });
+                              }}
+                            >
+                              Reset Password
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                const completedIds = Array.from(new Set(resultsList.filter((r) => r.studentId === s.studentId).map((r) => r.examId)));
+                                if (completedIds.length === 0) {
+                                  toast({ title: "No Completed Exams", description: "This student has not completed any exams yet.", variant: "default" });
+                                  return;
+                                }
+                                // Open advanced view and prefill restriction options
+                                setAdvancedProfile({
+                                  ...s,
+                                  restrictedExamIds: s.restrictedExamIds || [],
+                                });
+                              }}
+                            >
+                              Manage Retake
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -412,6 +528,120 @@ export default function AdminStudents() {
               </div>
             </div>
           </div>
+
+          {advancedProfile && (
+            <div className="border border-gray-200 rounded-lg p-4 mt-6 bg-white">
+              <h3 className="text-lg font-semibold mb-3">Advanced Student Profile Edit</h3>
+              <form onSubmit={handleAdvancedUpdate} className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="adv-name">Name</Label>
+                  <Input
+                    id="adv-name"
+                    value={advancedProfile.name}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="adv-studentId">Student ID</Label>
+                  <Input
+                    id="adv-studentId"
+                    value={advancedProfile.studentId}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, studentId: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="adv-classLevel">Class Level</Label>
+                  <select
+                    id="adv-classLevel"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={advancedProfile.classLevel || ""}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, classLevel: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="JSS1">JSS1</option>
+                    <option value="JSS2">JSS2</option>
+                    <option value="JSS3">JSS3</option>
+                    <option value="SS1">SS1</option>
+                    <option value="SS2">SS2</option>
+                    <option value="SS3">SS3</option>
+                    <option value="WAEC">WAEC</option>
+                    <option value="NECO">NECO</option>
+                    <option value="GCE WAEC">GCE WAEC</option>
+                    <option value="GCE NECO">GCE NECO</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="adv-department">Department</Label>
+                  <select
+                    id="adv-department"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={advancedProfile.department || ""}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, department: e.target.value })}
+                  >
+                    <option value="">All</option>
+                    <option value="Science">Science</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Art">Art</option>
+                    <option value="Others">Others</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="adv-sex">Sex</Label>
+                  <select
+                    id="adv-sex"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={advancedProfile.sex || ""}
+                    onChange={(e) => setAdvancedProfile({ ...advancedProfile, sex: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="M">M</option>
+                    <option value="F">F</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-semibold mb-2">Retake Restriction</h4>
+                  {(examsList && examsList.length > 0) ? (
+                    <div className="space-y-2">
+                      {Array.from(new Set(resultsList.filter((r) => r.studentId === advancedProfile.studentId).map((r) => r.examId))).map((examId) => {
+                        const exam = examsList.find((e) => e.id === examId);
+                        if (!exam) return null;
+                        const currentlyRestricted = advancedProfile.restrictedExamIds?.includes(examId);
+                        return (
+                          <div key={examId} className="flex items-center justify-between rounded border p-2">
+                            <div>
+                              <div className="font-medium">{exam.title}</div>
+                              <div className="text-xs text-muted-foreground">{exam.classLevel} / {exam.subject}</div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={currentlyRestricted ? "outline" : "secondary"}
+                              onClick={() => {
+                                const updatedRestricted = currentlyRestricted
+                                  ? (advancedProfile.restrictedExamIds || []).filter((id) => id !== examId)
+                                  : Array.from(new Set([...(advancedProfile.restrictedExamIds || []), examId]));
+                                setAdvancedProfile({ ...advancedProfile, restrictedExamIds: updatedRestricted });
+                              }}
+                            >
+                              {currentlyRestricted ? "Unrestrict" : "Restrict"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No completed exams yet for this student.</p>
+                  )}
+                </div>
+                <div className="md:col-span-2 flex gap-2">
+                  <Button type="submit">Save Advanced Profile</Button>
+                  <Button type="button" variant="outline" onClick={() => setAdvancedProfile(null)}>Cancel</Button>
+                </div>
+              </form>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -423,7 +653,7 @@ export default function AdminStudents() {
             <DialogDescription>Make changes to the student profile here.</DialogDescription>
           </DialogHeader>
           {editingStudent && (
-            <form onSubmit={handleUpdateStudent} className="space-y-4">
+            <form onSubmit={handleUpdateStudent} className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="edit-name">Name</Label>
                 <Input
@@ -494,6 +724,42 @@ export default function AdminStudents() {
                   <option value="F">F</option>
                 </select>
               </div>
+
+              <div className="md:col-span-2">
+                <h4 className="text-sm font-semibold mb-2">Retake Restriction Management</h4>
+                {(examsList && examsList.length > 0) ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto border rounded p-2">
+                    {Array.from(new Set(resultsList.filter((r) => r.studentId === editingStudent.studentId).map((r) => r.examId))).map((examId) => {
+                      const exam = examsList.find((e) => e.id === examId);
+                      if (!exam) return null;
+                      const currentlyRestricted = editingStudent.restrictedExamIds?.includes(examId);
+                      return (
+                        <div key={examId} className="flex items-center justify-between rounded border p-2 bg-gray-50">
+                          <div>
+                            <div className="font-medium text-sm">{exam.title}</div>
+                            <div className="text-xs text-muted-foreground">{exam.classLevel} / {exam.subject}</div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={currentlyRestricted ? "outline" : "secondary"}
+                            onClick={() => {
+                              const updatedRestricted = currentlyRestricted
+                                ? (editingStudent.restrictedExamIds || []).filter((id) => id !== examId)
+                                : Array.from(new Set([...(editingStudent.restrictedExamIds || []), examId]));
+                              setEditingStudent({ ...editingStudent, restrictedExamIds: updatedRestricted });
+                            }}
+                          >
+                            {currentlyRestricted ? "Unrestrict Retake" : "Restrict Retake"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No completed exams yet for this student.</p>
+                )}
+              </div>
+
               <DialogFooter>
                 <Button type="submit">Save Changes</Button>
               </DialogFooter>

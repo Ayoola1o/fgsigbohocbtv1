@@ -10,6 +10,17 @@ export const config = {
 export default async function handler(req: any, res: any) {
     try {
         const { app } = await createApp();
+
+        // Vercel API routes mounted under /api/ are passed into the function
+        // with the /api prefix stripped from req.url. Re-add it so Express
+        // route definitions using /api/* still match correctly.
+        if (typeof req.url === "string" && !req.url.startsWith("/api")) {
+            req.url = "/api" + req.url;
+        }
+        if (typeof req.originalUrl === "string" && !req.originalUrl.startsWith("/api")) {
+            req.originalUrl = "/api" + req.originalUrl;
+        }
+
         app(req, res);
     } catch (e: any) {
         // Fallback error handler if the app fails to start or crash at top level

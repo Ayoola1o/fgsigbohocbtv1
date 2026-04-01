@@ -84,8 +84,8 @@ export default function StudentPortal() {
               {exams
                 .filter((exam) => {
                   if (!exam.isActive) return false;
-                  // If exam is general (no department), allow it
-                  if (!exam.department) return true;
+                  // If exam is general (no department or General department), allow it for all students
+                  if (!exam.department || exam.department === "General") return true;
                   // If exam is specific to a department, student must match it
                   return exam.department === student.department;
                 })
@@ -98,9 +98,9 @@ export default function StudentPortal() {
                     <CardHeader>
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <CardTitle className="text-xl">{exam.title}</CardTitle>
-                        <Badge variant="secondary" data-testid={`badge-subject-${exam.id}`}>
-                          {exam.subject}
-                        </Badge>
+                        <Badge variant={exam.subExamIds && exam.subExamIds.length > 0 ? "default" : "secondary"} data-testid={`badge-subject-${exam.id}`}>
+                        {exam.subExamIds && exam.subExamIds.length > 0 ? `Multi (${exam.subExamIds.length} parts)` : exam.subject}
+                      </Badge>
                       </div>
                       {exam.description && (
                         <CardDescription>{exam.description}</CardDescription>
@@ -114,7 +114,7 @@ export default function StudentPortal() {
                         </div>
                         <div className="flex items-center gap-1">
                           <BookOpen className="h-4 w-4" />
-                          <span>{exam.questionIds.length} questions</span>
+                          <span>{exam.subExamIds && exam.subExamIds.length > 0 ? `${exam.subExamIds.length} parts` : `${exam.questionIds.length} questions`}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-sm">

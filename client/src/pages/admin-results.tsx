@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,21 +21,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon } from "lucide-react";
+import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Trash2 } from "lucide-react";
 import type { Result, Exam, Student } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { createRoot } from "react-dom/client";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { getResults } from "@/lib/firebase-api";
+import { getResults, deleteResult } from "@/lib/firebase-api";
+import { queryClient } from "@/lib/queryClient";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function AdminResults() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [examSearchTerm, setExamSearchTerm] = useState("");
   const [filterExamId, setFilterExamId] = useState<string>("ALL");
   const [filterClassLevel, setFilterClassLevel] = useState<string>("ALL");
   const [filterDepartment, setFilterDepartment] = useState<string>("ALL");
@@ -43,6 +59,11 @@ export default function AdminResults() {
     from: undefined,
     to: undefined,
   });
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [resultToDelete, setResultToDelete] = useState<Result | null>(null);
+
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   const writePrintWindowDocument = (printWindow: Window, title: string, extraHeadHtml = "") => {
     printWindow.document.open();
@@ -128,6 +149,43 @@ export default function AdminResults() {
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
   const { data: students } = useQuery<Student[]>({ queryKey: ["/api/students"] });
 
+  const deleteResultMutation = useMutation({
+    mutationFn: (resultId: string) => deleteResult(resultId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/results"] });
+      toast({
+        title: "Result deleted",
+        description: "The result has been successfully deleted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the result. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (resultIds: string[]) => Promise.all(resultIds.map(id => deleteResult(id))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/results"] });
+      setSelectedResultIds(new Set());
+      toast({
+        title: "Results deleted",
+        description: "The selected results have been successfully deleted.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to delete some results. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredResults = results?.filter(
     (result) => {
       const examMatch = filterExamId === "ALL" || result.examId === filterExamId;
@@ -152,6 +210,28 @@ export default function AdminResults() {
     return exams?.find((e) => e.id === examId)?.title || "Unknown Exam";
   };
 
+  const examMatches = exams?.filter(e => e.title.toLowerCase().includes(examSearchTerm.toLowerCase())) || [];
+
+  const updateExamFilterByTerm = (value: string) => {
+    const term = value.trim();
+    setExamSearchTerm(value);
+
+    if (!term || term.toLowerCase() === "all exams") {
+      setFilterExamId("ALL");
+      return;
+    }
+
+    const matchedExam = exams?.find(e => e.title.toLowerCase() === term.toLowerCase());
+    if (matchedExam) {
+      setFilterExamId(matchedExam.id);
+      return;
+    }
+
+    // while typing partial term, keep current exam filter until exact match selected
+  };
+
+  const filteredResultsCount = filteredResults?.length ?? 0;
+
   const handlePrint = async (result: Result) => {
     const exam = exams?.find(e => e.id === result.examId);
     const student = students?.find(s => s.studentId === result.studentId);
@@ -165,11 +245,16 @@ export default function AdminResults() {
       subjects.forEach(subject => {
         const subjectQuestions = examQuestions.filter(q => q.subject === subject);
         const totalQuestions = subjectQuestions.length;
+        let subjectScore = 0;
+        let subjectTotalPoints = 0;
         let correctCount = 0;
 
         subjectQuestions.forEach(q => {
+          const qPoints = q.points || 1;
+          subjectTotalPoints += qPoints;
           if (result.correctAnswers && result.correctAnswers[q.id]) {
-            correctCount++;
+            subjectScore += qPoints;
+            correctCount += 1;
           }
         });
 
@@ -177,7 +262,9 @@ export default function AdminResults() {
           subject,
           questions: totalQuestions,
           correct: correctCount,
-          percentage: totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
+          score: subjectScore,
+          total: subjectTotalPoints,
+          percentage: subjectTotalPoints > 0 ? (subjectScore / subjectTotalPoints) * 100 : 0,
         });
       });
     }
@@ -278,7 +365,8 @@ export default function AdminResults() {
         name: r.studentName,
         class: student?.classLevel || filterClassLevel || "-",
         subject: exam?.title || "Examination",
-        score: r.percentage
+        score: r.score,
+        total: r.totalPoints
       };
     });
 
@@ -441,8 +529,8 @@ export default function AdminResults() {
                     name: b.subject,
                     class: data.candidate.gradeLevel,
                     subject: data.examTitle,
-                    score: b.correct,
-                    total: b.questions,
+                    score: b.score ?? b.correct ?? 0,
+                    total: b.total ?? b.questions ?? 0,
                     percentage: b.percentage
                   }))}
                   showPrintButton={false}
@@ -481,7 +569,9 @@ export default function AdminResults() {
         name: r.studentName,
         class: student?.classLevel || filterClassLevel || "-",
         subject: getExamTitle(r.examId),
-        score: r.percentage
+        score: r.score,
+        total: r.totalPoints,
+        percentage: r.percentage
       };
     });
 
@@ -587,20 +677,28 @@ export default function AdminResults() {
                   </div>
                 </div>
 
-                {/* Exam Selection */}
+                {/* Exam Selection (Typeahead) */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Exam</label>
-                  <Select value={filterExamId} onValueChange={setFilterExamId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Exams" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Exams</SelectItem>
-                      {exams?.map(e => (
-                        <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Type exam name and select..."
+                      value={examSearchTerm}
+                      onChange={(e) => updateExamFilterByTerm(e.target.value)}
+                      className="pl-10"
+                      list="exam-suggestions"
+                    />
+                  </div>
+                  <datalist id="exam-suggestions">
+                    <option value="All Exams" />
+                    {examMatches.map(e => (
+                      <option key={e.id} value={e.title} />
+                    ))}
+                  </datalist>
+                  <div className="text-xs text-muted-foreground">
+                    {filterExamId === "ALL" ? "Showing results for all exams" : `${filteredResultsCount} students found for selected exam`}
+                  </div>
                 </div>
 
                 {/* Class Level Selection */}
@@ -683,12 +781,9 @@ export default function AdminResults() {
                   <Button variant="ghost" size="sm" onClick={() => {
                     setSearchQuery("");
                     setFilterExamId("ALL");
-                    setSearchQuery("");
-                    setFilterExamId("ALL");
                     setFilterClassLevel("ALL");
                     setFilterDepartment("ALL");
                     setDateRange({ from: undefined, to: undefined });
-
                   }}>
                     Reset Filters
                   </Button>
@@ -696,10 +791,19 @@ export default function AdminResults() {
 
                 <div className="flex gap-3">
                   {selectedResultIds.size > 0 && (
-                    <Button onClick={handleBulkPrint} variant="default">
-                      <Printer className="mr-2 h-4 w-4" />
-                      Print Selected ({selectedResultIds.size})
-                    </Button>
+                    <>
+                      <Button onClick={handleBulkPrint} variant="default">
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print Selected ({selectedResultIds.size})
+                      </Button>
+                      <Button 
+                        onClick={() => setBulkDeleteDialogOpen(true)} 
+                        variant="destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Selected ({selectedResultIds.size})
+                      </Button>
+                    </>
                   )}
 
                   <Button onClick={handlePrintFullReport} variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800">
@@ -857,6 +961,17 @@ export default function AdminResults() {
                             >
                               <Printer className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                setResultToDelete(result);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow >
@@ -893,6 +1008,60 @@ export default function AdminResults() {
           </Card>
         )}
       </div >
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Result</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the result for{" "}
+              <strong>{resultToDelete?.studentName}</strong> ({resultToDelete?.studentId})?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (resultToDelete) {
+                  deleteResultMutation.mutate(resultToDelete.id);
+                  setDeleteDialogOpen(false);
+                  setResultToDelete(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Results</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedResultIds.size} selected result{selectedResultIds.size > 1 ? 's' : ''}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                bulkDeleteMutation.mutate(Array.from(selectedResultIds));
+                setBulkDeleteDialogOpen(false);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div >
   );
 }

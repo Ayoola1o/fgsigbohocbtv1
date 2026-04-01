@@ -53,7 +53,7 @@ export default function AdminPrintout() {
     const breakdown: any[] = [];
     if (questions && exam) {
       const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
-      const subjects = [...new Set(examQuestions.map(q => q.subject))];
+      const subjects = Array.from(new Set(examQuestions.map(q => q.subject)));
 
       subjects.forEach(subject => {
         const subjectQuestions = examQuestions.filter(q => q.subject === subject);

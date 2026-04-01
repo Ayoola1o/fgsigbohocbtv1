@@ -156,7 +156,6 @@ export class MemStorage implements IStorage {
       term: (insertQuestion as any).term ?? "First Term",
       examType: (insertQuestion as any).examType ?? "Objectives",
       imageUrl: insertQuestion.imageUrl ?? null,
-      // department may be optional on the insert schema
       department: (insertQuestion as any).department ?? null,
     };
     this.questions.set(id, question);
@@ -199,12 +198,18 @@ export class MemStorage implements IStorage {
   async createExam(insertExam: InsertExam): Promise<Exam> {
     const id = randomUUID();
 
-    // Calculate total points from questions
     let totalPoints = 0;
-    for (const questionId of (insertExam.questionIds || [])) {
-      const question = await this.getQuestion(questionId);
-      if (question) {
-        totalPoints += question.points;
+    if (insertExam.subExamIds && insertExam.subExamIds.length > 0) {
+      for (const subExamId of insertExam.subExamIds) {
+        const subExam = await this.getExam(subExamId);
+        if (subExam) totalPoints += subExam.totalPoints;
+      }
+    } else {
+      for (const questionId of (insertExam.questionIds || [])) {
+        const question = await this.getQuestion(questionId);
+        if (question) {
+          totalPoints += question.points;
+        }
       }
     }
 
@@ -217,6 +222,7 @@ export class MemStorage implements IStorage {
       totalPoints,
       passingScore: insertExam.passingScore,
       questionIds: insertExam.questionIds || [],
+      subExamIds: insertExam.subExamIds || [],
       numberOfQuestionsToDisplay: (insertExam as any).numberOfQuestionsToDisplay ?? null,
       classLevel: (insertExam as any).classLevel ?? null,
       term: (insertExam as any).term ?? "First Term",
@@ -340,6 +346,7 @@ export class MemStorage implements IStorage {
       classLevel: insertStudent.classLevel,
       sex: insertStudent.sex || null,
       department: insertStudent.department || null,
+      restrictedExamIds: insertStudent.restrictedExamIds || [],
     };
     this.students.set(id, student);
     this.saveStudentsToDisk();
