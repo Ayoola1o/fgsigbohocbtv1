@@ -73,7 +73,7 @@ export default function Home() {
                 Manage exams, questions, and view comprehensive analytics and
                 reports.
               </p>
-              <Link href="/admin">
+              <Link href="/admin/login">
                 <Button size="lg" className="w-full bg-white text-primary hover:bg-white/90 font-semibold shadow-lg" data-testid="button-admin-portal">
                   Enter as Admin
                 </Button>
