@@ -756,431 +756,444 @@ export default function AdminQuestions() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="mb-2 text-3xl font-bold">Question Bank</h1>
-            <p className="text-muted-foreground">
-              Manage your collection of exam questions
-            </p>
+    <div className="space-y-8 pb-12">
+      {/* Header Panel */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-glass border border-slate-100 dark:border-slate-800/80 p-6 rounded-2xl shadow-xl shadow-slate-100/10 dark:shadow-none animate-in fade-in slide-in-from-top-4 duration-500">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Question Repository</span>
           </div>
-          <div className="flex gap-2">
-            <Dialog open={showImporterOpen} onOpenChange={setShowImporterOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/5">
-                  <Sparkles className="mr-2 h-4 w-4 text-amber-500 animate-pulse" /> Smart Importer
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card border shadow-2xl p-6">
-                <DialogHeader className="border-b pb-4">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-6 w-6 text-amber-500 animate-bounce" />
-                    <div>
-                      <DialogTitle className="text-2xl font-bold tracking-tight bg-gradient-to-r from-amber-500 via-primary to-blue-600 bg-clip-text text-transparent">
-                        FIA Smart Question Importer
-                      </DialogTitle>
-                      <DialogDescription className="text-xs text-muted-foreground mt-1">
-                        Resiliently parse questions from Word documents, Notepad files, or plain text, and optionally auto-create an exam.
-                      </DialogDescription>
-                    </div>
+          <h1 className="text-3xl font-black tracking-tight mt-1.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-white dark:via-indigo-200 dark:to-white bg-clip-text text-transparent">
+            Question Bank
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">
+            Register and structure Objective/Theory questions, import bulk worksheets, and map media assets.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Dialog open={showImporterOpen} onOpenChange={setShowImporterOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="shadow-sm border-indigo-250 text-indigo-650 hover:bg-indigo-50 dark:border-indigo-900/60 dark:text-indigo-400 dark:hover:bg-indigo-950/30 transition-all font-bold rounded-xl h-10 px-4 flex items-center gap-2"
+              >
+                <Sparkles className="h-4.5 w-4.5 text-amber-500 animate-pulse" /> Smart Importer
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+              <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <Sparkles className="h-5.5 w-5.5 animate-bounce" />
                   </div>
-                </DialogHeader>
+                  <div>
+                    <DialogTitle className="text-2xl font-black tracking-tight bg-gradient-to-r from-amber-500 via-indigo-600 to-blue-600 bg-clip-text text-transparent">
+                      FIA Smart Question Importer
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">
+                      Resiliently parse questions from Word documents, Notepad files, or plain text, and optionally auto-create an exam.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4">
-                  {/* Left Column - Configuration & Inputs (5 Cols) */}
-                  <div className="lg:col-span-5 space-y-6">
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-semibold text-foreground/90 border-b pb-1">1. Global Default Settings</h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Class Level *</Label>
-                          <Select value={csvClassLevel} onValueChange={setCsvClassLevel}>
-                            <SelectTrigger className="bg-background"><SelectValue placeholder="Select Class" /></SelectTrigger>
-                            <SelectContent>
-                              {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"].map(c => (
-                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Term *</Label>
-                          <Select value={csvTerm} onValueChange={setCsvTerm}>
-                            <SelectTrigger className="bg-background"><SelectValue placeholder="Select Term" /></SelectTrigger>
-                            <SelectContent>
-                              {["First Term", "Second Term", "Third Term"].map(t => (
-                                <SelectItem key={t} value={t}>{t}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Exam Type *</Label>
-                          <Select value={csvExamType} onValueChange={setCsvExamType}>
-                            <SelectTrigger className="bg-background"><SelectValue placeholder="Select Type" /></SelectTrigger>
-                            <SelectContent>
-                              {["Objectives", "Theory"].map(t => (
-                                <SelectItem key={t} value={t}>{t}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Subject *</Label>
-                          <Input
-                            placeholder="e.g. Mathematics"
-                            value={csvSubject}
-                            onChange={(e) => setCsvSubject(e.target.value)}
-                            className="bg-background h-10 text-sm"
-                          />
-                        </div>
-
-                        {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
-                          <div className="space-y-2 col-span-2">
-                            <Label>Department</Label>
-                            <Select value={csvDepartment} onValueChange={setCsvDepartment}>
-                              <SelectTrigger className="bg-background"><SelectValue placeholder="Select Department" /></SelectTrigger>
-                              <SelectContent>
-                                {["Science", "Commercial", "Art", "Others", "General"].map(d => (
-                                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between border-b pb-1">
-                        <h3 className="text-sm font-semibold text-foreground/90">2. Input Content</h3>
-                        <div className="flex gap-2 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => setImporterTab('paste')}
-                            className={`px-2.5 py-1 rounded transition-colors ${importerTab === 'paste' ? 'bg-primary text-primary-foreground font-medium' : 'bg-muted hover:bg-muted/80'}`}
-                          >
-                            Paste Text
-                          </button>
-                          <label className="px-2.5 py-1 rounded bg-muted hover:bg-muted/80 cursor-pointer transition-colors flex items-center gap-1">
-                            <Upload className="h-3 w-3" /> Load File (.txt / .csv)
-                            <input
-                              type="file"
-                              accept=".txt,.csv"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                const text = await file.text();
-                                setPastedText(text);
-                                setImporterTab('paste');
-                                toast({
-                                  title: "File Loaded",
-                                  description: `Loaded file "${file.name}" for parsing.`,
-                                });
-                              }}
-                            />
-                          </label>
-                        </div>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4">
+                {/* Left Column - Configuration & Inputs */}
+                <div className="lg:col-span-5 space-y-6">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-805 pb-1">1. Global Default Settings</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500">Class Level *</Label>
+                        <Select value={csvClassLevel} onValueChange={setCsvClassLevel}>
+                          <SelectTrigger className="bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800"><SelectValue placeholder="Select Class" /></SelectTrigger>
+                          <SelectContent className="rounded-xl border-slate-150">
+                            {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"].map(c => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
-                      {importerTab === 'paste' ? (
-                        <div className="space-y-2">
-                          <Textarea
-                            placeholder={`Paste exam document here. Example format:\n\n1. What is the CPU?\nA. Core Processing Unit\nB. Central Processing Unit\nC. Centralised Processor\nD. Computer Power Unit\nAnswer: B`}
-                            value={pastedText}
-                            onChange={(e) => setPastedText(e.target.value)}
-                            className="min-h-[220px] max-h-[300px] font-mono text-xs bg-background resize-y"
-                          />
-                          <p className="text-[10px] text-muted-foreground italic leading-normal">
-                            * Supports standard multiple choice option blocks (A, B, C, D) and answer tags. Unlabeled questions default to Theory.
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500">Term *</Label>
+                        <Select value={csvTerm} onValueChange={setCsvTerm}>
+                          <SelectTrigger className="bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800"><SelectValue placeholder="Select Term" /></SelectTrigger>
+                          <SelectContent className="rounded-xl border-slate-150">
+                            {["First Term", "Second Term", "Third Term"].map(t => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                    {/* Auto Exam creation form */}
-                    <div className="space-y-4 p-4 border border-primary/20 bg-primary/5 rounded-xl transition-all duration-300">
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <Label className="text-sm font-semibold text-foreground/90 cursor-pointer" htmlFor="auto-exam-check">
-                            3. Auto-Create Exam
-                          </Label>
-                          <span className="text-[11px] text-muted-foreground mt-0.5">
-                            Automatically create a CBT exam with these questions.
-                          </span>
-                        </div>
-                        <input
-                          type="checkbox"
-                          id="auto-exam-check"
-                          checked={autoCreateExam}
-                          onChange={(e) => setAutoCreateExam(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500">Exam Type *</Label>
+                        <Select value={csvExamType} onValueChange={setCsvExamType}>
+                          <SelectTrigger className="bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800"><SelectValue placeholder="Select Type" /></SelectTrigger>
+                          <SelectContent className="rounded-xl border-slate-150">
+                            {["Objectives", "Theory"].map(t => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500">Subject *</Label>
+                        <Input
+                          placeholder="e.g. Mathematics"
+                          value={csvSubject}
+                          onChange={(e) => setCsvSubject(e.target.value)}
+                          className="bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800 h-10 text-sm font-bold text-slate-700 dark:text-slate-300"
                         />
                       </div>
 
-                      {autoCreateExam && (
-                        <div className="space-y-4 pt-3 border-t border-primary/10 grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                          <div className="space-y-1 col-span-2">
-                            <Label className="text-xs">Exam Title *</Label>
-                            <Input
-                              placeholder="e.g. Midterm General Mathematics"
-                              value={examTitle}
-                              onChange={(e) => setExamTitle(e.target.value)}
-                              className="h-8 text-xs bg-background"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <Label className="text-xs">Duration (mins)</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={examDuration}
-                              onChange={(e) => setExamDuration(parseInt(e.target.value) || 0)}
-                              className="h-8 text-xs bg-background"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <Label className="text-xs">Passing Score (%)</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              max="100"
-                              value={examPassingScore}
-                              onChange={(e) => setExamPassingScore(parseInt(e.target.value) || 0)}
-                              className="h-8 text-xs bg-background"
-                            />
-                          </div>
+                      {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
+                        <div className="space-y-1.5 col-span-2">
+                          <Label className="text-xs font-bold text-slate-500">Department</Label>
+                          <Select value={csvDepartment} onValueChange={setCsvDepartment}>
+                            <SelectTrigger className="bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800"><SelectValue placeholder="Select Department" /></SelectTrigger>
+                            <SelectContent className="rounded-xl border-slate-150">
+                              {["Science", "Commercial", "Art", "Others", "General"].map(d => (
+                                <SelectItem key={d} value={d}>{d}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Right Column - Live Parser Preview (7 Cols) */}
-                  <div className="lg:col-span-7 flex flex-col h-full border rounded-xl overflow-hidden bg-background/50">
-                    <div className="bg-muted px-4 py-3 border-b flex justify-between items-center flex-shrink-0">
-                      <span className="text-sm font-semibold text-foreground/80 flex items-center gap-2">
-                        Live Preview <Badge variant="secondary">{parsedQuestions.length} parsed</Badge>
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">Updates in real-time</span>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-805 pb-1">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">2. Input Content</h3>
+                      <div className="flex gap-2 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setImporterTab('paste')}
+                          className={`px-3 py-1 rounded-xl transition-all ${importerTab === 'paste' ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+                        >
+                          Paste Text
+                        </button>
+                        <label className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-550 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700 cursor-pointer transition-all flex items-center gap-1 font-bold">
+                          <Upload className="h-3 w-3" /> Load File (.txt / .csv)
+                          <input
+                            type="file"
+                            accept=".txt,.csv"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const text = await file.text();
+                              setPastedText(text);
+                              setImporterTab('paste');
+                              toast({
+                                title: "File Loaded",
+                                description: `Loaded file "${file.name}" for parsing.`,
+                              });
+                            }}
+                          />
+                        </label>
+                      </div>
                     </div>
 
-                    <div className="p-4 overflow-y-auto space-y-4 max-h-[50vh] min-h-[300px] lg:max-h-[60vh] flex-1">
-                      {parsedQuestions.length > 0 ? (
-                        parsedQuestions.map((q, idx) => (
-                          <Card key={idx} className="border-l-4 border-l-primary/60 hover:shadow transition-shadow duration-200">
-                            <CardContent className="p-4 space-y-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
-                                  <span>Q{idx + 1}.</span>
-                                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 uppercase font-medium bg-muted/30">
-                                    {q.questionType}
-                                  </Badge>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground">{q.difficulty} | {q.points} pt</span>
-                              </div>
-                              
-                              <p className="text-sm font-medium leading-relaxed text-foreground/90 whitespace-pre-wrap">
-                                {q.questionText}
-                              </p>
+                    {importerTab === 'paste' ? (
+                      <div className="space-y-2 animate-in fade-in duration-300">
+                        <Textarea
+                          placeholder={`Paste exam document here. Example format:\n\n1. What is the CPU?\nA. Core Processing Unit\nB. Central Processing Unit\nC. Centralised Processor\nD. Computer Power Unit\nAnswer: B`}
+                          value={pastedText}
+                          onChange={(e) => setPastedText(e.target.value)}
+                          className="min-h-[220px] max-h-[300px] font-mono text-xs bg-slate-50/50 dark:bg-slate-950/40 rounded-xl resize-y border-slate-200 dark:border-slate-800 focus:ring-indigo-550"
+                        />
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium italic leading-normal">
+                          * Supports standard multiple choice option blocks (A, B, C, D) and answer tags. Unlabeled questions default to Theory.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
 
-                              {q.options && q.options.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                                  {q.options.map((opt: string, optIdx: number) => {
-                                    // Parse letter prefix to check correctness
-                                    const lowerOpt = opt.toLowerCase();
-                                    const lowerAns = q.correctAnswer?.toLowerCase().trim();
-                                    
-                                    const isCorrect = lowerAns && (
-                                      lowerOpt.startsWith(`(${lowerAns})`) || 
-                                      lowerOpt.startsWith(`${lowerAns}.`) || 
-                                      lowerOpt.startsWith(`${lowerAns})`) ||
-                                      lowerOpt.replace(/^\([a-e]\)\s*/, "").trim() === lowerAns
-                                    );
+                  {/* Auto Exam creation form */}
+                  <div className="space-y-4 p-4 border border-indigo-150 bg-indigo-50/30 dark:border-indigo-950/40 dark:bg-indigo-950/20 rounded-2xl transition-all duration-300">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <Label className="text-xs font-black uppercase tracking-wider text-indigo-750 dark:text-indigo-400 cursor-pointer" htmlFor="auto-exam-check">
+                          3. Auto-Create Exam
+                        </Label>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                          Automatically create a CBT exam with these questions.
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="auto-exam-check"
+                        checked={autoCreateExam}
+                        onChange={(e) => setAutoCreateExam(e.target.checked)}
+                        className="h-4.5 w-4.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </div>
 
-                                    return (
-                                      <div 
-                                        key={optIdx} 
-                                        className={`text-xs px-2.5 py-1.5 rounded-md border flex items-center gap-2 transition-colors ${
-                                          isCorrect 
-                                            ? 'bg-green-500/10 border-green-500/40 text-green-700 dark:text-green-400 font-medium shadow-sm' 
-                                            : 'bg-background/80 border-muted text-muted-foreground'
-                                        }`}
-                                      >
-                                        <span className="font-semibold">{opt.substring(0, 3)}</span>
-                                        <span className="flex-1">{opt.substring(4)}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              {q.correctAnswer && (
-                                <div className="text-xs flex items-center gap-1.5 text-foreground/70 bg-muted/40 px-2 py-1.5 rounded-md w-fit">
-                                  <span className="font-semibold text-foreground/80">Answer Key:</span>
-                                  <span className="font-mono text-primary font-bold px-1 py-0.5 rounded bg-background border shadow-sm">
-                                    {q.correctAnswer}
-                                  </span>
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        ))
-                      ) : (
-                        <div className="flex flex-col items-center justify-center h-full py-16 text-center text-muted-foreground space-y-3">
-                          <FileText className="h-10 w-10 text-muted-foreground/40 stroke-[1.5]" />
-                          <div>
-                            <p className="font-medium text-sm">No parsed questions yet</p>
-                            <p className="text-xs text-muted-foreground max-w-sm mt-1">
-                              Start typing, paste an exam document, or load a text file to see the interactive live preview here.
-                            </p>
-                          </div>
+                    {autoCreateExam && (
+                      <div className="space-y-4 pt-3 border-t border-indigo-100 dark:border-indigo-900/40 grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-xs font-bold text-slate-655 dark:text-slate-400">Exam Title *</Label>
+                          <Input
+                            placeholder="e.g. Midterm General Mathematics"
+                            value={examTitle}
+                            onChange={(e) => setExamTitle(e.target.value)}
+                            className="h-8.5 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg"
+                          />
                         </div>
-                      )}
-                    </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold text-slate-655 dark:text-slate-400">Duration (mins)</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={examDuration}
+                            onChange={(e) => setExamDuration(parseInt(e.target.value) || 0)}
+                            className="h-8.5 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg font-bold"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-bold text-slate-655 dark:text-slate-400">Passing Score (%)</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={examPassingScore}
+                            onChange={(e) => setExamPassingScore(parseInt(e.target.value) || 0)}
+                            className="h-8.5 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg font-bold"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <DialogFooter className="border-t pt-4 mt-6">
-                  <Button variant="outline" onClick={() => setShowImporterOpen(false)} disabled={isImporting}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handleSmartImportSubmit} 
-                    disabled={isImporting || parsedQuestions.length === 0}
-                    className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6 shadow-lg shadow-primary/20"
-                  >
-                    {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {autoCreateExam ? "Import & Create Exam" : `Import ${parsedQuestions.length} Questions`}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                {/* Right Column - Live Parser Preview */}
+                <div className="lg:col-span-7 flex flex-col h-full border border-slate-100 dark:border-slate-800/80 rounded-2xl overflow-hidden bg-slate-50/30 dark:bg-slate-950/20">
+                  <div className="bg-slate-50/80 dark:bg-slate-950/60 px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 flex justify-between items-center flex-shrink-0">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                      Live Preview <Badge variant="secondary" className="font-bold bg-indigo-50 text-indigo-700 border-indigo-200">{parsedQuestions.length} parsed</Badge>
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Updates in real-time</span>
+                  </div>
 
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-question">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Question
+                  <div className="p-4 overflow-y-auto space-y-4 max-h-[50vh] min-h-[300px] lg:max-h-[60vh] flex-1">
+                    {parsedQuestions.length > 0 ? (
+                      parsedQuestions.map((q, idx) => (
+                        <Card key={idx} className="border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow duration-200 rounded-xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                                <span className="text-indigo-650">Q{idx + 1}.</span>
+                                <Badge variant="outline" className="text-[9px] py-0 px-1.5 uppercase font-black bg-slate-50 text-slate-500">
+                                  {q.questionType}
+                                </Badge>
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-455">{q.difficulty} | {q.points} pt</span>
+                            </div>
+                            
+                            <p className="text-xs font-semibold leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                              {q.questionText}
+                            </p>
+
+                            {q.options && q.options.length > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                                {q.options.map((opt: string, optIdx: number) => {
+                                  const lowerOpt = opt.toLowerCase();
+                                  const lowerAns = q.correctAnswer?.toLowerCase().trim();
+                                  
+                                  const isCorrect = lowerAns && (
+                                    lowerOpt.startsWith(`(${lowerAns})`) || 
+                                    lowerOpt.startsWith(`${lowerAns}.`) || 
+                                    lowerOpt.startsWith(`${lowerAns})`) ||
+                                    lowerOpt.replace(/^\([a-e]\)\s*/, "").trim() === lowerAns
+                                  );
+
+                                  return (
+                                    <div 
+                                      key={optIdx} 
+                                      className={`text-[11px] px-2.5 py-1.5 rounded-xl border flex items-center gap-2 transition-all ${
+                                        isCorrect 
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40 font-bold shadow-sm shadow-emerald-500/5' 
+                                          : 'bg-slate-50/50 border-slate-100 text-slate-500 dark:bg-slate-900 dark:border-slate-800'
+                                      }`}
+                                    >
+                                      <span className="font-extrabold text-indigo-500">{opt.substring(0, 3)}</span>
+                                      <span className="flex-1 font-medium">{opt.substring(4)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {q.correctAnswer && (
+                              <div className="text-[10px] flex items-center gap-1.5 text-slate-500 bg-slate-50 dark:bg-slate-950 px-2 py-1 rounded-lg w-fit border border-slate-100/60 dark:border-slate-800/40">
+                                <span className="font-bold uppercase tracking-wider text-slate-455">Correct Key:</span>
+                                <span className="font-mono text-indigo-650 dark:text-indigo-400 font-extrabold px-1 rounded">
+                                  {q.correctAnswer}
+                                </span>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full py-16 text-center text-slate-400 space-y-3">
+                        <FileText className="h-10 w-10 text-slate-300 dark:text-slate-850 stroke-[1.5]" />
+                        <div>
+                          <p className="font-black text-sm text-slate-655 dark:text-slate-400">No parsed questions yet</p>
+                          <p className="text-xs text-slate-400 max-w-sm mt-1 font-medium leading-normal">
+                            Start typing, paste an exam document, or load a text file to see the interactive live preview here.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-6">
+                <Button variant="outline" className="rounded-xl h-9 text-xs font-bold" onClick={() => setShowImporterOpen(false)} disabled={isImporting}>
+                  Cancel
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <QuestionForm
-                  onSuccess={() => {
-                    setIsCreateOpen(false);
-                    queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
+                <Button 
+                  onClick={handleSmartImportSubmit} 
+                  disabled={isImporting || parsedQuestions.length === 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 h-9 rounded-xl text-xs shadow-lg shadow-indigo-500/10"
+                >
+                  {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {autoCreateExam ? "Import & Create Exam" : `Import ${parsedQuestions.length} Questions`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                data-testid="button-add-question"
+                className="shadow-md shadow-indigo-500/10 bg-indigo-650 hover:bg-indigo-700 text-white font-bold transition-all hover:scale-[1.03] duration-300 h-10 px-4 rounded-xl flex items-center gap-2"
+              >
+                <Plus className="h-4.5 w-4.5" /> Add Question
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-2xl">
+              <QuestionForm
+                onSuccess={() => {
+                  setIsCreateOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Control Tools bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/30 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-800/80">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => document.getElementById("questions-csv")?.click()}
+            disabled={!!uploadProgress}
+            className="h-8.5 rounded-lg border-slate-200 dark:border-slate-800 font-bold text-xs"
+          >
+            {uploadProgress ? (
+              `Uploading ${Math.round((uploadProgress.uploaded / uploadProgress.total) * 100)}%`
+            ) : (
+              <>
+                <Upload className="mr-2 h-3.5 w-3.5 text-indigo-500" /> Upload CSV
+              </>
+            )}
+          </Button>
+          <input
+            type="file"
+            id="questions-csv"
+            accept=".csv"
+            className="hidden"
+            ref={fileInputRef}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowHelpDialog(true)}
+            className="h-8.5 rounded-lg border-slate-200 dark:border-slate-800 font-bold text-xs"
+          >
+            <HelpCircle className="mr-2 h-3.5 w-3.5 text-slate-400" /> CSV Help
+          </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => document.getElementById("questions-csv")?.click()}
-              disabled={!!uploadProgress}
-            >
-              {uploadProgress ? (
-                `Uploading ${Math.round((uploadProgress.uploaded / uploadProgress.total) * 100)}%`
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" /> Upload CSV
-                </>
-              )}
-            </Button>
-            <input
-              type="file"
-              id="questions-csv"
-              accept=".csv"
-              className="hidden"
-              ref={fileInputRef}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHelpDialog(true)}
-            >
-              <HelpCircle className="mr-2 h-4 w-4" /> CSV Help
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => downloadTemplate('objectives')} className="h-8.5 rounded-lg border-slate-200 dark:border-slate-800 font-bold text-xs">
+            <Download className="mr-2 h-3.5 w-3.5 text-emerald-500" /> Template (Obj)
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => downloadTemplate('theory')} className="h-8.5 rounded-lg border-slate-200 dark:border-slate-800 font-bold text-xs">
+            <Download className="mr-2 h-3.5 w-3.5 text-rose-500" /> Template (Theory)
+          </Button>
+        </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => downloadTemplate('objectives')}>
-              <Download className="mr-2 h-4 w-4" /> Template (Obj)
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => downloadTemplate('theory')}>
-              <Download className="mr-2 h-4 w-4" /> Template (Theory)
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+            <SelectTrigger className="w-[180px] h-8.5 rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-bold text-xs">
+              <SelectValue placeholder="All Departments" />
+            </SelectTrigger>
+            <SelectContent className="rounded-lg">
+              <SelectItem value="__all__">All Departments</SelectItem>
+              <SelectItem value="General">General</SelectItem>
+              <SelectItem value="Science">Science</SelectItem>
+              <SelectItem value="Commercial">Commercial</SelectItem>
+              <SelectItem value="Art">Art</SelectItem>
+              <SelectItem value="Others">Others</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <div className="flex gap-2">
-            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Departments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Departments</SelectItem>
-                <SelectItem value="General">General</SelectItem>
-                <SelectItem value="Science">Science</SelectItem>
-                <SelectItem value="Commercial">Commercial</SelectItem>
-                <SelectItem value="Art">Art</SelectItem>
-                <SelectItem value="Others">Others</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-
-
-
-
-          <div className="flex gap-2 ml-auto">
-            {selectedIds.size > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setDeleteDialogState({ isOpen: true, type: 'selected', id: undefined })}
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> Delete Selected ({selectedIds.size})
-              </Button>
-            )}
+          {selectedIds.size > 0 && (
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => setDeleteDialogState({ isOpen: true, type: 'all', id: undefined })}
+              onClick={() => setDeleteDialogState({ isOpen: true, type: 'selected', id: undefined })}
+              className="h-8.5 rounded-lg font-bold text-xs"
             >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete All
+              <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Selected ({selectedIds.size})
             </Button>
-          </div>
+          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteDialogState({ isOpen: true, type: 'all', id: undefined })}
+            className="h-8.5 rounded-lg font-bold text-xs"
+          >
+            <Trash2 className="mr-2 h-3.5 w-3.5" /> Reset Repository
+          </Button>
         </div>
       </div>
 
       <Dialog open={showClassLevelDialog} onOpenChange={setShowClassLevelDialog}>
-        <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-2xl border-slate-100 p-6 shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Select Default Values for CSV Import</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-black text-slate-850">Select Default Values for CSV Import</DialogTitle>
+            <DialogDescription className="text-xs font-medium text-slate-500 leading-normal mt-1">
               Please select the class level, term, subject, and exam type for the imported questions.
               These values will be applied to all questions in the CSV file.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="csv-class-level">Class Level *</Label>
+            <div className="space-y-1">
+              <Label htmlFor="csv-class-level" className="text-xs font-bold text-slate-550">Class Level *</Label>
               <select
                 id="csv-class-level"
                 value={csvClassLevel}
                 onChange={e => setCsvClassLevel(e.target.value)}
-                className="border rounded px-2 py-1 w-full"
+                className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-350"
               >
                 <option value="">Select Class Level</option>
                 <option value="JSS1">JSS1</option>
@@ -1195,13 +1208,13 @@ export default function AdminQuestions() {
                 <option value="GCE NECO">GCE NECO</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="csv-term">Term *</Label>
+            <div className="space-y-1">
+              <Label htmlFor="csv-term" className="text-xs font-bold text-slate-550">Term *</Label>
               <select
                 id="csv-term"
                 value={csvTerm}
                 onChange={e => setCsvTerm(e.target.value)}
-                className="border rounded px-2 py-1 w-full"
+                className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-350"
               >
                 <option value="First Term">First Term</option>
                 <option value="Second Term">Second Term</option>
@@ -1210,13 +1223,13 @@ export default function AdminQuestions() {
               </select>
             </div>
             {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
-              <div className="space-y-2">
-                <Label htmlFor="csv-department">Department *</Label>
+              <div className="space-y-1">
+                <Label htmlFor="csv-department" className="text-xs font-bold text-slate-550">Department *</Label>
                 <select
                   id="csv-department"
                   value={csvDepartment}
                   onChange={e => setCsvDepartment(e.target.value)}
-                  className="border rounded px-2 py-1 w-full"
+                  className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-350"
                 >
                   <option value="">Select Department</option>
                   <option value="General">General</option>
@@ -1227,84 +1240,89 @@ export default function AdminQuestions() {
                 </select>
               </div>
             )}
-            <div className="space-y-2">
-
-              <Label htmlFor="csv-exam-type">Exam Type *</Label>
+            <div className="space-y-1">
+              <Label htmlFor="csv-exam-type" className="text-xs font-bold text-slate-550">Exam Type *</Label>
               <select
                 id="csv-exam-type"
                 value={csvExamType}
                 onChange={e => setCsvExamType(e.target.value)}
-                className="border rounded px-2 py-1 w-full"
+                className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-350"
               >
                 <option value="Objectives">Objectives</option>
                 <option value="Theory">Theory</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="csv-subject">Subject *</Label>
+            <div className="space-y-1">
+              <Label htmlFor="csv-subject" className="text-xs font-bold text-slate-550">Subject *</Label>
               <Input
                 id="csv-subject"
                 placeholder="e.g., Mathematics"
                 value={csvSubject}
                 onChange={e => setCsvSubject(e.target.value)}
+                className="h-10 rounded-xl border-slate-200"
               />
             </div>
             {previewRows.length > 0 && (
-              <div className="rounded-md bg-muted p-4">
-                <div className="text-sm font-medium mb-2">CSV Preview ({previewRows.length} rows)</div>
-                <div className="max-h-32 overflow-y-auto text-xs space-y-1">
+              <div className="rounded-2xl bg-slate-50 dark:bg-slate-950 p-4 border border-slate-100 dark:border-slate-850">
+                <div className="text-xs font-black uppercase text-slate-455 mb-2">CSV Preview ({previewRows.length} rows)</div>
+                <div className="max-h-32 overflow-y-auto text-xs space-y-1 font-medium text-slate-600">
                   {previewRows.slice(0, 3).map((row, i) => (
-                    <div key={i} className="break-all whitespace-pre-wrap border-b pb-1 last:border-0">
+                    <div key={i} className="break-all whitespace-pre-wrap border-b border-slate-100 dark:border-slate-850 pb-1 last:border-0">
                       {Object.values(row).join(", ")}
                     </div>
                   ))}
                   {previewRows.length > 3 && (
-                    <div className="text-muted-foreground italic">...and {previewRows.length - 3} more</div>
+                    <div className="text-slate-400 italic">...and {previewRows.length - 3} more</div>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-[11px] text-slate-400 mt-2 font-medium">
                   Review parsed rows below before uploading. Invalid rows will be reported by the server.
                 </p>
-                <div className="text-sm font-medium mt-2">
-                  Class: <Badge>{csvClassLevel}</Badge>, Term: <Badge>{csvTerm}</Badge>, Type: <Badge>{csvExamType}</Badge>, Subject: <Badge>{csvSubject}</Badge>
-                  {csvDepartment && <>, Dept: <Badge>{csvDepartment}</Badge></>}
+                <div className="text-xs font-bold mt-2.5 flex flex-wrap gap-1">
+                  Class: <Badge className="font-bold py-0">{csvClassLevel}</Badge>
+                  Term: <Badge className="font-bold py-0">{csvTerm}</Badge>
+                  Type: <Badge className="font-bold py-0">{csvExamType}</Badge>
+                  Subject: <Badge className="font-bold py-0">{csvSubject}</Badge>
+                  {csvDepartment && <>Dept: <Badge className="font-bold py-0">{csvDepartment}</Badge></>}
                 </div>
-
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowClassLevelDialog(false)}>Cancel</Button>
-            <Button onClick={() => {
-              setShowClassLevelDialog(false);
-              if (missingImages.length > 0) {
-                setShowImageUploadDialog(true);
-              } else {
-                uploadPreview();
-              }
-            }} disabled={!csvClassLevel || !csvSubject || !csvTerm || !csvExamType || (["SS1", "SS2", "SS3"].includes(csvClassLevel) && !csvDepartment)}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setShowClassLevelDialog(false)}>Cancel</Button>
+            <Button 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs"
+              onClick={() => {
+                setShowClassLevelDialog(false);
+                if (missingImages.length > 0) {
+                  setShowImageUploadDialog(true);
+                } else {
+                  uploadPreview();
+                }
+              }} 
+              disabled={!csvClassLevel || !csvSubject || !csvTerm || !csvExamType || (["SS1", "SS2", "SS3"].includes(csvClassLevel) && !csvDepartment)}
+            >
               Next
             </Button>
-
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showImageUploadDialog} onOpenChange={setShowImageUploadDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Upload Missing Images</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-black text-slate-850">Upload Missing Images</DialogTitle>
+            <DialogDescription className="text-xs font-medium text-slate-500 mt-1">
               The CSV contains {missingImages.length} image references. Please select and upload these files from your computer.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="max-h-40 overflow-y-auto border rounded p-2 text-sm bg-muted">
-              <p className="font-semibold mb-2">Required Files:</p>
-              <ul className="list-disc pl-5">
+            <div className="max-h-40 overflow-y-auto border border-slate-200/50 rounded-2xl p-3 text-xs bg-slate-50/50">
+              <p className="font-extrabold text-slate-700 mb-2">Required Files:</p>
+              <ul className="list-disc pl-5 space-y-1 font-medium text-slate-600">
                 {missingImages.map((img, i) => (
-                  <li key={i} className={uploadedImageMap[img] ? "text-green-600 line-through" : "text-red-500"}>
+                  <li key={i} className={uploadedImageMap[img] ? "text-green-600 line-through font-bold" : "text-rose-500 font-bold"}>
                     {img} {uploadedImageMap[img] && "(Ready)"}
                   </li>
                 ))}
@@ -1312,11 +1330,12 @@ export default function AdminQuestions() {
             </div>
 
             <div className="space-y-2">
-              <Label>Select Images</Label>
+              <Label className="text-xs font-bold text-slate-500">Select Images</Label>
               <Input
                 type="file"
                 multiple
                 accept="image/*"
+                className="h-10 rounded-xl"
                 onChange={async (e) => {
                   if (!e.target.files?.length) return;
                   const files = Array.from(e.target.files);
@@ -1326,7 +1345,6 @@ export default function AdminQuestions() {
                   setImageUploadProgress({ current: 0, total: files.length });
 
                   for (const file of files) {
-                    // Check if this file is needed
                     if (missingImages.includes(file.name)) {
                       try {
                         const formData = new FormData();
@@ -1363,44 +1381,47 @@ export default function AdminQuestions() {
                 }}
               />
               {imageUploadProgress && (
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[11px] text-slate-455 font-bold animate-pulse">
                   Uploading... {imageUploadProgress.current} / {imageUploadProgress.total}
                 </div>
               )}
             </div>
 
-            <div className="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200/50 p-3 rounded-xl font-medium">
               Note: Unmatched images will be ignored. Rows with missing images will save without an image.
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImageUploadDialog(false)}>Cancel</Button>
-            <Button onClick={() => {
-              setShowImageUploadDialog(false);
-              uploadPreview();
-            }}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setShowImageUploadDialog(false)}>Cancel</Button>
+            <Button 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs"
+              onClick={() => {
+                setShowImageUploadDialog(false);
+                uploadPreview();
+              }}
+            >
               Continue Upload
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-3 rounded-2xl max-w-md shadow-sm">
         <Input
-          placeholder="Filter by subject..."
+          placeholder="Quick search by subject..."
           value={filterSubject}
           onChange={(e) => setFilterSubject(e.target.value)}
-          className="max-w-sm"
+          className="h-9 border-none bg-slate-50 dark:bg-slate-950 focus-visible:ring-indigo-550 rounded-xl font-medium"
         />
         {filterSubject && (
           <Button
             variant="ghost"
             onClick={() => setFilterSubject("")}
-            className="h-8 px-2 lg:px-3"
+            className="h-8 px-3 text-xs text-slate-500 rounded-lg hover:bg-slate-100"
           >
             Reset
-            <X className="ml-2 h-4 w-4" />
+            <X className="ml-1.5 h-3.5 w-3.5" />
           </Button>
         )}
       </div>
@@ -1408,11 +1429,11 @@ export default function AdminQuestions() {
       {isLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <Skeleton key={i} className="h-32 w-full rounded-2xl" />
           ))}
         </div>
       ) : filteredQuestions && filteredQuestions.length > 0 ? (
-        <Accordion type="multiple" className="w-full">
+        <Accordion type="multiple" className="w-full space-y-4">
           {Object.entries(questionsBySubject).map(([subject, { questions: subjectQuestions, classLevels }]) => {
             const currentFilters = subjectFilters[subject] || { classLevel: "All", term: "All", examType: "All" };
 
@@ -1424,42 +1445,46 @@ export default function AdminQuestions() {
             });
 
             return (
-              <AccordionItem value={subject} key={subject} className="mb-4 rounded-lg border bg-card">
-                <AccordionTrigger className="p-6 text-left hover:no-underline">
-                  <div className="flex w-full flex-col items-start">
+              <AccordionItem 
+                value={subject} 
+                key={subject} 
+                className="border border-slate-100 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl shadow-md shadow-slate-100/5 dark:shadow-none overflow-hidden transition-all duration-300"
+              >
+                <AccordionTrigger className="p-6 text-left hover:no-underline group hover:bg-slate-50/40 dark:hover:bg-slate-950/20">
+                  <div className="flex w-full flex-col items-start gap-1">
                     <div className="flex w-full items-center justify-between pr-6">
-                      <h3 className="text-lg font-semibold text-card-foreground">{subject}</h3>
+                      <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-400 transition-colors">{subject}</h3>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
+                          <Button variant="ghost" size="icon" className="h-8.5 w-8.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-455">
+                            <MoreVertical className="h-4.5 w-4.5" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="rounded-xl border-slate-150">
                           <DropdownMenuItem onClick={(e) => {
                             e.stopPropagation();
                             setBulkEditDialog({ isOpen: true, subject, type: 'subjectName', value: subject });
                           }}>
-                            <Edit className="mr-2 h-4 w-4" />
+                            <Edit className="mr-2 h-4 w-4 text-indigo-500" />
                             Edit Subject Name
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => {
                             e.stopPropagation();
                             setBulkEditDialog({ isOpen: true, subject, type: 'settings' });
                           }}>
-                            <Settings className="mr-2 h-4 w-4" />
+                            <Settings className="mr-2 h-4 w-4 text-indigo-550" />
                             Bulk Settings
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
+                            className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteDialogState({
                                 isOpen: true,
                                 type: 'all',
                                 count: subjectQuestions.length,
-                                id: subject // Using id to store subject name for context if needed
+                                id: subject
                               });
                             }}
                           >
@@ -1469,24 +1494,27 @@ export default function AdminQuestions() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {subjectQuestions.length} Questions | Class Levels: {Array.from(classLevels).join(', ')}
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span>{subjectQuestions.length} Questions</span>
+                      <span className="text-slate-200 dark:text-slate-800">•</span>
+                      <span>Class Levels: {Array.from(classLevels).join(', ')}</span>
                     </p>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="p-6 pt-0">
-                  <div className="mb-4 flex flex-wrap gap-4">
+                  {/* Filters Header inside Accordion */}
+                  <div className="mb-6 flex flex-wrap gap-4 border-t border-b border-slate-100 dark:border-slate-800/80 py-4.5">
                     <div className="w-40">
-                      <Label className="text-xs mb-1 block">Class</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-455 tracking-wider mb-1.5 block">Class</Label>
                       <Select
                         value={currentFilters.classLevel}
                         onValueChange={(val) => updateSubjectFilter(subject, 'classLevel', val)}
                       >
-                        <SelectTrigger className="h-8 text-xs">
+                        <SelectTrigger className="h-8.5 text-xs rounded-xl bg-slate-50/50 border-slate-200">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="All">All</SelectItem>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="All">All Classes</SelectItem>
                           <SelectItem value="JSS1">JSS1</SelectItem>
                           <SelectItem value="JSS2">JSS2</SelectItem>
                           <SelectItem value="JSS3">JSS3</SelectItem>
@@ -1501,35 +1529,35 @@ export default function AdminQuestions() {
                       </Select>
                     </div>
                     <div className="w-40">
-                      <Label className="text-xs mb-1 block">Term</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-455 tracking-wider mb-1.5 block">Term</Label>
                       <Select
                         value={currentFilters.term}
                         onValueChange={(val) => updateSubjectFilter(subject, 'term', val)}
                       >
-                        <SelectTrigger className="h-8 text-xs">
+                        <SelectTrigger className="h-8.5 text-xs rounded-xl bg-slate-50/50 border-slate-200">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="All">All</SelectItem>
-                          <SelectItem value="First Term">1st</SelectItem>
-                          <SelectItem value="Second Term">2nd</SelectItem>
-                          <SelectItem value="Third Term">3rd</SelectItem>
-                          <SelectItem value="Others">Oth</SelectItem>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="All">All Terms</SelectItem>
+                          <SelectItem value="First Term">1st Term</SelectItem>
+                          <SelectItem value="Second Term">2nd Term</SelectItem>
+                          <SelectItem value="Third Term">3rd Term</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="w-40">
-                      <Label className="text-xs mb-1 block">Type</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-455 tracking-wider mb-1.5 block">Type</Label>
                       <Select
                         value={currentFilters.examType}
                         onValueChange={(val) => updateSubjectFilter(subject, 'examType', val)}
                       >
-                        <SelectTrigger className="h-8 text-xs">
+                        <SelectTrigger className="h-8.5 text-xs rounded-xl bg-slate-50/50 border-slate-200">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="All">All</SelectItem>
-                          <SelectItem value="Objectives">Obj</SelectItem>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="All">All Types</SelectItem>
+                          <SelectItem value="Objectives">Objectives (Obj)</SelectItem>
                           <SelectItem value="Theory">Theory</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1537,116 +1565,124 @@ export default function AdminQuestions() {
                   </div>
 
                   {displayQuestions.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12">
-                            <input
-                              type="checkbox"
-                              aria-label={`select-all-${subject}`}
-                              checked={displayQuestions.length > 0 && displayQuestions.every(q => selectedIds.has(q.id))}
-                              onChange={(e) => {
-                                const newSelectedIds = new Set(selectedIds);
-                                const subjectQuestionIds = displayQuestions.map(q => q.id);
-                                if (e.currentTarget.checked) {
-                                  subjectQuestionIds.forEach(id => newSelectedIds.add(id));
-                                } else {
-                                  subjectQuestionIds.forEach(id => newSelectedIds.delete(id));
-                                }
-                                setSelectedIds(newSelectedIds);
-                              }}
-                            />
-                          </TableHead>
-                          <TableHead className="w-1/2">Question</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Difficulty</TableHead>
-                          <TableHead>Term</TableHead>
-                          <TableHead>Points</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {displayQuestions.map((question) => (
-                          <TableRow key={question.id} data-testid={`row-question-${question.id}`}>
-                            <TableCell>
+                    <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800/80">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50 dark:bg-slate-950/40">
+                          <TableRow>
+                            <TableHead className="w-12 py-3">
                               <input
                                 type="checkbox"
-                                aria-label={`select-question-${question.id}`}
-                                checked={selectedIds.has(question.id)}
+                                aria-label={`select-all-${subject}`}
+                                checked={displayQuestions.length > 0 && displayQuestions.every(q => selectedIds.has(q.id))}
                                 onChange={(e) => {
-                                  const next = new Set(selectedIds);
-                                  if (e.currentTarget.checked) next.add(question.id);
-                                  else next.delete(question.id);
-                                  setSelectedIds(next);
+                                  const newSelectedIds = new Set(selectedIds);
+                                  const subjectQuestionIds = displayQuestions.map(q => q.id);
+                                  if (e.currentTarget.checked) {
+                                    subjectQuestionIds.forEach(id => newSelectedIds.add(id));
+                                  } else {
+                                    subjectQuestionIds.forEach(id => newSelectedIds.delete(id));
+                                  }
+                                  setSelectedIds(newSelectedIds);
                                 }}
+                                className="rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 h-4 w-4"
                               />
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <div>
-                                {question.imageUrl && (
-                                  <img
-                                    src={question.imageUrl}
-                                    alt="Question Image"
-                                    className="mb-2 h-16 w-auto object-contain rounded border bg-muted"
-                                  />
-                                )}
-                                <span>{question.questionText}</span>
-                              </div>
-                              <div className="flex gap-2 mt-1 flex-wrap">
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">{question.classLevel}</Badge>
-                                {question.department && (
-                                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                                    {question.department}
-                                  </Badge>
-                                )}
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">{(question.term === "First Term" ? "1st" : question.term === "Second Term" ? "2nd" : question.term === "Third Term" ? "3rd" : "Oth")}</Badge>
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">{(question.examType === "Objectives" ? "Obj" : "Theory")}</Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell className="max-w-[100px] truncate">
-                              <Badge variant="outline" className="truncate max-w-full">{question.questionType}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  question.difficulty === "easy"
-                                    ? "default"
-                                    : question.difficulty === "medium"
-                                      ? "secondary"
-                                      : "destructive"
-                                }
-                              >
-                                {question.difficulty}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{question.term || "First Term"}</TableCell>
-                            <TableCell>{question.points}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setEditingQuestion(question)}
-                                  data-testid={`button-edit-${question.id}`}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteDialogState({ isOpen: true, type: 'single', id: question.id })}
-                                  data-testid={`button-delete-${question.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
+                            </TableHead>
+                            <TableHead className="w-1/2 py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Question Context</TableHead>
+                            <TableHead className="py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Type</TableHead>
+                            <TableHead className="py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Difficulty</TableHead>
+                            <TableHead className="py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Term</TableHead>
+                            <TableHead className="py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Points</TableHead>
+                            <TableHead className="text-right py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Actions</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-800/40">
+                          {displayQuestions.map((question) => (
+                            <TableRow key={question.id} data-testid={`row-question-${question.id}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
+                              <TableCell className="py-3">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`select-question-${question.id}`}
+                                  checked={selectedIds.has(question.id)}
+                                  onChange={(e) => {
+                                    const next = new Set(selectedIds);
+                                    if (e.currentTarget.checked) next.add(question.id);
+                                    else next.delete(question.id);
+                                    setSelectedIds(next);
+                                  }}
+                                  className="rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 h-4 w-4"
+                                />
+                              </TableCell>
+                              <TableCell className="py-4">
+                                <div className="space-y-2">
+                                  {question.imageUrl && (
+                                    <div className="inline-block rounded-xl overflow-hidden border border-slate-200/50 bg-slate-50/50 p-1">
+                                      <img
+                                        src={question.imageUrl}
+                                        alt="Question Image"
+                                        className="h-16 w-auto object-contain rounded-lg"
+                                      />
+                                    </div>
+                                  )}
+                                  <p className="font-bold text-xs text-slate-700 dark:text-slate-350 leading-relaxed max-w-xl">{question.questionText}</p>
+                                </div>
+                                <div className="flex gap-1.5 mt-2 flex-wrap">
+                                  <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] py-0.2 px-1.5 font-bold uppercase">{question.classLevel}</Badge>
+                                  {question.department && (
+                                    <Badge variant="outline" className="text-[9px] py-0.2 px-1.5 font-bold border-slate-200">
+                                      {question.department}
+                                    </Badge>
+                                  )}
+                                  <Badge variant="secondary" className="text-[9px] py-0.2 px-1.5 font-bold bg-slate-100 text-slate-600">{(question.term === "First Term" ? "1st Term" : question.term === "Second Term" ? "2nd Term" : question.term === "Third Term" ? "3rd Term" : "Oth")}</Badge>
+                                  <Badge variant="outline" className="text-[9px] py-0.2 px-1.5 font-bold border-slate-250 text-slate-500">{(question.examType === "Objectives" ? "Objectives" : "Theory")}</Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <Badge className="bg-slate-50 border border-slate-200/60 text-slate-600 dark:bg-slate-900/60 dark:border-slate-800 text-[10px] uppercase font-black tracking-wider">{question.questionType}</Badge>
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <Badge
+                                  className={`text-[9px] font-black tracking-wider uppercase border ${
+                                    question.difficulty === "easy"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                      : question.difficulty === "medium"
+                                        ? "bg-indigo-50 text-indigo-700 border-indigo-250 dark:bg-indigo-950/20 dark:text-indigo-400"
+                                        : "bg-rose-50 text-rose-700 border-rose-250 dark:bg-rose-950/20 dark:text-rose-450"
+                                  }`}
+                                >
+                                  {question.difficulty}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-3 font-semibold text-xs text-slate-655">{question.term || "First Term"}</TableCell>
+                              <TableCell className="py-3 font-extrabold text-xs text-indigo-650">{question.points}</TableCell>
+                              <TableCell className="py-3 text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setEditingQuestion(question)}
+                                    data-testid={`button-edit-${question.id}`}
+                                    className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-550"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteDialogState({ isOpen: true, type: 'single', id: question.id })}
+                                    data-testid={`button-delete-${question.id}`}
+                                    className="h-8 w-8 rounded-lg hover:bg-rose-50 text-rose-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
+                    <div className="text-center py-10 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-400 text-xs italic font-medium">
                       No questions match the selected filters.
                     </div>
                   )}
@@ -1656,21 +1692,24 @@ export default function AdminQuestions() {
           })}
         </Accordion>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <Plus className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="mb-2 text-lg font-semibold">
+        <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-2xl">
+          <CardContent className="flex flex-col items-center py-16 text-center">
+            <BookOpen className="mb-4 h-12 w-12 text-slate-350 dark:text-slate-800" />
+            <h3 className="mb-2 text-lg font-black text-slate-700 dark:text-slate-350">
               {filterSubject ? "No Questions Found" : "No Questions Yet"}
             </h3>
-            <p className="mb-4 text-sm text-muted-foreground">
+            <p className="mb-5 text-sm text-slate-500 dark:text-slate-400 max-w-xs">
               {filterSubject
                 ? `No questions found for ${filterSubject}`
-                : "Get started by adding your first question."}
+                : "Get started by adding your first question to the master repository."}
             </p>
             {!filterSubject && (
-              <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-first-question">
-                <Plus className="mr-2 h-4 w-4" />
-                Add First Question
+              <Button 
+                onClick={() => setIsCreateOpen(true)} 
+                data-testid="button-create-first-question"
+                className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold px-5 h-10 rounded-xl flex items-center gap-2"
+              >
+                <Plus className="h-4.5 w-4.5" /> Add First Question
               </Button>
             )}
           </CardContent>
@@ -1679,19 +1718,19 @@ export default function AdminQuestions() {
 
       {/* Delete Dialog kept as is */}
       <AlertDialog open={deleteDialogState.isOpen} onOpenChange={(open) => setDeleteDialogState(prev => ({ ...prev, isOpen: open }))}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl bg-white dark:bg-slate-900 p-6 border-slate-100 shadow-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-lg font-black text-slate-855">Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">
               {deleteDialogState.type === 'single' && "This will permanently delete the selected question."}
               {deleteDialogState.type === 'selected' && `This will permanently delete ${deleteDialogState.count} selected questions.`}
               {deleteDialogState.type === 'all' && `This will permanently delete ALL ${deleteDialogState.count} questions. This action implies a total reset of the question bank.`}
               {" "}This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="rounded-xl h-9.5 text-xs font-bold">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl h-9.5 text-xs">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1700,9 +1739,9 @@ export default function AdminQuestions() {
 
       {/* Edit Question Dialog */}
       <Dialog open={editingQuestion !== null} onOpenChange={(open) => !open && setEditingQuestion(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-100 rounded-2xl p-6 shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Question</DialogTitle>
+            <DialogTitle className="text-lg font-black text-slate-855">Edit Question Context</DialogTitle>
           </DialogHeader>
           <QuestionForm
             initialData={editingQuestion!}
@@ -1719,26 +1758,28 @@ export default function AdminQuestions() {
         open={bulkEditDialog.isOpen && bulkEditDialog.type === 'subjectName'}
         onOpenChange={(open) => !open && setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}
       >
-        <DialogContent>
+        <DialogContent className="bg-white dark:bg-slate-900 border border-slate-100 rounded-2xl p-6 shadow-2xl max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Subject Name</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-black text-slate-855">Edit Subject Name</DialogTitle>
+            <DialogDescription className="text-xs font-medium text-slate-500 mt-1">
               This will update the subject name for all questions in "{bulkEditDialog.subject}".
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>New Subject Name</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-500">New Subject Name</Label>
               <Input
                 value={bulkEditDialog.value || ""}
                 onChange={(e) => setBulkEditDialog(prev => ({ ...prev, value: e.target.value }))}
                 placeholder="Enter new subject name"
+                className="h-10 rounded-xl"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}>Cancel</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}>Cancel</Button>
             <Button
+              className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs"
               disabled={bulkUpdateMutation.isPending || !bulkEditDialog.value}
               onClick={() => {
                 const subjectQuestions = questions?.filter(q => q.subject === bulkEditDialog.subject) || [];
@@ -1760,65 +1801,65 @@ export default function AdminQuestions() {
         open={bulkEditDialog.isOpen && bulkEditDialog.type === 'settings'}
         onOpenChange={(open) => !open && setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}
       >
-        <DialogContent>
+        <DialogContent className="bg-white dark:bg-slate-900 border border-slate-100 rounded-2xl p-6 shadow-2xl max-w-lg">
           <DialogHeader>
-            <DialogTitle>Bulk Update Settings</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-black text-slate-855">Bulk Update Settings</DialogTitle>
+            <DialogDescription className="text-xs font-medium text-slate-500 mt-1">
               Update Class Level, Term, or Exam Type for all questions in "{bulkEditDialog.subject}".
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Class Level</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-500">Class Level</Label>
                 <Select
                   value={bulkEditDialog.value?.classLevel || ""}
                   onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), classLevel: val } }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Select Class" /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].map(c => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Term</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-500">Term</Label>
                 <Select
                   value={bulkEditDialog.value?.term || ""}
                   onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), term: val } }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select Term" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Select Term" /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     {["First Term", "Second Term", "Third Term", "Others"].map(t => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Exam Type</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-500">Exam Type</Label>
                 <Select
                   value={bulkEditDialog.value?.examType || ""}
                   onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), examType: val } }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Select Type" /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     {["Objectives", "Theory"].map(t => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Department</Label>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-500">Department</Label>
                 <Select
                   value={bulkEditDialog.value?.department || ""}
                   onValueChange={(val) => setBulkEditDialog(prev => ({ ...prev, value: { ...(prev.value || {}), department: val } }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Select Department" /></SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     {["Science", "Commercial", "Art", "Others", "General"].map(d => (
                       <SelectItem key={d} value={d}>{d}</SelectItem>
                     ))}
@@ -1827,9 +1868,10 @@ export default function AdminQuestions() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}>Cancel</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setBulkEditDialog(prev => ({ ...prev, isOpen: false }))}>Cancel</Button>
             <Button
+              className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs"
               disabled={bulkUpdateMutation.isPending || !bulkEditDialog.value}
               onClick={() => {
                 const subjectQuestions = questions?.filter(q => q.subject === bulkEditDialog.subject) || [];
@@ -1845,7 +1887,7 @@ export default function AdminQuestions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div >
+    </div>
   );
 }
 

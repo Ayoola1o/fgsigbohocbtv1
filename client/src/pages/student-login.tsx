@@ -34,42 +34,76 @@ export default function StudentLoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"
+      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 bg-cover bg-center bg-no-repeat relative px-4 overflow-hidden font-sans"
       style={{ backgroundImage: 'url("/login-bg.jpg")' }}
     >
-      <div className="absolute inset-0 bg-black/50" />
-      <div className="w-full max-w-md p-4 relative z-10">
-        <Card className="shadow-2xl bg-white/10 backdrop-blur-md border-white/20">
-          <CardContent className="p-8">
-            <div className="flex justify-center mb-6">
-              <img src="/logo.png" alt="Faith Immaculate Academy" className="w-24 h-24 drop-shadow-lg" />
+      {/* Dynamic Background Glow Overlay */}
+      <div className="absolute inset-0 bg-slate-950/80 dark:bg-slate-950/90 z-0 backdrop-blur-[2px]" />
+      
+      {/* Decorative Light Orbs */}
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none z-0" />
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none z-0" />
+
+      <div className="w-full max-w-md relative z-10 animate-in fade-in slide-in-from-bottom-6 duration-600">
+        <Card className="shadow-2xl bg-white/5 dark:bg-slate-900/40 backdrop-blur-xl border border-white/10 dark:border-slate-805/65 rounded-3xl overflow-hidden">
+          <CardContent className="p-8 sm:p-10">
+            {/* School Branding */}
+            <div className="flex flex-col items-center mb-8 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center font-black text-2xl text-white shadow-lg shadow-indigo-650/20 mb-4 animate-bounce">
+                FIA
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Faith Immaculate Academy
+              </h1>
+              <p className="text-indigo-200/60 text-xs uppercase tracking-widest font-black mt-1">
+                Knowledge and Godliness
+              </p>
+              <div className="h-0.5 w-12 bg-indigo-500/30 rounded-full mt-4" />
             </div>
-            <h1 className="text-2xl font-bold text-center mb-2 text-white">Faith Immaculate Academy</h1>
-            <p className="text-gray-200 text-center mb-8">Student Portal Login</p>
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <Label htmlFor="name" className="text-white">Student Name</Label>
+
+            <p className="text-slate-350 text-center text-sm font-semibold mb-6">
+              Enter details below to access your CBT Portal
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <Label htmlFor="name" className="text-slate-200 text-xs font-bold uppercase tracking-wider">
+                  Full Candidate Name
+                </Label>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your full name"
-                  className="mt-1 bg-white/20 border-white/20 text-white placeholder:text-gray-300 focus-visible:ring-white/50"
+                  placeholder="Enter full registered name"
+                  className="mt-2 h-11 bg-white/5 border-white/10 text-white placeholder:text-slate-455 focus-visible:ring-indigo-550 rounded-xl focus:border-indigo-500 transition-colors"
                 />
               </div>
-              <div className="mb-6">
-                <Label htmlFor="studentId" className="text-white">Student ID</Label>
+
+              <div>
+                <Label htmlFor="studentId" className="text-slate-200 text-xs font-bold uppercase tracking-wider">
+                  Student Portal passcode ID
+                </Label>
                 <Input
                   id="studentId"
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value)}
-                  placeholder="Enter your student ID"
-                  className="mt-1 bg-white/20 border-white/20 text-white placeholder:text-gray-300 focus-visible:ring-white/50"
+                  placeholder="Enter your student passcode ID"
+                  className="mt-2 h-11 bg-white/5 border-white/10 text-white placeholder:text-slate-455 focus-visible:ring-indigo-550 rounded-xl focus:border-indigo-500 transition-colors"
                 />
               </div>
-              {error && <p className="text-red-300 text-center mb-4 bg-red-900/50 p-2 rounded border border-red-500/50">{error}</p>}
-              <Button type="submit" disabled={loading} className="w-full bg-white text-primary hover:bg-white/90 font-semibold shadow-lg">
-                {loading ? "Logging in..." : "Login"}
+
+              {error && (
+                <p className="text-rose-350 text-xs font-bold text-center bg-rose-955/25 border border-rose-900/35 p-3 rounded-xl animate-in shake duration-300">
+                  {error}
+                </p>
+              )}
+
+              <Button 
+                type="submit" 
+                disabled={loading} 
+                className="w-full h-11 bg-white hover:bg-slate-100 text-indigo-950 font-extrabold shadow-lg rounded-xl transition-all duration-200 hover:scale-[1.01]"
+              >
+                {loading ? "Logging in..." : "Access Candidate Portal"}
               </Button>
             </form>
           </CardContent>

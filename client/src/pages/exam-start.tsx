@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Clock, BookOpen, AlertTriangle, CheckCircle } from "lucide-react";
+import { Clock, BookOpen, AlertTriangle, CheckCircle, Sparkles, ArrowRight, ChevronLeft } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Exam, ExamSession } from "@shared/schema";
+import type { Exam, ExamSession, Student, Result } from "@shared/schema";
 import { createExamSession, getExam } from "@/lib/firebase-api";
 
 export default function ExamStart() {
@@ -165,114 +165,154 @@ export default function ExamStart() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-3xl">
-          <div className="mb-8">
-            <h1 className="mb-2 text-3xl font-bold">{exam.title}</h1>
-            <p className="text-muted-foreground">
-              Student: {studentName} ({studentId})
-            </p>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 font-sans">
+      <div className="container mx-auto px-4 py-12 max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+        
+        {/* Simple Header back button */}
+        <div className="mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLocation("/student-portal")}
+            className="rounded-xl font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-900/60 h-9 px-3 flex items-center gap-1.5"
+            data-testid="button-cancel"
+          >
+            <ChevronLeft className="h-4.5 w-4.5" />
+            Back to Portal
+          </Button>
+        </div>
+
+        {/* Pre-Exam Identification Header */}
+        <div className="mb-10 bg-gradient-to-r from-indigo-900 via-indigo-950 to-indigo-900 dark:from-indigo-955 dark:via-indigo-965 dark:to-indigo-955 text-white p-6 sm:p-8 rounded-3xl shadow-xl shadow-indigo-950/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-10 pointer-events-none">
+            <Sparkles className="h-40 w-40 text-white" />
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Exam Instructions</CardTitle>
-              <CardDescription>
-                Please read the following instructions carefully before starting
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <Clock className="mt-0.5 h-5 w-5 text-primary" />
-                  <div>
-                    <h3 className="font-medium">Time Limit</h3>
-                    <p className="text-sm text-muted-foreground">
-                      You have {exam.duration} minutes to complete this exam. The
-                      timer will start when you begin.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <BookOpen className="mt-0.5 h-5 w-5 text-primary" />
-                  <div>
-                    <h3 className="font-medium">Questions</h3>
-                    <p className="text-sm text-muted-foreground">
-                      This exam contains {exam.questionIds?.length || 0} questions worth a
-                      total of {exam.totalPoints} points.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="mt-0.5 h-5 w-5 text-primary" />
-                  <div>
-                    <h3 className="font-medium">Passing Score</h3>
-                    <p className="text-sm text-muted-foreground">
-                      You need to score at least {exam.passingScore}% to pass this
-                      exam.
-                    </p>
-                  </div>
-                </div>
-
-                {exam.examType === "Theory" && exam.theoryInstructions && (
-                  <div className="rounded-md bg-secondary/20 p-4 border border-secondary/30">
-                    <h3 className="font-semibold text-secondary-foreground mb-1">Additional Theory Instructions</h3>
-                    <p className="text-sm whitespace-pre-wrap">{exam.theoryInstructions}</p>
-                  </div>
-                )}
+          <div className="relative z-10">
+            <div className="flex items-center gap-2">
+              <Badge className="bg-white/10 text-indigo-200 border-none font-bold py-0.5 px-2.5 rounded-full text-[10px] uppercase tracking-wider">
+                Exam Gateway
+              </Badge>
+              <span className="text-emerald-400 font-extrabold text-[11px] flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                Session Ready
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3.5xl font-black tracking-tight mt-3 leading-tight" data-testid="text-exam-title">
+              {exam.title}
+            </h1>
+            <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row gap-4 sm:items-center text-xs text-indigo-200 font-semibold">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">Student Name:</span>
+                <span className="text-white font-bold">{studentName}</span>
               </div>
-
-              {isBlocked ? (
-                <Alert variant="destructive" className="border-rose-200 bg-rose-50 text-rose-800">
-                  <AlertTriangle className="h-4 w-4 text-rose-600" />
-                  <AlertDescription className="font-semibold">
-                    This examination has been locked/blocked for you by the administrator. Please contact your coordinator to request access.
-                  </AlertDescription>
-                </Alert>
-              ) : hasTaken ? (
-                <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800">
-                  <CheckCircle className="h-4 w-4 text-emerald-600 animate-pulse" />
-                  <AlertDescription className="font-semibold">
-                    You have already completed this examination. Re-attempts are not permitted unless reset by the administrator.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    Once you start the exam, you cannot pause or restart it. Make sure
-                    you have a stable internet connection and enough time to complete
-                    it.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <div className="flex gap-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setLocation("/student-portal")}
-                  data-testid="button-cancel"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    console.log("Begin Exam Clicked. Mutation status:", startExamMutation.status);
-                    startExamMutation.mutate();
-                  }}
-                  disabled={startExamMutation.isPending || isBlocked || hasTaken}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
-                  data-testid="button-begin-exam"
-                >
-                  {startExamMutation.isPending ? "Starting..." : isBlocked ? "Blocked by Admin" : hasTaken ? "Exam Already Taken" : "Begin Exam"}
-                </Button>
+              <div className="hidden sm:block h-3 w-px bg-white/20" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">Access ID:</span>
+                <span className="text-white font-mono">{studentId}</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
+
+        {/* Detailed Guidelines and Parameters Card */}
+        <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-lg overflow-hidden">
+          <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-850">
+            <h2 className="text-sm font-black text-slate-800 dark:text-slate-205 flex items-center gap-2">
+              <BookOpen className="h-4.5 w-4.5 text-indigo-500" />
+              Academic Examination Parameters
+            </h2>
+          </div>
+
+          <CardContent className="p-6 sm:p-8 space-y-6">
+            <div className="grid gap-6 sm:grid-cols-3">
+              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
+                <Clock className="h-6 w-6 text-indigo-500 mx-auto mb-2" />
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Limit</span>
+                <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.duration} Minutes</span>
+              </div>
+
+              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
+                <BookOpen className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Questions Count</span>
+                <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.questionIds?.length || 0} Items</span>
+              </div>
+
+              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
+                <CheckCircle className="h-6 w-6 text-indigo-500 mx-auto mb-2" />
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Passing score</span>
+                <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.passingScore}%</span>
+              </div>
+            </div>
+
+            {/* Custom Theory Config */}
+            {exam.examType === "Theory" && exam.theoryInstructions && (
+              <div className="rounded-2xl bg-indigo-50/35 border border-indigo-100/40 p-5 text-sm dark:bg-indigo-950/15 dark:border-indigo-900/20">
+                <h3 className="font-extrabold text-indigo-950 dark:text-indigo-300 mb-1.5 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-indigo-500" /> Additional Theory Instructions:
+                </h3>
+                <p className="text-slate-600 dark:text-slate-350 leading-relaxed font-semibold whitespace-pre-wrap">{exam.theoryInstructions}</p>
+              </div>
+            )}
+
+            {/* Alerts & Critical Status */}
+            {isBlocked ? (
+              <Alert variant="destructive" className="border-rose-100 bg-rose-50/50 dark:border-rose-955/20 dark:bg-rose-955/10 rounded-2xl p-4">
+                <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+                <AlertDescription className="font-semibold text-rose-700 dark:text-rose-450 ml-2 leading-relaxed">
+                  Attention: Access to this exam has been locked/blocked by the administrator. Please contact the coordinator to request activation.
+                </AlertDescription>
+              </Alert>
+            ) : hasTaken ? (
+              <Alert className="border-emerald-100 bg-emerald-50/50 dark:border-emerald-955/20 dark:bg-emerald-955/10 rounded-2xl p-4">
+                <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                <AlertDescription className="font-semibold text-emerald-700 dark:text-emerald-450 ml-2 leading-relaxed">
+                  Session Completed: You have already completed this examination. Re-attempts are not permitted unless reset by the administrator.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="border-amber-100 bg-amber-50/50 dark:border-amber-955/20 dark:bg-amber-955/10 rounded-2xl p-4">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <AlertDescription className="font-semibold text-amber-700 dark:text-amber-450 ml-2 leading-relaxed">
+                  Important: Once you begin, you cannot pause or restart the session. Verify that you have a stable network and ample time to complete the test.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Actions Bar */}
+            <div className="flex gap-4 pt-4 border-t border-slate-100 dark:border-slate-805/45">
+              <Button
+                variant="outline"
+                onClick={() => setLocation("/student-portal")}
+                className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-150 font-bold h-11 px-6"
+                data-testid="button-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  console.log("Begin Exam Clicked. Mutation status:", startExamMutation.status);
+                  startExamMutation.mutate();
+                }}
+                disabled={startExamMutation.isPending || isBlocked || hasTaken}
+                className="flex-1 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold shadow-lg shadow-indigo-600/10 hover:scale-[1.01] transition-all rounded-xl h-11 px-8 flex items-center justify-center gap-1.5"
+                data-testid="button-begin-exam"
+              >
+                {startExamMutation.isPending ? (
+                  "Initiating Exam..."
+                ) : isBlocked ? (
+                  "Blocked by Admin"
+                ) : hasTaken ? (
+                  "Exam Already Taken"
+                ) : (
+                  <>
+                    Begin Exam <ArrowRight className="h-4.5 w-4.5" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

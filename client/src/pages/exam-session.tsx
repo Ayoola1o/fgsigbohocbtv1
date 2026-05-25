@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Clock, Flag, CheckCircle, AlertTriangle } from "lucide-react";
+import { Clock, Flag, CheckCircle, AlertTriangle, Sparkles, ChevronLeft, ChevronRight, Send, HelpCircle, ShieldAlert, Award } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ExamSession, Question, Exam, Result } from "@shared/schema";
@@ -370,59 +370,61 @@ export default function ExamSessionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-10 border-b bg-background">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            <div>
-              <h1 className="text-lg font-semibold" data-testid="text-exam-title">
-                {exam.title}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Question {currentQuestionIndex + 1} of {totalSteps}
-              </p>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                <span
-                  className={`text-lg font-semibold tabular-nums ${timeRemaining < 300 ? "text-destructive" : ""
-                    }`}
-                  data-testid="text-timer"
-                >
-                  {formatTime(timeRemaining)}
-                </span>
-              </div>
-              <Button
-                onClick={() => setShowSubmitDialog(true)}
-                variant="default"
-                data-testid="button-submit-exam"
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16 font-sans">
+      {/* Premium Top Sticky Progress Navbar */}
+      <div className="sticky top-0 z-40 border-b border-slate-150/70 bg-white/90 dark:bg-slate-900/90 dark:border-slate-805/80 backdrop-blur-md">
+        <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest flex items-center gap-1.5 mb-0.5">
+              <Sparkles className="h-3 w-3" /> Live Exam Session
+            </span>
+            <h1 className="text-base sm:text-lg font-black text-slate-850 dark:text-slate-100 leading-tight" data-testid="text-exam-title">
+              {exam.title}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-5 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-2.5 bg-slate-100/70 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-805/40 py-1.5 px-4.5 rounded-2xl">
+              <Clock className={`h-4.5 w-4.5 shrink-0 ${timeRemaining < 300 ? "text-rose-500 animate-pulse" : "text-indigo-500"}`} />
+              <span
+                className={`text-base font-extrabold tabular-nums ${
+                  timeRemaining < 300 ? "text-rose-500 font-black" : "text-slate-700 dark:text-slate-350"
+                }`}
+                data-testid="text-timer"
               >
-                Submit Exam
-              </Button>
+                {formatTime(timeRemaining)}
+              </span>
             </div>
+            
+            <Button
+              onClick={() => setShowSubmitDialog(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-md hover:scale-[1.01] transition-transform rounded-xl px-5.5 h-10 flex items-center gap-1.5"
+              data-testid="button-submit-exam"
+            >
+              <Send className="h-4 w-4" />
+              Submit CBT
+            </Button>
           </div>
         </div>
-      </div>
 
-      {/* Progress Bar */}
-      <div className="border-b bg-background">
-        <div className="container mx-auto px-4 py-2">
-          <div className="flex items-center gap-4">
-            <Progress value={progress} className="flex-1" />
-            <span className="text-sm text-muted-foreground">
-              {answeredCount}/{questions?.length || 0} items answered
+        {/* Real-time progress indicator */}
+        <div className="bg-slate-50/50 dark:bg-slate-950/30 px-4 py-2 border-t border-slate-100 dark:border-slate-805/30">
+          <div className="container mx-auto max-w-4xl flex items-center justify-between gap-4">
+            <Progress value={progress} className="h-1.5 flex-1 rounded-full bg-slate-150 dark:bg-slate-800" />
+            <span className="text-[11px] font-bold text-slate-455 shrink-0">
+              {answeredCount} of {totalSteps} Completed
             </span>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+      {/* Main Content Area */}
+      <div className="container mx-auto px-4 py-10">
         <div className="mx-auto max-w-4xl">
-          <Card className="mb-6">
-            <CardContent className="p-8">
+          
+          {/* Active Question Display Card */}
+          <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-slate-100/50 dark:shadow-none overflow-hidden relative">
+            <CardContent className="p-6 sm:p-10">
               {exam.examType === "Theory" ? (
                 currentQuestion ? (
                   <TheoryQuestionView
@@ -433,72 +435,96 @@ export default function ExamSessionPage() {
                     mainLabel={(currentQuestionIndex + 1).toString()}
                   />
                 ) : (
-                  <p>Question not found.</p>
+                  <div className="py-12 text-center text-slate-400">
+                    <ShieldAlert className="h-8 w-8 mx-auto mb-2 text-indigo-500" />
+                    <span>Question configuration not resolved.</span>
+                  </div>
                 )
               ) : (
                 <>
-                  <div className="mb-6 flex items-start justify-between gap-4">
+                  <div className="mb-8 flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <div className="mb-2 flex items-center gap-2">
-                        <Badge variant="secondary">
-                          Question {currentQuestionIndex + 1}
+                      <div className="mb-3.5 flex items-center gap-2">
+                        <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold uppercase py-0.5 px-2.5 rounded-lg border border-indigo-100/20 dark:border-indigo-900/20 text-[10px]">
+                          Item No. {currentQuestionIndex + 1}
                         </Badge>
                         {currentQuestion && (
-                          <Badge variant="outline">{(currentQuestion as Question).points} point{(currentQuestion as Question).points !== 1 ? 's' : ''}</Badge>
+                          <Badge variant="outline" className="border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-455 py-0.5 px-2.5 rounded-lg">
+                            {(currentQuestion as Question).points} Point{(currentQuestion as Question).points !== 1 ? 's' : ''}
+                          </Badge>
                         )}
                       </div>
+                      
                       <h2
-                        className="text-xl font-medium leading-relaxed md:text-2xl"
+                        className="text-lg sm:text-2xl font-black text-slate-800 dark:text-slate-150 leading-relaxed max-w-3xl"
                         data-testid={`text-question-${currentQuestionIndex}`}
                       >
                         {(currentQuestion as Question)?.questionText}
                       </h2>
                     </div>
+
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => toggleFlag(currentQuestionIndex)}
-                      className={flaggedQuestions.has(currentQuestionIndex) ? "text-primary" : ""}
+                      className={`rounded-xl h-10 w-10 shrink-0 border transition-all ${
+                        flaggedQuestions.has(currentQuestionIndex) 
+                          ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-955/20 dark:border-rose-900/30" 
+                          : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900 text-slate-400"
+                      }`}
                       data-testid="button-flag-question"
                     >
-                      <Flag className="h-5 w-5" />
+                      <Flag className={`h-4.5 w-4.5 ${flaggedQuestions.has(currentQuestionIndex) ? "fill-rose-500 text-rose-500" : ""}`} />
                     </Button>
                   </div>
 
+                  {/* Optional Image Diagram */}
                   {(currentQuestion as Question)?.imageUrl && (
-                    <div className="mb-6 flex justify-center">
+                    <div className="mb-8 flex justify-center bg-slate-50 dark:bg-slate-950/40 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-805/40">
                       <img
                         src={(currentQuestion as Question).imageUrl!}
                         alt="Question Diagram"
-                        className="max-h-[400px] w-auto max-w-full rounded-lg border bg-muted object-contain"
+                        className="max-h-[350px] w-auto max-w-full rounded-xl object-contain shadow-sm border border-slate-200/50"
                       />
                     </div>
                   )}
 
-                  <div className="space-y-4">
+                  {/* Input Select Options */}
+                  <div className="space-y-4.5">
                     {(currentQuestion as Question)?.questionType === "multiple-choice" && (currentQuestion as Question).options && (
                       <RadioGroup
                         value={answers[(currentQuestion as Question).id] || ""}
                         onValueChange={(value) => handleAnswerChange((currentQuestion as Question).id, value)}
+                        className="grid gap-3.5"
                       >
-                        {(currentQuestion as Question).options!.map((option, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center space-x-3 rounded-md border p-4 hover-elevate"
-                          >
-                            <RadioGroupItem
-                              value={option}
-                              id={`option-${idx}`}
-                              data-testid={`radio-option-${idx}`}
-                            />
-                            <Label
-                              htmlFor={`option-${idx}`}
-                              className="flex-1 cursor-pointer text-lg font-normal"
+                        {(currentQuestion as Question).options!.map((option, idx) => {
+                          const isSelected = answers[(currentQuestion as Question).id] === option;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => handleAnswerChange((currentQuestion as Question).id, option)}
+                              className={`flex items-center space-x-3.5 rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 ${
+                                isSelected 
+                                  ? "border-indigo-650 bg-indigo-50/15 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm" 
+                                  : "border-slate-150/70 hover:border-slate-300 hover:bg-slate-50/50 dark:border-slate-805 dark:hover:bg-slate-850/50"
+                              }`}
                             >
-                              {option}
-                            </Label>
-                          </div>
-                        ))}
+                              <RadioGroupItem
+                                value={option}
+                                id={`option-${idx}`}
+                                className="border-slate-350 dark:border-slate-700 text-indigo-600 dark:text-indigo-500 shrink-0"
+                                data-testid={`radio-option-${idx}`}
+                                checked={isSelected}
+                              />
+                              <Label
+                                htmlFor={`option-${idx}`}
+                                className="flex-1 cursor-pointer text-[15px] font-semibold text-slate-750 dark:text-slate-250 leading-snug"
+                              >
+                                {option}
+                              </Label>
+                            </div>
+                          );
+                        })}
                       </RadioGroup>
                     )}
 
@@ -506,34 +532,45 @@ export default function ExamSessionPage() {
                       <RadioGroup
                         value={answers[(currentQuestion as Question).id] || ""}
                         onValueChange={(value) => handleAnswerChange((currentQuestion as Question).id, value)}
+                        className="grid gap-3.5 sm:grid-cols-2"
                       >
-                        {["True", "False"].map((option) => (
-                          <div
-                            key={option}
-                            className="flex items-center space-x-3 rounded-md border p-4 hover-elevate"
-                          >
-                            <RadioGroupItem
-                              value={option}
-                              id={`option-${option}`}
-                              data-testid={`radio-${option.toLowerCase()}`}
-                            />
-                            <Label
-                              htmlFor={`option-${option}`}
-                              className="flex-1 cursor-pointer text-lg font-normal"
+                        {["True", "False"].map((option) => {
+                          const isSelected = answers[(currentQuestion as Question).id] === option;
+                          return (
+                            <div
+                              key={option}
+                              onClick={() => handleAnswerChange((currentQuestion as Question).id, option)}
+                              className={`flex items-center space-x-3.5 rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 ${
+                                isSelected 
+                                  ? "border-indigo-650 bg-indigo-50/15 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm" 
+                                  : "border-slate-150/70 hover:border-slate-300 hover:bg-slate-50/50 dark:border-slate-805 dark:hover:bg-slate-850/50"
+                              }`}
                             >
-                              {option}
-                            </Label>
-                          </div>
-                        ))}
+                              <RadioGroupItem
+                                value={option}
+                                id={`option-${option}`}
+                                className="border-slate-350 dark:border-slate-700 text-indigo-600 dark:text-indigo-500 shrink-0"
+                                data-testid={`radio-${option.toLowerCase()}`}
+                                checked={isSelected}
+                              />
+                              <Label
+                                htmlFor={`option-${option}`}
+                                className="flex-1 cursor-pointer text-base font-extrabold text-slate-750 dark:text-slate-250"
+                              >
+                                {option}
+                              </Label>
+                            </div>
+                          );
+                        })}
                       </RadioGroup>
                     )}
 
                     {(currentQuestion as Question)?.questionType === "short-answer" && (
                       <Textarea
-                        placeholder="Type your answer here..."
+                        placeholder="Type your structured descriptive response here..."
                         value={answers[(currentQuestion as Question).id] || ""}
                         onChange={(e) => handleAnswerChange((currentQuestion as Question).id, e.target.value)}
-                        className="min-h-32 text-base"
+                        className="min-h-32 text-base rounded-2xl border-slate-150/70 dark:border-slate-805 bg-slate-50/20 dark:bg-slate-900/20 focus:border-indigo-500 font-semibold p-4"
                         data-testid="textarea-answer"
                       />
                     )}
@@ -543,65 +580,86 @@ export default function ExamSessionPage() {
             </CardContent>
           </Card>
 
-          {/* Navigation Buttons */}
-          <div className="flex gap-4">
+          {/* Core Controls Navigation */}
+          <div className="flex items-center justify-between gap-4">
             <Button
               variant="outline"
               onClick={() => handleNavigate(currentQuestionIndex - 1)}
               disabled={currentQuestionIndex === 0}
+              className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-100 font-bold h-11 px-6 transition-all"
               data-testid="button-previous"
             >
+              <ChevronLeft className="mr-1.5 h-5 w-5" />
               Previous
             </Button>
+            
             <Button
               variant="outline"
               onClick={() => handleNavigate(currentQuestionIndex + 1)}
               disabled={currentQuestionIndex === totalSteps - 1}
-              className="flex-1"
+              className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 font-extrabold h-11 px-6 max-w-xs transition-all flex items-center justify-center gap-1.5"
               data-testid="button-next"
             >
               Next
+              <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
 
-          {/* Question Navigator */}
-          <Card className="mt-6">
+          {/* Matrix Grid Navigator Panel */}
+          <Card className="mt-10 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
             <CardContent className="p-6">
-              <h3 className="mb-4 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                Question Navigator
+              <h3 className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                <HelpCircle className="h-3.5 w-3.5 text-indigo-500" /> CBT Index Map Navigator
               </h3>
-              <div className="grid grid-cols-8 gap-2 md:grid-cols-10">
-                {(exam.examType === "Theory" ? (exam.theoryConfig?.structure || []) : questions).map((q: any, idx: number) => (
-                  <Button
-                    key={idx}
-                    variant={idx === currentQuestionIndex ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleNavigate(idx)}
-                    className={`relative h-10 w-10 p-0 ${exam.examType === "Theory"
-                      ? (exam.theoryConfig?.structure?.[idx]?.questionId && answers[exam.theoryConfig.structure[idx].questionId!] ? "bg-green-500 text-white border-green-600" : "")
-                      : (answers[q.id] ? "bg-green-500 text-white border-green-600" : "")
+              
+              <div className="grid grid-cols-6 sm:grid-cols-10 gap-2.5">
+                {(exam.examType === "Theory" ? (exam.theoryConfig?.structure || []) : questions).map((q: any, idx: number) => {
+                  const isCurrent = idx === currentQuestionIndex;
+                  const isAnswered = exam.examType === "Theory"
+                    ? (exam.theoryConfig?.structure?.[idx]?.questionId && answers[exam.theoryConfig.structure[idx].questionId!])
+                    : answers[q.id];
+                  
+                  return (
+                    <Button
+                      key={idx}
+                      variant={isCurrent ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleNavigate(idx)}
+                      className={`relative h-10 w-10 p-0 font-extrabold rounded-xl transition-all ${
+                        isCurrent
+                          ? "bg-indigo-650 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/10 scale-105"
+                          : isAnswered
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400"
+                          : "border-slate-150/70 dark:border-slate-805 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350"
                       }`}
-                    data-testid={`button-nav-${idx}`}
-                  >
-                    {idx + 1}
-                    {flaggedQuestions.has(idx) && (
-                      <Flag className="absolute -right-1 -top-1 h-3 w-3 fill-primary text-primary" />
-                    )}
-                  </Button>
-                ))}
+                      data-testid={`button-nav-${idx}`}
+                    >
+                      {idx + 1}
+                      {flaggedQuestions.has(idx) && (
+                        <div className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center border border-white dark:border-slate-900">
+                          <Flag className="h-2 w-2 fill-white" />
+                        </div>
+                      )}
+                    </Button>
+                  );
+                })}
               </div>
-              <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2 border-primary" />
-                  <span>Answered</span>
+
+              {/* Navigator Legend */}
+              <div className="mt-5.5 pt-4.5 border-t border-slate-100 dark:border-slate-805/45 flex flex-wrap gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3.5 w-3.5 rounded-md bg-emerald-50 border border-emerald-250 dark:bg-emerald-950/30 dark:border-emerald-900/30" />
+                  <span>Answered Logs</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border" />
-                  <span>Unanswered</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3.5 w-3.5 rounded-md border border-slate-200 dark:border-slate-800" />
+                  <span>Remaining</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Flag className="h-4 w-4 fill-primary text-primary" />
-                  <span>Flagged</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3.5 w-3.5 rounded-md bg-rose-500 flex items-center justify-center text-white">
+                    <Flag className="h-2 w-2 fill-white" />
+                  </div>
+                  <span>Flagged items</span>
                 </div>
               </div>
             </CardContent>
@@ -609,28 +667,35 @@ export default function ExamSessionPage() {
         </div>
       </div>
 
-      {/* Submit Dialog */}
+      {/* Confirmation Submit Dialog */}
       <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2 text-foreground">
+        <AlertDialogContent className="rounded-3xl border border-slate-150 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-2xl p-6">
+          <AlertDialogHeader className="flex flex-col items-center text-center">
+            <div className="h-14 w-14 rounded-2xl bg-amber-50 dark:bg-amber-955/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3.5 shadow-sm">
+              <AlertTriangle className="h-7 w-7" />
+            </div>
+            <AlertDialogTitle className="text-xl font-black text-slate-850 dark:text-white">Submit CBT Exam?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-semibold text-slate-500 dark:text-slate-400 leading-relaxed mt-2 space-y-2">
               <p>
-                You have answered {answeredCount} items.
+                You have resolved and answered <span className="font-extrabold text-slate-700 dark:text-slate-350">{answeredCount}</span> items out of <span className="font-extrabold text-slate-700 dark:text-slate-350">{totalSteps}</span> total questions.
               </p>
-              <p>Once submitted, you cannot make any changes to your answers.</p>
+              <p>Once submitted, your final examination answers will be locked for grading and cannot be altered.</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-submit">
-              Review Answers
+          <AlertDialogFooter className="sm:justify-center gap-3.5 mt-6">
+            <AlertDialogCancel 
+              className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold h-11 px-5 hover:bg-slate-50/70"
+              data-testid="button-cancel-submit"
+            >
+              Continue Solving
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => submitExamMutation.mutate({ submissionType: 'student', answers })}
               disabled={submitExamMutation.isPending}
+              className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold rounded-xl h-11 px-6 shadow-md transition-all shrink-0"
               data-testid="button-confirm-submit"
             >
-              {submitExamMutation.isPending ? "Submitting..." : "Submit Exam"}
+              {submitExamMutation.isPending ? "Grading..." : "Yes, Submit Session"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

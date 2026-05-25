@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon } from "lucide-react";
+import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Award, TrendingUp, Sparkles, Clock, ChevronRight, User } from "lucide-react";
 import type { Result, Exam, Student } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
@@ -520,7 +520,7 @@ export default function AdminResults() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
@@ -553,48 +553,66 @@ export default function AdminResults() {
         .print-only { display: none; }
       `}} />
 
-      <div className="no-print">
-        <h1 className="mb-2 text-3xl font-bold">Results</h1>
-        <p className="text-muted-foreground">
-          View and analyze student exam results
-        </p>
+      {/* Header Panel */}
+      <div className="no-print flex flex-col md:flex-row md:items-center justify-between gap-6 bg-glass border border-slate-100 dark:border-slate-800/80 p-6 rounded-2xl shadow-xl shadow-slate-100/10 dark:shadow-none animate-in fade-in slide-in-from-top-4 duration-500">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Award className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Performance Ledger</span>
+          </div>
+          <h1 className="text-3xl font-black tracking-tight mt-1.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-white dark:via-indigo-200 dark:to-white bg-clip-text text-transparent">
+            Examination Results
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">
+            Review detailed student scorecards, filter performance trends, and print consolidated school reports.
+          </p>
+        </div>
+
         {resultsError && (
-          <div className="mt-4 p-4 rounded bg-red-50 border border-red-200 text-red-700">
-            <h3 className="font-bold">Error loading results:</h3>
-            <p>{resultsError instanceof Error ? resultsError.message : "Unknown error. Please check your Firebase settings."}</p>
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium max-w-md animate-bounce">
+            <span className="font-extrabold block mb-1">Error Loading Results:</span>
+            <span>{resultsError instanceof Error ? resultsError.message : "Unknown error. Please check your database settings."}</span>
           </div>
         )}
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100/60 dark:border-indigo-900/40 text-xs font-bold text-indigo-650 dark:text-indigo-455">
+            <TrendingUp className="h-4 w-4" />
+            <span>{results?.length || 0} Total Exams Completed</span>
+          </div>
+        </div>
       </div>
 
       <div className="print-container">
-
         {/* Advanced Filter Toolbar */}
-        <Card className="print:hidden overflow-visible mb-6">
+        <Card className="print:hidden overflow-visible border border-slate-100 dark:border-slate-800/80 shadow-md rounded-2xl bg-white dark:bg-slate-900 mb-6">
           <CardContent className="p-6">
             <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                 {/* Search */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Search</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Search Candidate</label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
                       placeholder="Name or Student ID..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 h-10 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-550 font-medium"
                     />
                   </div>
                 </div>
 
                 {/* Exam Selection */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Exam</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Examination</label>
                   <Select value={filterExamId} onValueChange={setFilterExamId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 font-semibold text-slate-700 dark:text-slate-300">
                       <SelectValue placeholder="All Exams" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border-slate-150">
                       <SelectItem value="ALL">All Exams</SelectItem>
                       {exams?.map(e => (
                         <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>
@@ -604,13 +622,13 @@ export default function AdminResults() {
                 </div>
 
                 {/* Class Level Selection */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Class Level</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Class Level</label>
                   <Select value={filterClassLevel} onValueChange={setFilterClassLevel}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 font-semibold text-slate-700 dark:text-slate-300">
                       <SelectValue placeholder="All Classes" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border-slate-150">
                       <SelectItem value="ALL">All Classes</SelectItem>
                       {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].map(level => (
                         <SelectItem key={level} value={level}>{level}</SelectItem>
@@ -620,13 +638,13 @@ export default function AdminResults() {
                 </div>
 
                 {/* Department Selection */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Department</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Department</label>
                   <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 font-semibold text-slate-700 dark:text-slate-300">
                       <SelectValue placeholder="All Departments" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border-slate-150">
                       <SelectItem value="ALL">All Departments</SelectItem>
                       <SelectItem value="Science">Science</SelectItem>
                       <SelectItem value="Commercial">Commercial</SelectItem>
@@ -636,20 +654,19 @@ export default function AdminResults() {
                   </Select>
                 </div>
 
-
                 {/* Date Range Picker */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Date Range</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Submission Date</label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant={"outline"}
                         className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !dateRange.from && "text-muted-foreground"
+                          "w-full h-10 justify-start text-left font-semibold rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300",
+                          !dateRange.from && "text-slate-400"
                         )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <CalendarIcon className="mr-2 h-4 w-4 text-indigo-500" />
                         {dateRange.from ? (
                           dateRange.to ? (
                             <>
@@ -664,7 +681,7 @@ export default function AdminResults() {
                         )}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 rounded-2xl border-slate-150 shadow-2xl" align="start">
                       <Calendar
                         initialFocus
                         mode="range"
@@ -672,45 +689,57 @@ export default function AdminResults() {
                         selected={{ from: dateRange.from, to: dateRange.to }}
                         onSelect={(range: any) => setDateRange(range || { from: undefined, to: undefined })}
                         numberOfMonths={2}
+                        className="rounded-2xl"
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center border-t pt-4">
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    setSearchQuery("");
-                    setFilterExamId("ALL");
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-100 dark:border-slate-800/80 pt-4.5">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
                     setSearchQuery("");
                     setFilterExamId("ALL");
                     setFilterClassLevel("ALL");
                     setFilterDepartment("ALL");
                     setDateRange({ from: undefined, to: undefined });
+                  }}
+                  className="rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                >
+                  Clear Filters
+                </Button>
 
-                  }}>
-                    Reset Filters
-                  </Button>
-                </div>
-
-                <div className="flex gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {selectedResultIds.size > 0 && (
-                    <Button onClick={handleBulkPrint} variant="default">
+                    <Button 
+                      onClick={handleBulkPrint} 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 h-9.5 rounded-xl text-xs shadow-lg shadow-indigo-500/10 transition-transform duration-200 hover:scale-[1.02]"
+                    >
                       <Printer className="mr-2 h-4 w-4" />
                       Print Selected ({selectedResultIds.size})
                     </Button>
                   )}
 
-                  <Button onClick={handlePrintFullReport} variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800">
+                  <Button 
+                    onClick={handlePrintFullReport} 
+                    variant="outline" 
+                    className="border-indigo-150 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-850 dark:border-indigo-900/60 dark:bg-indigo-950/20 dark:text-indigo-400 dark:hover:bg-indigo-950/40 px-4 h-9.5 rounded-xl text-xs font-bold"
+                  >
                     <Printer className="mr-2 h-4 w-4" />
-                    Print Report
+                    Consolidated Report
                   </Button>
 
                   {filterExamId !== "ALL" && (
-                    <Button variant="secondary" onClick={handlePrintBroadsheet}>
+                    <Button 
+                      variant="secondary" 
+                      onClick={handlePrintBroadsheet}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-350 dark:hover:bg-slate-750 px-4 h-9.5 rounded-xl text-xs font-bold"
+                    >
                       <Printer className="mr-2 h-4 w-4" />
-                      Print Score Sheet
+                      Score Sheet (Broadsheet)
                     </Button>
                   )}
                 </div>
@@ -722,177 +751,215 @@ export default function AdminResults() {
         {resultsLoading ? (
           <div className="space-y-4 print:hidden">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full" />
+              <Skeleton key={i} className="h-20 w-full rounded-2xl" />
             ))}
           </div>
         ) : filteredResults && filteredResults.length > 0 ? (
-          <Card className="overflow-hidden border-none shadow-lg print:shadow-none">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="font-bold print:hidden w-10">
-                    <input
-                      type="checkbox"
-                      checked={filteredResults.length > 0 && Array.from(selectedResultIds).length === filteredResults.length}
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                  </TableHead>
-                  <TableHead className="font-bold max-w-[150px]">Student</TableHead>
-                  <TableHead className="font-bold">Cls</TableHead>
-                  <TableHead className="font-bold">Dept</TableHead>
-                  <TableHead className="font-bold max-w-[120px]">Exam</TableHead>
-                  <TableHead className="font-bold print:hidden">Scr</TableHead>
-                  <TableHead className="font-bold hidden print:table-cell">Score (%)</TableHead>
-                  <TableHead className="font-bold print:hidden">%</TableHead>
-                  <TableHead className="font-bold print:hidden">Sts</TableHead>
-                  <TableHead className="font-bold hidden xl:table-cell print:hidden">Submitted</TableHead>
-                  <TableHead className="font-bold text-right hidden lg:table-cell print:hidden">Completed</TableHead>
-                  <TableHead className="text-right print:hidden">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredResults
-                  .sort(
-                    (a, b) =>
-                      new Date(b.completedAt).getTime() -
-                      new Date(a.completedAt).getTime()
-                  )
-                  .map((result) => {
-                    const student = students?.find(s => s.studentId === result.studentId);
-                    return (
-                      <TableRow key={result.id} className={cn(selectedResultIds.has(result.id) ? "bg-blue-50/50" : "", "group transition-colors")}>
-                        <TableCell className="print:hidden">
-                          <input
-                            type="checkbox"
-                            checked={selectedResultIds.has(result.id)}
-                            onChange={(e) => handleSelectOne(result.id, e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                        </TableCell>
-                        <TableCell className="max-w-[150px]">
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => setLocation(`/ admin / results / student / ${result.studentId}`)}
-                          >
-                            <p className="font-semibold text-primary hover:underline transition-all truncate" title={result.studentName}>
-                              {result.studentName}
-                            </p>
-                            <p className="text-xs text-muted-foreground font-mono truncate">
-                              {result.studentId}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium text-muted-foreground">{student?.classLevel || '-'}</TableCell>
-                        <TableCell className="font-medium text-muted-foreground">{student?.department || '-'}</TableCell>
-                        <TableCell className="font-medium max-w-[120px] truncate" title={getExamTitle(result.examId)}>{getExamTitle(result.examId)}</TableCell>
-
-                        {/* Score Column: Visible on Screen, Hidden on Print */}
-                        <TableCell className="print:hidden">
-                          <span className="font-medium">{result.score}</span>
-                          <span className="text-muted-foreground text-xs"> / {result.totalPoints}</span>
-                        </TableCell>
-
-                        {/* Score (%) Column: Hidden on Screen, Visible on Print */}
-                        <TableCell className="hidden print:table-cell">
-                          <span className="font-bold">{result.percentage}%</span>
-                        </TableCell>
-
-                        {/* Percentage Column: Visible on Screen, Hidden on Print */}
-                        <TableCell className="print:hidden">
-                          <span
-                            className={`font-bold ${result.passed ? "text-green-600" : "text-red-600"
-                              }`}
-                          >
-                            {result.percentage}%
-                          </span>
-                        </TableCell>
-
-                        <TableCell className="print:hidden">
-                          {result.passed ? (
-                            <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                              <CheckCircle className="mr-1 h-3 w-3" />
-                              Passed
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-                              <XCircle className="mr-1 h-3 w-3" />
-                              Failed
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="print:hidden hidden xl:table-cell">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "border-transparent font-semibold shadow-none",
-                              result.submissionType === 'student'
-                                ? "bg-green-50 text-green-700 hover:bg-green-100"
-                                : "bg-red-50 text-red-700 hover:bg-red-100"
-                            )}
-                          >
-                            {result.submissionType === 'student' ? 'Submitted' : 'Not Submitted'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right print:hidden hidden lg:table-cell">
-                          <div className="text-sm">
-                            <p className="font-medium">{format(new Date(result.completedAt), "dd MMM yyyy")}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(result.completedAt), "hh:mm a")}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right print:hidden">
-                          <div className="flex justify-end gap-1">
-                            <Link href={`/admin/results/${result.id}`}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-muted"
-                              onClick={() => handlePrint(result)}
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow >
+          <Card className="overflow-hidden border border-slate-100 dark:border-slate-800/80 shadow-lg print:shadow-none rounded-2xl bg-white dark:bg-slate-900">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-805">
+                  <TableRow>
+                    <TableHead className="font-bold print:hidden w-12 py-3.5">
+                      <input
+                        type="checkbox"
+                        checked={filteredResults.length > 0 && Array.from(selectedResultIds).length === filteredResults.length}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="h-4.5 w-4.5 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[200px]">Student / Candidate</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-16">Class</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-20">Dept</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[150px]">Examination</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Points</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden print:table-cell">Score (%)</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Score %</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Status</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden xl:table-cell print:hidden">Submission</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 text-right hidden lg:table-cell print:hidden">Date Completed</TableHead>
+                    <TableHead className="text-right font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden w-28">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-805/40">
+                  {filteredResults
+                    .sort(
+                      (a, b) =>
+                        new Date(b.completedAt).getTime() -
+                        new Date(a.completedAt).getTime()
                     )
-                  })}
-              </TableBody >
-            </Table >
+                    .map((result) => {
+                      const student = students?.find(s => s.studentId === result.studentId);
+                      return (
+                        <TableRow 
+                          key={result.id} 
+                          className={cn(
+                            selectedResultIds.has(result.id) 
+                              ? "bg-indigo-50/30 dark:bg-indigo-950/10" 
+                              : "hover:bg-slate-50/50 dark:hover:bg-slate-900/20", 
+                            "group transition-colors"
+                          )}
+                        >
+                          <TableCell className="print:hidden py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedResultIds.has(result.id)}
+                              onChange={(e) => handleSelectOne(result.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </TableCell>
+                          <TableCell className="max-w-[200px] py-4">
+                            <div
+                              className="cursor-pointer flex items-center gap-3"
+                              onClick={() => setLocation(`/admin/results/student/${result.studentId}`)}
+                            >
+                              <div className="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-650 dark:group-hover:bg-indigo-950 dark:group-hover:text-indigo-400 transition-colors">
+                                <User className="h-4.5 w-4.5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-extrabold text-sm text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-455 transition-colors hover:underline truncate" title={result.studentName}>
+                                  {result.studentName}
+                                </p>
+                                <p className="text-[11px] text-slate-455 font-mono truncate mt-0.5">
+                                  {result.studentId}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-semibold text-xs text-slate-550 py-4">{student?.classLevel || '-'}</TableCell>
+                          <TableCell className="font-semibold text-xs text-slate-550 py-4">
+                            {student?.department && student.department !== 'General' ? (
+                              <Badge variant="outline" className="border-slate-200 text-slate-500 text-[10px] py-0 px-1.5 font-bold">
+                                {student.department}
+                              </Badge>
+                            ) : student?.department || '-'}
+                          </TableCell>
+                          <TableCell className="font-semibold text-xs text-slate-800 dark:text-slate-300 max-w-[150px] truncate py-4" title={getExamTitle(result.examId)}>
+                            {getExamTitle(result.examId)}
+                          </TableCell>
+
+                          {/* Score Column: Visible on Screen, Hidden on Print */}
+                          <TableCell className="print:hidden py-4">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{result.score}</span>
+                            <span className="text-slate-400 text-xs"> / {result.totalPoints}</span>
+                          </TableCell>
+
+                          {/* Score (%) Column: Hidden on Screen, Visible on Print */}
+                          <TableCell className="hidden print:table-cell py-4">
+                            <span className="font-black text-sm">{result.percentage}%</span>
+                          </TableCell>
+
+                          {/* Percentage Column: Visible on Screen, Hidden on Print */}
+                          <TableCell className="print:hidden py-4">
+                            <span
+                              className={`font-black text-sm ${
+                                result.passed 
+                                  ? "text-emerald-600 dark:text-emerald-400" 
+                                  : "text-rose-600 dark:text-rose-455"
+                              }`}
+                            >
+                              {result.percentage}%
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="print:hidden py-4">
+                            {result.passed ? (
+                              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-455 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 font-bold border rounded-lg py-0.5 px-2 text-[10px] uppercase">
+                                <CheckCircle className="mr-1 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                Passed
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-955/20 dark:text-rose-450 hover:bg-rose-50 dark:hover:bg-rose-955/20 font-bold border rounded-lg py-0.5 px-2 text-[10px] uppercase">
+                                <XCircle className="mr-1 h-3.5 w-3.5 text-rose-600 dark:text-rose-450" />
+                                Failed
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="print:hidden hidden xl:table-cell py-4">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "border-transparent font-black text-[10px] uppercase shadow-none rounded-lg py-0.5 px-2",
+                                result.submissionType === 'student'
+                                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                                  : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400"
+                              )}
+                            >
+                              {result.submissionType === 'student' ? 'Student Portal' : 'Manual / Staff'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right print:hidden hidden lg:table-cell py-4">
+                            <div className="inline-flex flex-col items-end text-xs font-semibold text-slate-700 dark:text-slate-350">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 text-slate-400" />
+                                {format(new Date(result.completedAt), "dd MMM yyyy")}
+                              </span>
+                              <span className="text-[10px] text-slate-455 font-normal mt-0.5">
+                                {format(new Date(result.completedAt), "hh:mm a")}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right print:hidden py-4">
+                            <div className="flex justify-end gap-1.5">
+                              <Link href={`/admin/results/${result.id}`}>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8.5 w-8.5 rounded-lg text-indigo-650 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+                                >
+                                  <Eye className="h-4.5 w-4.5" />
+                                </Button>
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8.5 w-8.5 rounded-lg text-slate-455 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => handlePrint(result)}
+                              >
+                                <Printer className="h-4.5 w-4.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow >
+                      )
+                    })}
+                </TableBody >
+              </Table >
+            </div>
           </Card >
         ) : (
-          <Card className="print:hidden">
+          <Card className="print:hidden border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xl">
             <CardContent className="flex flex-col items-center py-20 text-center">
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                <Filter className="h-8 w-8 text-muted-foreground" />
+              <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 flex items-center justify-center mb-4 text-indigo-500">
+                <Filter className="h-8 w-8 stroke-[1.5]" />
               </div>
-              <h3 className="mb-2 text-xl font-bold">
-                {searchQuery || filterExamId !== "ALL" || filterClassLevel !== "ALL" || dateRange.from ? "No Match Found" : "No Results Yet"}
+              <h3 className="mb-2 text-xl font-black text-slate-800 dark:text-slate-200">
+                {searchQuery || filterExamId !== "ALL" || filterClassLevel !== "ALL" || dateRange.from ? "No Results Match Filters" : "No Results Registered"}
               </h3>
-              <p className="text-muted-foreground max-w-xs">
+              <p className="text-slate-500 dark:text-slate-400 max-w-sm mt-1 text-sm font-medium leading-relaxed">
                 {searchQuery || filterExamId !== "ALL" || filterClassLevel !== "ALL" || dateRange.from
-                  ? "We couldn't find any results matching your active filters. Try adjusting them."
-                  : "Examination results will automatically appear here once students complete their exams."}
+                  ? "We couldn't find any student examination reports matching your active filters. Try adjusting dates or selection values."
+                  : "Complete student exam session records will automatically appear here once candidates complete tests."}
               </p>
               {(searchQuery || filterExamId !== "ALL" || filterClassLevel !== "ALL" || dateRange.from) && (
-                <Button variant="outline" className="mt-6" onClick={() => {
-                  setSearchQuery("");
-                  setFilterExamId("ALL");
-                  setFilterClassLevel("ALL");
-                  setDateRange({ from: undefined, to: undefined });
-                }}>
-                  Clear All Filters
+                <Button 
+                  variant="outline" 
+                  className="mt-6 rounded-xl h-10 px-5 font-bold border-indigo-200 text-indigo-650 hover:bg-indigo-50/50" 
+                  onClick={() => {
+                    setSearchQuery("");
+                    setFilterExamId("ALL");
+                    setFilterClassLevel("ALL");
+                    setFilterDepartment("ALL");
+                    setDateRange({ from: undefined, to: undefined });
+                  }}
+                >
+                  Clear Active Filters
                 </Button>
               )}
             </CardContent>
           </Card>
         )}
-      </div >
-    </div >
+      </div>
+    </div>
   );
 }

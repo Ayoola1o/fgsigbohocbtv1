@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Clock, BookOpen, CheckCircle, LogOut, Lock } from "lucide-react";
+import { Clock, BookOpen, CheckCircle, LogOut, Lock, Sparkles, Award, ShieldAlert, User, ArrowRight } from "lucide-react";
 import type { Exam, Student, Result } from "@shared/schema";
 import { getExams } from "@/lib/firebase-api";
 
@@ -65,37 +65,100 @@ export default function StudentPortal() {
   if (!student) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Welcome, {student.name}</h1>
-            <p className="text-muted-foreground">Student ID: {student.studentId}</p>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16 font-sans">
+      {/* Top Banner and Navigation */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-805/80 sticky top-0 z-50 backdrop-blur-md bg-opacity-80 dark:bg-opacity-80">
+        <div className="container mx-auto px-4 py-4.5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-10 w-10 rounded-2xl bg-indigo-600 dark:bg-indigo-500/10 text-white dark:text-indigo-400 flex items-center justify-center font-black shadow-lg shadow-indigo-650/15 dark:shadow-none animate-pulse">
+              FIA
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Portal active</span>
+              </div>
+              <h2 className="text-base font-black text-slate-850 dark:text-white leading-tight mt-0.5">
+                Faith Immaculate Academy
+              </h2>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            data-testid="button-logout"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <div className="hidden md:flex flex-col text-right">
+              <span className="text-xs font-black text-slate-800 dark:text-slate-200">{freshestStudent.name}</span>
+              <span className="text-[10px] text-slate-455 font-mono tracking-wider">{freshestStudent.studentId}</span>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 dark:hover:text-rose-455 font-bold h-9 px-4.5 transition-colors"
+              data-testid="button-logout"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-10 max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-550">
+        {/* Welcome Dashboard Profile Panel */}
+        <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-indigo-900 dark:from-indigo-955 dark:via-indigo-965 dark:to-indigo-955 text-white p-6 sm:p-8 rounded-3xl shadow-xl shadow-indigo-950/10 mb-10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-10 pointer-events-none">
+            <Sparkles className="h-40 w-40 text-white" />
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-white/10 dark:bg-indigo-950/60 text-indigo-200 border-none font-bold py-0.5 px-2.5 rounded-full text-[10px] tracking-wider uppercase">
+                  Candidate Profile
+                </Badge>
+                <div className="flex items-center gap-1 text-[11px] text-indigo-300 font-semibold">
+                  <Sparkles className="h-3 w-3 text-yellow-400" />
+                  <span>CBT Hub</span>
+                </div>
+              </div>
+              <h1 className="text-2.5xl sm:text-3.5xl font-black tracking-tight mt-2.5 leading-tight">
+                Welcome back, {freshestStudent.name}
+              </h1>
+              <p className="text-indigo-200 text-sm mt-1.5 font-medium">
+                Access your scheduled subject examinations, view grading result sheets, and track performance scores.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 bg-white/5 dark:bg-slate-950/40 p-4.5 rounded-2xl border border-white/10 shrink-0">
+              <div className="text-center px-4 py-1 border-r border-white/10">
+                <span className="block text-[10px] text-indigo-200 uppercase font-black tracking-wider">Class Level</span>
+                <span className="block text-lg font-black text-white mt-0.5">{freshestStudent.classLevel || '-'}</span>
+              </div>
+              <div className="text-center px-4 py-1">
+                <span className="block text-[10px] text-indigo-200 uppercase font-black tracking-wider">Department</span>
+                <span className="block text-lg font-black text-emerald-400 mt-0.5">{freshestStudent.department || 'General'}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
+        {/* Exams Deck */}
         <div>
-          <h2 className="mb-6 text-2xl font-semibold">Available Exams</h2>
+          <div className="flex items-center gap-2.5 mb-6.5">
+            <div className="h-7.5 w-7.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-650 dark:text-indigo-400">
+              <BookOpen className="h-4.5 w-4.5" />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 dark:text-slate-200">Available Examination Sessions</h2>
+          </div>
 
           {isLoading ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-full" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-20 w-full" />
-                  </CardContent>
+                <Card key={i} className="border border-slate-100 dark:border-slate-805 rounded-2xl bg-white dark:bg-slate-900 p-6 space-y-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-3/4 rounded-lg" />
+                    <Skeleton className="h-4 w-full rounded-md" />
+                  </div>
+                  <Skeleton className="h-10 w-full rounded-xl" />
                 </Card>
               ))}
             </div>
@@ -107,7 +170,7 @@ export default function StudentPortal() {
                   // If exam is general (no department or "General"), allow it for all
                   if (!exam.department || exam.department === "General") return true;
                   // If exam is specific to a department, student must match it
-                  return exam.department === student.department;
+                  return exam.department === freshestStudent.department;
                 })
                 .map((exam) => {
                   const examResult = getStudentResult(exam.id);
@@ -116,76 +179,101 @@ export default function StudentPortal() {
                   return (
                     <Card
                       key={exam.id}
-                      className={`hover-elevate overflow-hidden border ${
+                      className={`overflow-hidden border group transition-all duration-300 rounded-2.5xl flex flex-col justify-between ${
                         isBlocked
-                          ? "border-rose-100 bg-rose-50/10 shadow-sm"
+                          ? "border-rose-100 bg-rose-50/5 dark:border-rose-955/20 dark:bg-rose-955/5 shadow-sm"
                           : hasTaken
-                          ? "border-emerald-100 bg-emerald-50/10 shadow-sm"
-                          : "border-slate-100 shadow-md"
+                          ? "border-emerald-100 bg-emerald-50/5 dark:border-emerald-955/20 dark:bg-emerald-955/5 shadow-sm"
+                          : "border-slate-150/70 bg-white dark:border-slate-805 dark:bg-slate-900 shadow-md hover:shadow-xl hover:scale-[1.01]"
                       }`}
                       data-testid={`card-exam-${exam.id}`}
                     >
-                      <CardHeader>
-                        <div className="mb-2 flex items-start justify-between gap-2">
-                          <CardTitle className="text-xl font-bold text-slate-800">{exam.title}</CardTitle>
-                          <Badge variant="secondary" className="font-bold uppercase tracking-wider" data-testid={`badge-subject-${exam.id}`}>
+                      <CardHeader className="pb-4">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <Badge 
+                            variant="secondary" 
+                            className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold uppercase tracking-wider text-[10px] py-0.5 px-2 rounded-lg border border-indigo-100/30 dark:border-indigo-900/30"
+                            data-testid={`badge-subject-${exam.id}`}
+                          >
                             {exam.subject}
                           </Badge>
-                        </div>
-                        {exam.description && (
-                          <CardDescription className="text-xs">{exam.description}</CardDescription>
-                        )}
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground font-semibold">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4 text-slate-400" />
-                            <span>{exam.duration} mins</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <BookOpen className="h-4 w-4 text-slate-400" />
-                            <span>{exam.questionIds?.length || 0} questions</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-semibold">
-                          <CheckCircle className="h-4 w-4 text-slate-400" />
-                          <span className="text-muted-foreground">
-                            Passing Score: {exam.passingScore}%
-                          </span>
+
+                          {hasTaken && (
+                            <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/30 dark:border-emerald-900/30 font-bold py-0.5 px-2 text-[9px] uppercase rounded-lg">
+                              Completed
+                            </Badge>
+                          )}
+
+                          {isBlocked && (
+                            <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-955/20 dark:text-rose-450 border border-rose-100/30 dark:border-rose-900/30 font-bold py-0.5 px-2 text-[9px] uppercase rounded-lg">
+                              Blocked
+                            </Badge>
+                          )}
                         </div>
 
-                        {/* Status Badges & Buttons */}
+                        <CardTitle className="text-lg font-black text-slate-800 dark:text-slate-150 leading-tight group-hover:text-indigo-650 dark:group-hover:text-indigo-400 transition-colors">
+                          {exam.title}
+                        </CardTitle>
+                        
+                        {exam.description && (
+                          <CardDescription className="text-slate-455 dark:text-slate-400 text-xs font-medium leading-relaxed mt-1">
+                            {exam.description}
+                          </CardDescription>
+                        )}
+                      </CardHeader>
+
+                      <CardContent className="space-y-4 pt-0">
+                        <div className="flex items-center gap-4 bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-805/40 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-4 w-4 text-indigo-500 shrink-0" />
+                            <span>{exam.duration} Minutes</span>
+                          </div>
+                          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+                          <div className="flex items-center gap-1.5">
+                            <BookOpen className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>{exam.questionIds?.length || 0} Questions</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs font-semibold px-1">
+                          <span className="text-slate-455">Grading Passing Score</span>
+                          <span className="font-extrabold text-slate-700 dark:text-slate-300">{exam.passingScore}%</span>
+                        </div>
+
+                        {/* Status Action Buttons */}
                         {isBlocked ? (
-                          <div className="space-y-2 pt-2">
-                            <div className="flex items-center gap-1.5 text-rose-600 font-bold text-xs">
-                              <Lock className="h-4 w-4 shrink-0" />
-                              <span>Access Blocked by Administrator</span>
+                          <div className="space-y-2 pt-2 border-t border-rose-100/40 dark:border-rose-900/20">
+                            <div className="flex items-center justify-center gap-1.5 text-rose-600 dark:text-rose-455 font-bold text-xs">
+                              <Lock className="h-3.5 w-3.5 shrink-0" />
+                              <span>Requires Administrator Permission</span>
                             </div>
-                            <Button disabled className="w-full bg-rose-50 text-rose-400 font-bold border-none cursor-not-allowed">
-                              Blocked
+                            <Button disabled className="w-full bg-rose-100 text-rose-400 dark:bg-rose-955/20 dark:text-rose-600 font-bold border-none cursor-not-allowed rounded-xl h-10">
+                              Locked / Blocked
                             </Button>
                           </div>
                         ) : hasTaken ? (
-                          <div className="space-y-2 pt-2">
-                            <div className="flex items-center justify-between text-xs font-bold text-emerald-600">
-                              <div className="flex items-center gap-1.5">
+                          <div className="space-y-2 pt-2 border-t border-emerald-100/40 dark:border-emerald-900/20">
+                            <div className="flex items-center justify-between text-xs font-extrabold text-emerald-600 dark:text-emerald-455">
+                              <span className="flex items-center gap-1.5">
                                 <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
-                                <span>Completed Successfully</span>
-                              </div>
-                              <span className="text-sm font-extrabold">{examResult.percentage}%</span>
+                                Completed Score
+                              </span>
+                              <span className="text-base font-black">{examResult.percentage}%</span>
                             </div>
                             <Link href={`/exam/result/${examResult.id}`}>
-                              <Button variant="outline" className="w-full border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 font-bold">
-                                View Result Sheet
+                              <Button variant="outline" className="w-full border-emerald-150 bg-emerald-50/50 hover:bg-emerald-100/40 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40 font-bold rounded-xl h-10 transition-colors">
+                                View Performance Sheet
                               </Button>
                             </Link>
                           </div>
                         ) : (
-                          <Link href={`/exam/${exam.id}/start?studentName=${encodeURIComponent(freshestStudent.name)}&studentId=${encodeURIComponent(freshestStudent.studentId)}`}>
-                            <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md hover:scale-[1.01] transition-transform" data-testid={`button-start-exam-${exam.id}`}>
-                              Start CBT Exam
-                            </Button>
-                          </Link>
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-805/40">
+                            <Link href={`/exam/${exam.id}/start?studentName=${encodeURIComponent(freshestStudent.name)}&studentId=${encodeURIComponent(freshestStudent.studentId)}`}>
+                              <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-lg shadow-indigo-500/10 hover:scale-[1.01] transition-all rounded-xl h-10 flex items-center justify-center gap-1.5 group-hover:bg-indigo-650" data-testid={`button-start-exam-${exam.id}`}>
+                                Start CBT Exam <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                              </Button>
+                            </Link>
+                          </div>
                         )}
                       </CardContent>
                     </Card>
@@ -193,12 +281,14 @@ export default function StudentPortal() {
                 })}
             </div>
           ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center py-12 text-center">
-                <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-semibold">No Exams Available</h3>
-                <p className="text-sm text-muted-foreground">
-                  There are currently no active exams. Please check back later.
+            <Card className="border border-slate-150 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-2.5xl shadow-xl">
+              <CardContent className="flex flex-col items-center py-20 text-center">
+                <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 flex items-center justify-center mb-4 text-indigo-500">
+                  <ShieldAlert className="h-8 w-8 stroke-[1.5]" />
+                </div>
+                <h3 className="mb-2 text-xl font-black text-slate-800 dark:text-slate-200">No Examinations Found</h3>
+                <p className="text-slate-500 dark:text-slate-400 max-w-sm mt-1 text-sm font-medium leading-relaxed">
+                  There are currently no active exams configured for your class level ({freshestStudent.classLevel || 'General'}). Please verify with your examiner or check back soon.
                 </p>
               </CardContent>
             </Card>

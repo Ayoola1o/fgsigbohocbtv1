@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Clock, BookOpen, Eye, Pencil, Trash2 } from "lucide-react";
+import { 
+  Plus, 
+  Clock, 
+  BookOpen, 
+  Eye, 
+  Pencil, 
+  Trash2, 
+  Sparkles, 
+  ChevronRight, 
+  Award,
+  ToggleLeft,
+  Settings,
+  HelpCircle,
+  FileSpreadsheet
+} from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Exam, Question } from "@shared/schema";
 import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/components/theory-structure-editor";
@@ -35,13 +49,12 @@ import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/com
 export default function AdminExams() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
 
-  const { data: exams, isLoading } = useQuery<Exam[]>({
+  const { data: exams = [], isLoading } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
 
-  const { data: questions } = useQuery<Question[]>({
+  const { data: questions = [] } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
   });
 
@@ -50,10 +63,17 @@ export default function AdminExams() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
       toast({
-        title: "Exam deleted",
-        description: "The exam has been successfully deleted.",
+        title: "Exam Deleted",
+        description: "The exam paper has been removed successfully.",
       });
     },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to Delete",
+        description: err.message || "An error occurred.",
+        variant: "destructive",
+      });
+    }
   });
 
   const toggleExamMutation = useMutation({
@@ -61,28 +81,53 @@ export default function AdminExams() {
       apiRequest("PATCH", `/api/exams/${examId}`, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
+      toast({
+        title: "Status Updated",
+        description: "Exam availability updated successfully.",
+      });
     },
   });
 
+  // Custom Subject badge colors
+  const getSubjectBadge = (subj: string) => {
+    const s = subj.toLowerCase();
+    if (s.includes("math")) return <Badge className="bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/40 font-bold">Mathematics</Badge>;
+    if (s.includes("english")) return <Badge className="bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/40 font-bold">English</Badge>;
+    if (s.includes("physics") || s.includes("chem") || s.includes("bio")) return <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40 font-bold">{subj}</Badge>;
+    return <Badge variant="secondary" className="font-bold">{subj}</Badge>;
+  };
+
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 pb-12">
+      {/* Header Panel */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-glass border border-slate-100 dark:border-slate-800/80 p-6 rounded-2xl shadow-xl shadow-slate-100/10 dark:shadow-none animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
-          <h1 className="mb-2 text-3xl font-bold">Exams</h1>
-          <p className="text-muted-foreground">
-            Create and manage your examination papers
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Settings className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Institution Data Center</span>
+          </div>
+          <h1 className="text-3xl font-black tracking-tight mt-1.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-white dark:via-indigo-200 dark:to-white bg-clip-text text-transparent">
+            Examination Papers
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">
+            Draft Objectives/Theory examination papers, configure display constraints, and set question criteria.
           </p>
         </div>
+
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-create-exam">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Exam
+            <Button 
+              data-testid="button-create-exam"
+              className="shadow-md shadow-indigo-500/10 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold transition-all hover:scale-[1.03] duration-300 flex items-center gap-2 px-4 h-10 rounded-xl"
+            >
+              <Plus className="h-4 w-4" /> Create Exam
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
             <ExamForm
-              questions={questions || []}
+              questions={questions}
               onSuccess={() => {
                 setIsCreateOpen(false);
                 queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
@@ -92,114 +137,157 @@ export default function AdminExams() {
         </Dialog>
       </div>
 
+      {/* Main Table view */}
       {isLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <Skeleton key={i} className="h-32 w-full rounded-2xl" />
           ))}
         </div>
-      ) : exams && exams.length > 0 ? (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Exam Title</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Class Level</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Questions</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {exams.map((exam) => (
-                <TableRow key={exam.id} data-testid={`row-exam-${exam.id}`}>
-                  <TableCell className="font-medium">{exam.title}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{exam.subject}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <Badge variant="outline">{exam.classLevel}</Badge>
-                      {exam.department && (
-                        <Badge variant="secondary" className="text-[10px] w-fit">
-                          {exam.department}
+      ) : exams.length > 0 ? (
+        <Card className="border-none shadow-xl overflow-hidden bg-white dark:bg-slate-900 rounded-2xl">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-slate-50/60 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/40">
+                <TableRow>
+                  <TableHead className="font-bold py-4 px-6 text-xs text-slate-400 uppercase tracking-widest">Exam Title</TableHead>
+                  <TableHead className="font-bold py-4 px-4 text-xs text-slate-400 uppercase tracking-widest">Subject</TableHead>
+                  <TableHead className="font-bold py-4 px-4 text-xs text-slate-400 uppercase tracking-widest text-center">Class / Dept</TableHead>
+                  <TableHead className="font-bold py-4 px-4 text-xs text-slate-400 uppercase tracking-widest text-center">Duration</TableHead>
+                  <TableHead className="font-bold py-4 px-4 text-xs text-slate-400 uppercase tracking-widest text-center">Type</TableHead>
+                  <TableHead className="font-bold py-4 px-4 text-xs text-slate-400 uppercase tracking-widest text-center">Questions</TableHead>
+                  <TableHead className="font-bold py-4 px-4 text-xs text-slate-400 uppercase tracking-widest text-center">Status</TableHead>
+                  <TableHead className="font-bold py-4 px-6 text-xs text-slate-400 uppercase tracking-widest text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-slate-50 dark:divide-slate-800/40">
+                {exams.map((exam) => (
+                  <TableRow 
+                    key={exam.id} 
+                    data-testid={`row-exam-${exam.id}`}
+                    className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors group"
+                  >
+                    {/* Exam Title */}
+                    <TableCell className="font-extrabold text-slate-800 dark:text-slate-205 text-sm py-4.5 px-6 leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      {exam.title}
+                    </TableCell>
+
+                    {/* Subject */}
+                    <TableCell className="py-4.5 px-4">
+                      {getSubjectBadge(exam.subject)}
+                    </TableCell>
+
+                    {/* Class & Dept */}
+                    <TableCell className="py-4.5 px-4 text-center">
+                      <div className="flex flex-col items-center gap-1 justify-center">
+                        <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/40 font-bold text-[10px]">
+                          {exam.classLevel}
                         </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{exam.duration} mins</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{exam.examType || "Objectives"}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      <span>{exam.questionIds?.length || 0}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={exam.isActive}
-                        onCheckedChange={(checked) =>
-                          toggleExamMutation.mutate({
-                            examId: exam.id,
-                            isActive: checked,
-                          })
-                        }
-                        data-testid={`switch-active-${exam.id}`}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {exam.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/admin/exams/${exam.id}`}>
+                        {exam.department && (
+                          <Badge variant="outline" className="text-[9px] uppercase font-bold border-slate-200/60 dark:border-slate-800">
+                            {exam.department}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Duration */}
+                    <TableCell className="py-4.5 px-4 text-center">
+                      <div className="inline-flex items-center gap-1.5 bg-slate-100/50 dark:bg-slate-950/40 px-2 py-1 rounded-md text-xs font-bold text-slate-655 dark:text-slate-400 border border-slate-200/10">
+                        <Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                        <span>{exam.duration}m</span>
+                      </div>
+                    </TableCell>
+
+                    {/* Exam Type */}
+                    <TableCell className="py-4.5 px-4 text-center">
+                      <Badge 
+                        variant="outline"
+                        className={`font-black text-[10px] uppercase border tracking-wider ${
+                          (exam.examType || "Objectives") === "Theory"
+                            ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40"
+                            : "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/20 dark:text-teal-400 dark:border-teal-900/40"
+                        }`}
+                      >
+                        {exam.examType || "Objectives"}
+                      </Badge>
+                    </TableCell>
+
+                    {/* Questions */}
+                    <TableCell className="py-4.5 px-4 text-center">
+                      <div className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-350 font-bold text-sm">
+                        <BookOpen className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span>{exam.questionIds?.length || 0}</span>
+                      </div>
+                    </TableCell>
+
+                    {/* Status Toggle */}
+                    <TableCell className="py-4.5 px-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Switch
+                          checked={exam.isActive}
+                          onCheckedChange={(checked) =>
+                            toggleExamMutation.mutate({
+                              examId: exam.id,
+                              isActive: checked,
+                            })
+                          }
+                          data-testid={`switch-active-${exam.id}`}
+                          className="data-[state=checked]:bg-indigo-650"
+                        />
+                        <span className={`text-xs font-bold uppercase ${exam.isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400"}`}>
+                          {exam.isActive ? "Active" : "Draft"}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell className="py-4.5 px-6 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Link href={`/admin/exams/${exam.id}`}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            data-testid={`button-view-${exam.id}`}
+                            className="h-8.5 w-8.5 rounded-xl text-indigo-650 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 dark:text-indigo-400"
+                            title="Inspect Exam Paper"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </Link>
                         <Button
                           variant="ghost"
                           size="icon"
-                          data-testid={`button-view-${exam.id}`}
+                          onClick={() => deleteExamMutation.mutate(exam.id)}
+                          data-testid={`button-delete-${exam.id}`}
+                          className="h-8.5 w-8.5 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:text-rose-450"
+                          title="Trash Paper"
                         >
-                          <Eye className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          deleteExamMutation.mutate(exam.id)
-                        }
-                        data-testid={`button-delete-${exam.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                        <ChevronRight className="h-5 w-5 text-slate-300 dark:text-slate-700 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all duration-300 shrink-0" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="mb-2 text-lg font-semibold">No Exams Yet</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Get started by creating your first exam.
+        <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-2xl">
+          <CardContent className="flex flex-col items-center py-16 text-center">
+            <BookOpen className="mb-4 h-12 w-12 text-slate-300 dark:text-slate-800" />
+            <h3 className="mb-2 text-lg font-black text-slate-700 dark:text-slate-350">No Exam Papers Yet</h3>
+            <p className="mb-5 text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+              Get started by creating your first objectives or theory question paper sheet.
             </p>
-            <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-first-exam">
-              <Plus className="mr-2 h-4 w-4" />
+            <Button 
+              onClick={() => setIsCreateOpen(true)} 
+              data-testid="button-create-first-exam"
+              className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-xl"
+            >
+              <Plus className="mr-2 h-4.5 w-4.5" />
               Create First Exam
             </Button>
           </CardContent>
@@ -208,8 +296,6 @@ export default function AdminExams() {
     </div>
   );
 }
-
-;
 
 function ExamForm({
   questions,
@@ -252,7 +338,6 @@ function ExamForm({
   });
 
   const availableQuestions = questions.filter((q) => {
-    // Basic filters
     const selectedSubjects = formData.subject
       ? formData.subject.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
@@ -266,8 +351,6 @@ function ExamForm({
       (formData.term ? q.term === formData.term : true) &&
       matchDept;
 
-
-    // Exam Type filter (checkboxes)
     if (match) {
       const type = q.examType || "Objectives";
       if (!selectedExamTypes[type]) return false;
@@ -280,15 +363,15 @@ function ExamForm({
     mutationFn: (data: typeof formData) => apiRequest("POST", "/api/exams", { ...data, assignRandomQuestions }),
     onSuccess: () => {
       toast({
-        title: "Exam created",
-        description: "The exam has been successfully created.",
+        title: "Exam Created",
+        description: "The examination paper sheet has been registered.",
       });
       onSuccess();
     },
     onError: (error: any) => {
-      const errorMsg = error.response?.data?.error || error.message || "Failed to create exam. Please try again.";
+      const errorMsg = error.response?.data?.error || error.message || "Failed to save exam paper.";
       toast({
-        title: "Error",
+        title: "Failed to Create",
         description: Array.isArray(errorMsg) ? errorMsg[0].message : errorMsg,
         variant: "destructive",
       });
@@ -301,8 +384,6 @@ function ExamForm({
     const dataToSubmit: any = { ...formData };
 
     if (formData.examType === "Theory") {
-      // In manual mode, we already have the structure in state.
-      // In auto mode, we re-generate it just to be sure (though preview should have done it).
       if (formData.theoryConfig.mode === "auto") {
         const selectedSubjects = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
         const matchingQuestions = questions.filter(q =>
@@ -321,7 +402,6 @@ function ExamForm({
         dataToSubmit.theoryConfig.structure = generateStructure(formData.theoryConfig.settings, matchingQuestions);
       }
 
-      // Extract all questionIds from structure for database indexing/querying
       const extractIds = (slots: TheorySlot[]): string[] => {
         let ids: string[] = [];
         slots.forEach(slot => {
@@ -332,18 +412,13 @@ function ExamForm({
       };
 
       dataToSubmit.questionIds = extractIds(dataToSubmit.theoryConfig.structure);
-
-      // If auto mode and no questionIds extracted, that's fine, the system will select random matching ones during session?
-      // Actually, for Theory auto-gen, we might want the server to pick questions for these slots.
-      // For now, if no questionIds are assigned, we'll store null and handle it at exam start.
     } else {
-      // Objectives logic
       const wantsServerSelection = !!formData.numberOfQuestionsToDisplay && formData.numberOfQuestionsToDisplay > 0;
 
       if (!wantsServerSelection && formData.questionIds.length === 0) {
         toast({
-          title: "No questions selected",
-          description: "Please select at least one question for the exam or set 'Number of Questions to Display'.",
+          title: "No Questions Selected",
+          description: "Please pick at least one objective question or enable server selection.",
           variant: "destructive",
         });
         return;
@@ -378,22 +453,25 @@ function ExamForm({
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="space-y-6">
       <DialogHeader>
-        <DialogTitle>Create New Exam</DialogTitle>
-        <DialogDescription>
-          Fill in the details to create a new examination
+        <DialogTitle className="text-xl font-black bg-gradient-to-r from-indigo-650 to-indigo-800 dark:from-indigo-400 dark:to-violet-400 bg-clip-text text-transparent flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-indigo-500" /> Create New Exam Paper
+        </DialogTitle>
+        <DialogDescription className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+          Configure title, duration constraints, objective/theory formats and selection.
         </DialogDescription>
       </DialogHeader>
-      <div className="space-y-6 py-6">
-        <div className="space-y-2">
-          <Label htmlFor="examType">Exam Type *</Label>
+
+      <div className="space-y-5 pt-3 max-h-[60vh] overflow-y-auto pr-2">
+        <div className="space-y-1">
+          <Label htmlFor="examType" className="text-xs font-bold text-slate-500 dark:text-slate-400">Exam Formatting Type *</Label>
           <select
             id="examType"
             value={formData.examType}
             onChange={e => setFormData({ ...formData, examType: e.target.value as any })}
             required
-            className="border rounded px-2 py-1 w-full"
+            className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
             data-testid="select-exam-type"
           >
             <option value="Objectives">Objectives (Multiple Choice)</option>
@@ -401,38 +479,31 @@ function ExamForm({
           </select>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="classLevel">Class Level *</Label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="classLevel" className="text-xs font-bold text-slate-500 dark:text-slate-400">Target Classroom *</Label>
             <select
               id="classLevel"
               value={formData.classLevel}
               onChange={e => setFormData({ ...formData, classLevel: e.target.value, subject: '', questionIds: [], department: '' })}
               required
-              className="border rounded px-2 py-1 w-full"
+              className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
               data-testid="select-exam-class-level"
             >
-              <option value="JSS1">JSS1</option>
-              <option value="JSS2">JSS2</option>
-              <option value="JSS3">JSS3</option>
-              <option value="SS1">SS1</option>
-              <option value="SS2">SS2</option>
-              <option value="SS3">SS3</option>
-              <option value="WAEC">WAEC</option>
-              <option value="NECO">NECO</option>
-              <option value="GCE WAEC">GCE WAEC</option>
-              <option value="GCE NECO">GCE NECO</option>
+              {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].map(cls => (
+                <option key={cls} value={cls}>{cls}</option>
+              ))}
             </select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="term">Term *</Label>
+          <div className="space-y-1">
+            <Label htmlFor="term" className="text-xs font-bold text-slate-500 dark:text-slate-400">School Term *</Label>
             <select
               id="term"
               value={formData.term}
               onChange={e => setFormData({ ...formData, term: e.target.value, subject: '', questionIds: [] })}
               required
-              className="border rounded px-2 py-1 w-full"
+              className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
               data-testid="select-exam-term"
             >
               <option value="First Term">First Term</option>
@@ -444,14 +515,14 @@ function ExamForm({
         </div>
 
         {["SS1", "SS2", "SS3"].includes(formData.classLevel) && (
-          <div className="space-y-2">
-            <Label htmlFor="department">Department *</Label>
+          <div className="space-y-1 animate-in fade-in duration-300">
+            <Label htmlFor="department" className="text-xs font-bold text-slate-500 dark:text-slate-400">SS Department</Label>
             <select
               id="department"
               value={formData.department}
               onChange={e => setFormData({ ...formData, department: e.target.value, questionIds: [] })}
               required
-              className="border rounded px-2 py-1 w-full"
+              className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
               data-testid="select-exam-department"
             >
               <option value="">Select Department</option>
@@ -464,42 +535,41 @@ function ExamForm({
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="title">Exam Title *</Label>
+        <div className="space-y-1">
+          <Label htmlFor="title" className="text-xs font-bold text-slate-500 dark:text-slate-400">Exam Title *</Label>
           <Input
             id="title"
-            placeholder="e.g., Mathematics Final Exam"
+            placeholder="e.g., Mathematics Second Term Examination"
             value={formData.title}
-            onChange={(e) =>
-              setFormData({ ...formData, title: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             required
+            className="h-10 border-slate-200 dark:border-slate-800 rounded-xl focus-visible:ring-indigo-550 bg-slate-50/50 dark:bg-slate-950/40"
             data-testid="input-exam-title"
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="description">Description</Label>
+        <div className="space-y-1">
+          <Label htmlFor="description" className="text-xs font-bold text-slate-500 dark:text-slate-400">Instructions / Guidelines</Label>
           <Textarea
             id="description"
-            placeholder="Brief description of the exam"
+            placeholder="Review exam parameters before student commencement."
             value={formData.description}
-            onChange={(e) =>
-              setFormData({ ...formData, description: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="border-slate-200 dark:border-slate-800 rounded-xl focus-visible:ring-indigo-550 bg-slate-50/50 dark:bg-slate-950/40 text-xs"
             data-testid="textarea-exam-description"
           />
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2 col-span-2 md:col-span-1">
-            <Label>Subject(s) *</Label>
-            <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2 bg-background">
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Subject selections */}
+          <div className="space-y-1">
+            <Label className="text-xs font-bold text-slate-500 dark:text-slate-400">Subject Filters *</Label>
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2 bg-slate-50/30 dark:bg-slate-950/30">
               {Array.from(new Set(questions.filter(q => q.classLevel === formData.classLevel).map(q => q.subject))).map(subject => {
                 const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
                 const isChecked = selectedList.includes(subject);
                 return (
-                  <div key={subject} className="flex items-center gap-2">
+                  <div key={subject} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       id={`subject-select-${subject}`}
@@ -513,23 +583,24 @@ function ExamForm({
                         }
                         setFormData({ ...formData, subject: newList.join(", "), questionIds: [] });
                       }}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                      className="rounded border-slate-300 dark:border-slate-800 text-indigo-650 focus:ring-indigo-500"
                     />
-                    <Label htmlFor={`subject-select-${subject}`} className="text-sm font-normal cursor-pointer select-none">
+                    <Label htmlFor={`subject-select-${subject}`} className="text-xs font-medium cursor-pointer select-none text-slate-700 dark:text-slate-350">
                       {subject}
                     </Label>
                   </div>
                 );
               })}
               {questions.filter(q => q.classLevel === formData.classLevel).length === 0 && (
-                <p className="text-xs text-muted-foreground italic">No questions found for this class level. Add a custom subject below.</p>
+                <p className="text-[10px] text-slate-400 italic">No existing questions found for this class.</p>
               )}
             </div>
+            {/* Custom subject */}
             <div className="flex gap-2 items-center mt-2">
               <Input
                 placeholder="Or type a custom subject name..."
                 id="custom-subject"
-                className="h-8 text-xs flex-1"
+                className="h-8.5 text-xs flex-1 rounded-lg border-slate-200 dark:border-slate-800 bg-slate-50/20"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -548,7 +619,7 @@ function ExamForm({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs"
+                className="h-8.5 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800"
                 onClick={() => {
                   const input = document.getElementById("custom-subject") as HTMLInputElement | null;
                   const val = input?.value.trim();
@@ -567,7 +638,7 @@ function ExamForm({
             {formData.subject && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {formData.subject.split(",").map(s => s.trim()).filter(Boolean).map(subj => (
-                  <Badge key={subj} variant="secondary" className="text-[10px] py-0.5 pr-1 flex items-center gap-1">
+                  <Badge key={subj} variant="secondary" className="text-[9px] py-0.5 pr-1 flex items-center gap-1 font-bold">
                     {subj}
                     <button
                       type="button"
@@ -576,7 +647,7 @@ function ExamForm({
                         const newList = selectedList.filter(s => s !== subj);
                         setFormData({ ...formData, subject: newList.join(", "), questionIds: [] });
                       }}
-                      className="text-muted-foreground hover:text-foreground rounded-full text-xs font-bold leading-none"
+                      className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full text-xs font-bold leading-none"
                     >
                       ×
                     </button>
@@ -587,69 +658,69 @@ function ExamForm({
             <input type="hidden" value={formData.subject} required />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="duration">Duration (minutes) *</Label>
-            <Input
-              id="duration"
-              type="number"
-              min="1"
-              value={formData.duration || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, duration: parseInt(e.target.value) || 0 })
-              }
-              required
-              data-testid="input-exam-duration"
-            />
+          <div className="space-y-4">
+            {/* Duration */}
+            <div className="space-y-1">
+              <Label htmlFor="duration" className="text-xs font-bold text-slate-500 dark:text-slate-400">Duration (Minutes) *</Label>
+              <Input
+                id="duration"
+                type="number"
+                min="1"
+                value={formData.duration || ""}
+                onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 0 })}
+                required
+                className="h-10 border-slate-200 dark:border-slate-800 rounded-xl focus-visible:ring-indigo-550 bg-slate-50/50 dark:bg-slate-950/40 font-bold"
+                data-testid="input-exam-duration"
+              />
+            </div>
+
+            {/* Passing Score */}
+            <div className="space-y-1">
+              <Label htmlFor="passingScore" className="text-xs font-bold text-slate-500 dark:text-slate-400">Passing Score Limit (%) *</Label>
+              <Input
+                id="passingScore"
+                type="number"
+                min="0"
+                max="100"
+                value={formData.passingScore || ""}
+                onChange={(e) => setFormData({ ...formData, passingScore: parseInt(e.target.value) || 0 })}
+                required
+                className="h-10 border-slate-200 dark:border-slate-800 rounded-xl focus-visible:ring-indigo-550 bg-slate-50/50 dark:bg-slate-950/40 font-bold"
+                data-testid="input-exam-passing-score"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="passingScore">Passing Score (%) *</Label>
-            <Input
-              id="passingScore"
-              type="number"
-              min="0"
-              max="100"
-              value={formData.passingScore || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, passingScore: parseInt(e.target.value) || 0 })
-              }
-              required
-              data-testid="input-exam-passing-score"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="numberOfQuestionsToDisplay">Number of Questions to Display</Label>
-            <Input
-              id="numberOfQuestionsToDisplay"
-              type="number"
-              min="0"
-              disabled={formData.examType === "Theory"}
-              placeholder={formData.examType === "Theory" ? "Not applicable for Theory" : `Defaults to all ${formData.questionIds.length} selected questions`}
-              value={formData.numberOfQuestionsToDisplay ?? ""}
-              onChange={(e) =>
-                setFormData({ ...formData, numberOfQuestionsToDisplay: e.target.value ? parseInt(e.target.value) : undefined })
-              }
-              data-testid="input-exam-questions-to-display"
-            />
-            <p className="text-sm text-muted-foreground">
-              {formData.examType === "Theory"
-                ? "For Theory exams, the number of questions is determined by the structure configuration."
-                : "If left blank or 0, all selected questions will be used. Otherwise, a random selection of this number of questions will be presented to the student."}
-            </p>
-          </div>
+        {/* Display limit */}
+        <div className="space-y-1">
+          <Label htmlFor="numberOfQuestionsToDisplay" className="text-xs font-bold text-slate-500 dark:text-slate-400">Question Display Pool Limit</Label>
+          <Input
+            id="numberOfQuestionsToDisplay"
+            type="number"
+            min="0"
+            disabled={formData.examType === "Theory"}
+            placeholder={formData.examType === "Theory" ? "Not applicable for Theory" : `Defaults to all ${formData.questionIds.length} selected`}
+            value={formData.numberOfQuestionsToDisplay ?? ""}
+            onChange={(e) => setFormData({ ...formData, numberOfQuestionsToDisplay: e.target.value ? parseInt(e.target.value) : undefined })}
+            className="h-10 border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/40"
+            data-testid="input-exam-questions-to-display"
+          />
+          <p className="text-[10px] text-slate-400 font-medium leading-normal mt-1">
+            If configured, the server presents a randomized subset of this limit size to the student.
+          </p>
         </div>
 
+        {/* Theory structures */}
         {formData.examType === "Theory" && (
-          <div className="space-y-6 rounded-lg border bg-muted/50 p-4">
-            <div className="flex items-center justify-between">
-              <Label className="text-lg font-semibold">Theory Configuration</Label>
-              <div className="flex items-center gap-2">
+          <div className="space-y-6 rounded-2xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/40 p-4.5 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2 mb-4">
+              <Label className="text-sm font-black text-slate-700 dark:text-slate-350">Theory Structure Builder</Label>
+              <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/40">
                 <Button
                   type="button"
-                  variant={formData.theoryConfig.mode === "manual" ? "default" : "outline"}
-                  size="sm"
+                  variant="ghost"
+                  className={`h-7 px-3 text-xs font-bold rounded-lg ${formData.theoryConfig.mode === "manual" ? "bg-white dark:bg-slate-800 text-indigo-650 shadow-sm" : "text-slate-500"}`}
                   onClick={() => setFormData(prev => ({
                     ...prev,
                     theoryConfig: { ...prev.theoryConfig, mode: "manual" }
@@ -659,8 +730,8 @@ function ExamForm({
                 </Button>
                 <Button
                   type="button"
-                  variant={formData.theoryConfig.mode === "auto" ? "default" : "outline"}
-                  size="sm"
+                  variant="ghost"
+                  className={`h-7 px-3 text-xs font-bold rounded-lg ${formData.theoryConfig.mode === "auto" ? "bg-white dark:bg-slate-800 text-indigo-650 shadow-sm" : "text-slate-500"}`}
                   onClick={() => setFormData(prev => ({
                     ...prev,
                     theoryConfig: { ...prev.theoryConfig, mode: "auto" }
@@ -672,15 +743,16 @@ function ExamForm({
             </div>
 
             {formData.theoryConfig.mode === "auto" ? (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="totalMainQuestions">Total Main Questions</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="totalMainQuestions" className="text-xs font-bold text-slate-500">Total Main Questions</Label>
                     <Input
                       id="totalMainQuestions"
                       type="number"
                       min="1"
                       value={formData.theoryConfig.settings.totalMainQuestions || 1}
+                      className="h-10 rounded-xl"
                       onChange={(e) => {
                         const total = parseInt(e.target.value) || 1;
                         setFormData(prev => {
@@ -698,9 +770,10 @@ function ExamForm({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Options</Label>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
+                    <Label className="text-xs font-bold text-slate-500">Structure Rules</Label>
+                    <div className="space-y-2 bg-white dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-655 dark:text-slate-400">Alphabet numbering (a,b,c)</span>
                         <Switch
                           checked={formData.theoryConfig.settings.includeAlphabet}
                           onCheckedChange={(checked) => setFormData(prev => {
@@ -715,9 +788,9 @@ function ExamForm({
                             };
                           })}
                         />
-                        <span className="text-sm">Include Alphabet (a, b, c)</span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-655 dark:text-slate-400">Roman numbering (i,ii,iii)</span>
                         <Switch
                           checked={formData.theoryConfig.settings.includeRoman}
                           onCheckedChange={(checked) => setFormData(prev => {
@@ -732,44 +805,26 @@ function ExamForm({
                             };
                           })}
                         />
-                        <span className="text-sm">Include Roman Numerals (i, ii, iii)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={formData.theoryConfig.settings.randomizeComplexity}
-                          onCheckedChange={(checked) => setFormData(prev => {
-                            const newSettings = { ...prev.theoryConfig.settings, randomizeComplexity: checked };
-                            return {
-                              ...prev,
-                              theoryConfig: {
-                                ...prev.theoryConfig,
-                                settings: newSettings,
-                                structure: generateStructure(newSettings)
-                              }
-                            };
-                          })}
-                        />
-                        <span className="text-sm">Randomize Complexity</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t pt-4">
-                  <Label className="mb-2 block text-sm font-medium">Auto-generated Structure Preview</Label>
-                  <div className="max-h-64 overflow-y-auto space-y-2 rounded border bg-background p-3 text-xs">
+                <div className="border-t border-slate-100 dark:border-slate-850 pt-4">
+                  <Label className="mb-2 block text-xs font-bold text-slate-500">Auto-Generated Structure Preview</Label>
+                  <div className="max-h-64 overflow-y-auto space-y-2.5 rounded-xl border bg-slate-950 p-4 text-[11px] font-mono text-slate-300">
                     {formData.theoryConfig.structure.length === 0 && (
-                      <p className="text-muted-foreground italic">No structure generated yet.</p>
+                      <p className="text-slate-500 italic">Configure rules to preview nestings.</p>
                     )}
                     {formData.theoryConfig.structure.map((main: TheorySlot) => (
                       <div key={main.id} className="space-y-1">
-                        <div className="font-bold text-primary">Question {main.label}</div>
+                        <div className="font-extrabold text-indigo-400">Question {main.label}</div>
                         {main.children.map((sub: TheorySlot) => (
                           <div key={sub.id} className="ml-4 flex items-center gap-2">
-                            <span className="font-semibold text-secondary">({sub.label})</span>
-                            <div className="flex-1 border-b border-dotted" />
+                            <span className="font-bold text-emerald-400">({sub.label})</span>
+                            <div className="flex-1 border-b border-slate-800 border-dotted" />
                             {sub.children.map((nested: TheorySlot) => (
-                              <Badge key={nested.id} variant="outline" className="text-[10px] py-0">{nested.label}.</Badge>
+                              <Badge key={nested.id} variant="outline" className="text-[9px] py-0 border-slate-800 text-slate-400">{nested.label}.</Badge>
                             ))}
                           </div>
                         ))}
@@ -794,67 +849,65 @@ function ExamForm({
               />
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="theoryInstructions">Theory Instructions</Label>
+            <div className="space-y-1">
+              <Label htmlFor="theoryInstructions" className="text-xs font-bold text-slate-500">Theory Instructions</Label>
               <Textarea
                 id="theoryInstructions"
-                placeholder="e.g., Answer all questions. Each question carries equal marks."
+                placeholder="e.g., Answer any four questions. All questions carry equal marks."
                 value={formData.theoryInstructions}
-                onChange={(e) =>
-                  setFormData({ ...formData, theoryInstructions: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, theoryInstructions: e.target.value })}
+                className="h-16 border-slate-200 dark:border-slate-800 rounded-xl"
                 data-testid="textarea-theory-instructions"
               />
             </div>
           </div>
         )}
 
-        {/* Duplicate Number of Questions to Display removed from here */}
-
-        <div className="space-y-2">
-          <Label>Question Selection Logic</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="subject-selection-logic"
-              checked={useSubjectSelectionLogic}
-              onChange={e => setUseSubjectSelectionLogic(e.target.checked)}
-              className="mr-2"
-            />
-            <Label htmlFor="subject-selection-logic">Enable: Question Bank → Select Subject → Select Questions by Subject → Sort Questions by Subject</Label>
-          </div>
+        {/* Selection logic checkbox */}
+        <div className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-950/40 p-3.5 rounded-xl border border-slate-200/40">
+          <input
+            type="checkbox"
+            id="subject-selection-logic"
+            checked={useSubjectSelectionLogic}
+            onChange={e => setUseSubjectSelectionLogic(e.target.checked)}
+            className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 h-4 w-4 shrink-0"
+          />
+          <Label htmlFor="subject-selection-logic" className="text-xs font-bold text-slate-655 dark:text-slate-400 cursor-pointer">
+            Filter: Group available questions alphabetically by Subject
+          </Label>
         </div>
 
-        <div className="space-y-2">
-          <Label>Randomize Questions</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="assign-random-questions"
-              checked={assignRandomQuestions}
-              onChange={e => setAssignRandomQuestions(e.target.checked)}
-              className="mr-2"
-            />
-            <Label htmlFor="assign-random-questions">Assign random questions to each student</Label>
-          </div>
+        {/* Randomize checkbox */}
+        <div className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-950/40 p-3.5 rounded-xl border border-slate-200/40">
+          <input
+            type="checkbox"
+            id="assign-random-questions"
+            checked={assignRandomQuestions}
+            onChange={e => setAssignRandomQuestions(e.target.checked)}
+            className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 h-4 w-4 shrink-0"
+          />
+          <Label htmlFor="assign-random-questions" className="text-xs font-bold text-slate-655 dark:text-slate-400 cursor-pointer">
+            Randomize question sheet indices for each candidate
+          </Label>
         </div>
 
+        {/* Select questions block */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Select Questions * ({availableQuestions.length} available)</Label>
-            <div>
-              <Button variant="ghost" size="sm" onClick={selectAllQuestions} data-testid="button-select-all-questions">Select All</Button>
-            </div>
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2 mb-2">
+            <Label className="text-xs font-black text-slate-700">Select Question Content ({availableQuestions.length} Match)</Label>
+            <Button type="button" variant="ghost" size="sm" onClick={selectAllQuestions} className="text-xs text-indigo-650 hover:bg-indigo-50 font-bold h-7 rounded-lg" data-testid="button-select-all-questions">
+              Select All
+            </Button>
           </div>
-          <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-4">
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-250 dark:border-slate-800 p-4 bg-slate-50/20 dark:bg-slate-950/20">
             {useSubjectSelectionLogic ? (
               <>
-                <div className="mb-2">
-                  <Label>Filter by Subject:</Label>
+                <div className="mb-3 flex items-center gap-2 text-xs">
+                  <Label className="font-bold text-slate-500">Group Focus:</Label>
                   <select
                     value={formData.subject}
                     onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                    className="ml-2 border rounded px-2 py-1"
+                    className="border rounded-lg px-2 py-1 bg-white dark:bg-slate-900 border-slate-200"
                   >
                     <option value="">All Subjects</option>
                     {Array.from(new Set(questions.map(q => q.subject))).map(subject => (
@@ -866,69 +919,70 @@ function ExamForm({
                   availableQuestions
                     .sort((a, b) => a.subject.localeCompare(b.subject))
                     .map((question) => (
-                      <div key={question.id} className="flex items-start gap-3 rounded-md border p-3 hover-elevate">
+                      <div key={question.id} className="flex items-start gap-3 rounded-xl border border-slate-100 dark:border-slate-850/60 p-3 bg-white dark:bg-slate-900 hover:border-indigo-400 hover-glow transition-all duration-300">
                         <input
                           type="checkbox"
                           id={`question-${question.id}`}
                           checked={formData.questionIds.includes(question.id)}
                           onChange={() => toggleQuestion(question.id)}
-                          className="mt-1"
+                          className="mt-1 rounded text-indigo-650 focus:ring-indigo-500 h-4 w-4 shrink-0"
                           data-testid={`checkbox-question-${question.id}`}
                         />
-                        <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
-                            <Badge variant="outline" className="text-xs">{question.examType || "Objectives"}</Badge>
-                            <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
+                        <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-xs">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                            <Badge variant="secondary" className="text-[9px] font-bold py-0">{question.subject}</Badge>
+                            <Badge variant="outline" className="text-[9px] font-bold py-0">{question.examType || "Objectives"}</Badge>
+                            <Badge variant="outline" className="text-[9px] font-bold py-0 bg-slate-50">{question.difficulty}</Badge>
                           </div>
-                          <p className="mt-1">{question.questionText}</p>
+                          <p className="font-medium text-slate-700 dark:text-slate-300 leading-normal">{question.questionText}</p>
                         </Label>
                       </div>
                     ))
                 ) : (
-                  <p className="text-center text-sm text-muted-foreground">No questions available for the selected Class Level and Subject.</p>
+                  <p className="text-center text-xs text-slate-400 py-6 italic">No questions match the current subject scope.</p>
                 )}
               </>
             ) : (
               availableQuestions.length > 0 ? (
                 availableQuestions.map((question) => (
-                  <div key={question.id} className="flex items-start gap-3 rounded-md border p-3 hover-elevate">
+                  <div key={question.id} className="flex items-start gap-3 rounded-xl border border-slate-100 dark:border-slate-850/60 p-3 bg-white dark:bg-slate-900 hover:border-indigo-400 hover-glow transition-all duration-300">
                     <input
                       type="checkbox"
                       id={`question-${question.id}`}
                       checked={formData.questionIds.includes(question.id)}
                       onChange={() => toggleQuestion(question.id)}
-                      className="mt-1"
+                      className="mt-1 rounded text-indigo-650 focus:ring-indigo-500 h-4 w-4 shrink-0"
                       data-testid={`checkbox-question-${question.id}`}
                     />
-                    <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
-                        <Badge variant="outline" className="text-xs">{question.examType || "Objectives"}</Badge>
-                        <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
+                    <Label htmlFor={`question-${question.id}`} className="flex-1 cursor-pointer text-xs">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                        <Badge variant="secondary" className="text-[9px] font-bold py-0">{question.subject}</Badge>
+                        <Badge variant="outline" className="text-[9px] font-bold py-0">{question.examType || "Objectives"}</Badge>
+                        <Badge variant="outline" className="text-[9px] font-bold py-0 bg-slate-50">{question.difficulty}</Badge>
                       </div>
-                      <p className="mt-1">{question.questionText}</p>
+                      <p className="font-medium text-slate-700 dark:text-slate-300 leading-normal">{question.questionText}</p>
                     </Label>
                   </div>
                 ))
               ) : (
-                <p className="text-center text-sm text-muted-foreground">No questions available for the selected Class Level and Subject.</p>
+                <p className="text-center text-xs text-slate-400 py-6 italic">No questions match the current classroom level.</p>
               )
             )}
           </div>
-          <p className="text-sm text-muted-foreground">{formData.questionIds.length} question(s) selected</p>
+          <p className="text-xs font-bold text-slate-500 mt-1">{formData.questionIds.length} question(s) active in exam sheet pool</p>
         </div>
       </div>
-      <DialogFooter>
-        <Button
-          type="submit"
+
+      <DialogFooter className="border-t border-slate-100 dark:border-slate-850 pt-4 gap-2">
+        <Button 
+          type="submit" 
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 h-9 rounded-xl text-xs" 
           disabled={createExamMutation.isPending}
           data-testid="button-submit-exam"
         >
-          {createExamMutation.isPending ? "Creating..." : "Create Exam"}
+          {createExamMutation.isPending ? "Drafting..." : "Create Exam Paper"}
         </Button>
       </DialogFooter>
-    </form >
+    </form>
   );
 }
-
