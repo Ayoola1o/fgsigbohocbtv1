@@ -50,7 +50,6 @@ import {
   BookOpen,
   UserCheck,
   Percent,
-  GenderMale,
   HelpCircle,
   Clock,
   ArrowUpRight
