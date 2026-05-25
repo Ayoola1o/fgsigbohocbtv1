@@ -13,7 +13,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     "--sidebar-width-icon": "3rem",
   };
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Authentication check enabled for secure hardcoded access
