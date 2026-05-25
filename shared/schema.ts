@@ -8,7 +8,7 @@ export const questionTypes = ["multiple-choice", "true-false", "short-answer", "
 export const difficultyLevels = ["easy", "medium", "hard"] as const;
 export const termOptions = ["First Term", "Second Term", "Third Term", "Others"] as const;
 export const examTypeOptions = ["Objectives", "Theory"] as const;
-export const departments = ["Science", "Commercial", "Art", "Others"] as const;
+export const departments = ["Science", "Commercial", "Art", "Others", "General"] as const;
 
 
 

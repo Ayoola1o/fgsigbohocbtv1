@@ -84,8 +84,8 @@ export default function StudentPortal() {
               {exams
                 .filter((exam) => {
                   if (!exam.isActive) return false;
-                  // If exam is general (no department), allow it
-                  if (!exam.department) return true;
+                  // If exam is general (no department or "General"), allow it for all
+                  if (!exam.department || exam.department === "General") return true;
                   // If exam is specific to a department, student must match it
                   return exam.department === student.department;
                 })

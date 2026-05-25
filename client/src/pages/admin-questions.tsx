@@ -55,7 +55,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings } from "lucide-react";
+import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, Sparkles, FileText } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
 import { Loader2 } from "lucide-react";
@@ -69,6 +69,102 @@ export default function AdminQuestions() {
   const [filterDepartment, setFilterDepartment] = useState<string>("");
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Smart Importer Dialog & Parser state
+  const [showImporterOpen, setShowImporterOpen] = useState(false);
+  const [importerTab, setImporterTab] = useState<'paste' | 'file'>('paste');
+  const [pastedText, setPastedText] = useState("");
+  const [parsedQuestions, setParsedQuestions] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // Auto Exam creation states
+  const [autoCreateExam, setAutoCreateExam] = useState(false);
+  const [examTitle, setExamTitle] = useState("");
+  const [examDuration, setExamDuration] = useState(30);
+  const [examPassingScore, setExamPassingScore] = useState(50);
+
+  const parseTextToQuestions = (text: string) => {
+    const lines = text.split(/\r?\n/);
+    const questionsList: any[] = [];
+    let currentQuestion: any = null;
+
+    for (let line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Check for Question start: "1. ", "Question 1: ", "1) "
+      const questionMatch = trimmed.match(/^(?:question\s*(\d+)[:.]?|(\d+)[\s.)\]:-]+)\s*(.+)/i);
+      if (questionMatch) {
+        if (currentQuestion) {
+          questionsList.push(currentQuestion);
+        }
+        currentQuestion = {
+          questionText: questionMatch[3].trim(),
+          options: [] as string[],
+          correctAnswer: "",
+          questionType: "multiple-choice",
+          difficulty: "medium",
+          points: 1,
+        };
+        continue;
+      }
+
+      if (!currentQuestion) continue;
+
+      // Check for correct answer start: "Answer: ", "Correct: ", "Ans. "
+      const answerMatch = trimmed.match(/^\s*(?:correct\s*|key\s*|correct\s*option\s*)?ans(?:wer)?\s*[:.-]+\s*(.+)/i);
+      if (answerMatch) {
+        currentQuestion.correctAnswer = answerMatch[1].trim();
+        continue;
+      }
+
+      // Check for options start: "A. OptionText" or "(A) OptionText" or "A) OptionText"
+      const optMatches = Array.from(trimmed.matchAll(/(?:\(?([a-eA-E])\)?[\s.)\]:-]+)\s*([^\s].*?)(?=\s+(?:\(?([a-eA-E])\)?[\s.)\]:-]+)|$)/g));
+      if (optMatches.length > 0) {
+        for (const m of optMatches) {
+          const letter = m[1].toUpperCase();
+          const optionVal = m[2].trim();
+          currentQuestion.options.push(`(${letter.toLowerCase()}) ${optionVal}`);
+        }
+        continue;
+      }
+
+      // Otherwise, treat as continuation of question text
+      if (currentQuestion.options.length === 0 && !currentQuestion.correctAnswer) {
+        currentQuestion.questionText += "\n" + trimmed;
+      }
+    }
+
+    if (currentQuestion) {
+      questionsList.push(currentQuestion);
+    }
+
+    // Normalize post-process
+    return questionsList.map(q => {
+      const lowerOpts = q.options.map((o: string) => o.toLowerCase());
+      const isTrueFalse = q.options.length === 2 &&
+        lowerOpts.some((o: string) => o.includes("true")) &&
+        lowerOpts.some((o: string) => o.includes("false"));
+
+      if (isTrueFalse) {
+        q.questionType = "true-false";
+        q.options = undefined;
+      } else if (q.options.length === 0) {
+        q.questionType = "theory";
+        q.options = undefined;
+        if (!q.correctAnswer) q.correctAnswer = "Theory Question";
+      }
+
+      return q;
+    });
+  };
+
+  useEffect(() => {
+    if (importerTab === 'paste') {
+      const parsed = parseTextToQuestions(pastedText);
+      setParsedQuestions(parsed);
+    }
+  }, [pastedText, importerTab]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditDialog, setBulkEditDialog] = useState<{
@@ -437,6 +533,112 @@ export default function AdminQuestions() {
     queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
   };
 
+  const handleSmartImportSubmit = async () => {
+    if (parsedQuestions.length === 0) {
+      toast({
+        title: "No questions parsed",
+        description: "Please check your input formatting or paste some questions first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!csvClassLevel || !csvSubject || !csvTerm || !csvExamType) {
+      toast({
+        title: "Missing Metadata",
+        description: "Please select Class Level, Subject, Term, and Exam Type.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (autoCreateExam && !examTitle) {
+      toast({
+        title: "Missing Exam Title",
+        description: "Please enter a title for the automatic exam.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsImporting(true);
+
+    try {
+      // 1. Prepare questions array
+      const questionsToUpload = parsedQuestions.map(q => ({
+        ...q,
+        classLevel: csvClassLevel,
+        subject: csvSubject,
+        term: csvTerm,
+        examType: csvExamType,
+        department: csvDepartment || undefined,
+        points: q.points || 1,
+      }));
+
+      // 2. Perform bulk upload
+      const uploadedQuestions = await apiRequest<Question[]>("POST", "/api/questions/bulk", questionsToUpload);
+      
+      toast({
+        title: "Questions Imported",
+        description: `Successfully uploaded ${uploadedQuestions.length} questions to the bank.`,
+      });
+
+      // 3. Auto create exam if checked
+      if (autoCreateExam) {
+        const questionIds = uploadedQuestions.map(q => q.id);
+        const examPayload = {
+          title: examTitle,
+          classLevel: csvClassLevel,
+          subject: csvSubject,
+          term: csvTerm,
+          department: csvDepartment || undefined,
+          examType: csvExamType,
+          duration: examDuration,
+          passingScore: examPassingScore,
+          questionIds,
+          numberOfQuestionsToDisplay: questionIds.length,
+          assignRandomQuestions: false,
+          theoryConfig: csvExamType === "Theory" ? {
+            mode: "manual",
+            structure: [{
+              sectionTitle: "Section A",
+              instruction: "Answer all questions in this section",
+              questionCount: questionIds.length,
+              requiredAnswers: questionIds.length,
+              questionIds: questionIds,
+              pointsPerQuestion: 10
+            }]
+          } : undefined
+        };
+
+        const createdExam = await apiRequest<any>("POST", "/api/exams", examPayload);
+        toast({
+          title: "Exam Created",
+          description: `Exam "${createdExam.title}" was successfully created with these questions!`,
+        });
+      }
+
+      // Cleanup
+      setPastedText("");
+      setParsedQuestions([]);
+      setAutoCreateExam(false);
+      setExamTitle("");
+      setShowImporterOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
+
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Import Failed",
+        description: err.message || "An unexpected error occurred during import.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const deleteQuestionMutation = useMutation({
     mutationFn: (questionId: string) =>
       apiRequest("DELETE", `/api/questions/${questionId}`, {}),
@@ -564,6 +766,303 @@ export default function AdminQuestions() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Dialog open={showImporterOpen} onOpenChange={setShowImporterOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/5">
+                  <Sparkles className="mr-2 h-4 w-4 text-amber-500 animate-pulse" /> Smart Importer
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto bg-card border shadow-2xl p-6">
+                <DialogHeader className="border-b pb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-6 w-6 text-amber-500 animate-bounce" />
+                    <div>
+                      <DialogTitle className="text-2xl font-bold tracking-tight bg-gradient-to-r from-amber-500 via-primary to-blue-600 bg-clip-text text-transparent">
+                        FIA Smart Question Importer
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-muted-foreground mt-1">
+                        Resiliently parse questions from Word documents, Notepad files, or plain text, and optionally auto-create an exam.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4">
+                  {/* Left Column - Configuration & Inputs (5 Cols) */}
+                  <div className="lg:col-span-5 space-y-6">
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-foreground/90 border-b pb-1">1. Global Default Settings</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Class Level *</Label>
+                          <Select value={csvClassLevel} onValueChange={setCsvClassLevel}>
+                            <SelectTrigger className="bg-background"><SelectValue placeholder="Select Class" /></SelectTrigger>
+                            <SelectContent>
+                              {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"].map(c => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Term *</Label>
+                          <Select value={csvTerm} onValueChange={setCsvTerm}>
+                            <SelectTrigger className="bg-background"><SelectValue placeholder="Select Term" /></SelectTrigger>
+                            <SelectContent>
+                              {["First Term", "Second Term", "Third Term"].map(t => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Exam Type *</Label>
+                          <Select value={csvExamType} onValueChange={setCsvExamType}>
+                            <SelectTrigger className="bg-background"><SelectValue placeholder="Select Type" /></SelectTrigger>
+                            <SelectContent>
+                              {["Objectives", "Theory"].map(t => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Subject *</Label>
+                          <Input
+                            placeholder="e.g. Mathematics"
+                            value={csvSubject}
+                            onChange={(e) => setCsvSubject(e.target.value)}
+                            className="bg-background h-10 text-sm"
+                          />
+                        </div>
+
+                        {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
+                          <div className="space-y-2 col-span-2">
+                            <Label>Department</Label>
+                            <Select value={csvDepartment} onValueChange={setCsvDepartment}>
+                              <SelectTrigger className="bg-background"><SelectValue placeholder="Select Department" /></SelectTrigger>
+                              <SelectContent>
+                                {["Science", "Commercial", "Art", "Others", "General"].map(d => (
+                                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b pb-1">
+                        <h3 className="text-sm font-semibold text-foreground/90">2. Input Content</h3>
+                        <div className="flex gap-2 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setImporterTab('paste')}
+                            className={`px-2.5 py-1 rounded transition-colors ${importerTab === 'paste' ? 'bg-primary text-primary-foreground font-medium' : 'bg-muted hover:bg-muted/80'}`}
+                          >
+                            Paste Text
+                          </button>
+                          <label className="px-2.5 py-1 rounded bg-muted hover:bg-muted/80 cursor-pointer transition-colors flex items-center gap-1">
+                            <Upload className="h-3 w-3" /> Load File (.txt / .csv)
+                            <input
+                              type="file"
+                              accept=".txt,.csv"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const text = await file.text();
+                                setPastedText(text);
+                                setImporterTab('paste');
+                                toast({
+                                  title: "File Loaded",
+                                  description: `Loaded file "${file.name}" for parsing.`,
+                                });
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {importerTab === 'paste' ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            placeholder={`Paste exam document here. Example format:\n\n1. What is the CPU?\nA. Core Processing Unit\nB. Central Processing Unit\nC. Centralised Processor\nD. Computer Power Unit\nAnswer: B`}
+                            value={pastedText}
+                            onChange={(e) => setPastedText(e.target.value)}
+                            className="min-h-[220px] max-h-[300px] font-mono text-xs bg-background resize-y"
+                          />
+                          <p className="text-[10px] text-muted-foreground italic leading-normal">
+                            * Supports standard multiple choice option blocks (A, B, C, D) and answer tags. Unlabeled questions default to Theory.
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Auto Exam creation form */}
+                    <div className="space-y-4 p-4 border border-primary/20 bg-primary/5 rounded-xl transition-all duration-300">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <Label className="text-sm font-semibold text-foreground/90 cursor-pointer" htmlFor="auto-exam-check">
+                            3. Auto-Create Exam
+                          </Label>
+                          <span className="text-[11px] text-muted-foreground mt-0.5">
+                            Automatically create a CBT exam with these questions.
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          id="auto-exam-check"
+                          checked={autoCreateExam}
+                          onChange={(e) => setAutoCreateExam(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        />
+                      </div>
+
+                      {autoCreateExam && (
+                        <div className="space-y-4 pt-3 border-t border-primary/10 grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="space-y-1 col-span-2">
+                            <Label className="text-xs">Exam Title *</Label>
+                            <Input
+                              placeholder="e.g. Midterm General Mathematics"
+                              value={examTitle}
+                              onChange={(e) => setExamTitle(e.target.value)}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-xs">Duration (mins)</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={examDuration}
+                              onChange={(e) => setExamDuration(parseInt(e.target.value) || 0)}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-xs">Passing Score (%)</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              max="100"
+                              value={examPassingScore}
+                              onChange={(e) => setExamPassingScore(parseInt(e.target.value) || 0)}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column - Live Parser Preview (7 Cols) */}
+                  <div className="lg:col-span-7 flex flex-col h-full border rounded-xl overflow-hidden bg-background/50">
+                    <div className="bg-muted px-4 py-3 border-b flex justify-between items-center flex-shrink-0">
+                      <span className="text-sm font-semibold text-foreground/80 flex items-center gap-2">
+                        Live Preview <Badge variant="secondary">{parsedQuestions.length} parsed</Badge>
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">Updates in real-time</span>
+                    </div>
+
+                    <div className="p-4 overflow-y-auto space-y-4 max-h-[50vh] min-h-[300px] lg:max-h-[60vh] flex-1">
+                      {parsedQuestions.length > 0 ? (
+                        parsedQuestions.map((q, idx) => (
+                          <Card key={idx} className="border-l-4 border-l-primary/60 hover:shadow transition-shadow duration-200">
+                            <CardContent className="p-4 space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                                  <span>Q{idx + 1}.</span>
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1.5 uppercase font-medium bg-muted/30">
+                                    {q.questionType}
+                                  </Badge>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground">{q.difficulty} | {q.points} pt</span>
+                              </div>
+                              
+                              <p className="text-sm font-medium leading-relaxed text-foreground/90 whitespace-pre-wrap">
+                                {q.questionText}
+                              </p>
+
+                              {q.options && q.options.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                                  {q.options.map((opt: string, optIdx: number) => {
+                                    // Parse letter prefix to check correctness
+                                    const lowerOpt = opt.toLowerCase();
+                                    const lowerAns = q.correctAnswer?.toLowerCase().trim();
+                                    
+                                    const isCorrect = lowerAns && (
+                                      lowerOpt.startsWith(`(${lowerAns})`) || 
+                                      lowerOpt.startsWith(`${lowerAns}.`) || 
+                                      lowerOpt.startsWith(`${lowerAns})`) ||
+                                      lowerOpt.replace(/^\([a-e]\)\s*/, "").trim() === lowerAns
+                                    );
+
+                                    return (
+                                      <div 
+                                        key={optIdx} 
+                                        className={`text-xs px-2.5 py-1.5 rounded-md border flex items-center gap-2 transition-colors ${
+                                          isCorrect 
+                                            ? 'bg-green-500/10 border-green-500/40 text-green-700 dark:text-green-400 font-medium shadow-sm' 
+                                            : 'bg-background/80 border-muted text-muted-foreground'
+                                        }`}
+                                      >
+                                        <span className="font-semibold">{opt.substring(0, 3)}</span>
+                                        <span className="flex-1">{opt.substring(4)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {q.correctAnswer && (
+                                <div className="text-xs flex items-center gap-1.5 text-foreground/70 bg-muted/40 px-2 py-1.5 rounded-md w-fit">
+                                  <span className="font-semibold text-foreground/80">Answer Key:</span>
+                                  <span className="font-mono text-primary font-bold px-1 py-0.5 rounded bg-background border shadow-sm">
+                                    {q.correctAnswer}
+                                  </span>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-16 text-center text-muted-foreground space-y-3">
+                          <FileText className="h-10 w-10 text-muted-foreground/40 stroke-[1.5]" />
+                          <div>
+                            <p className="font-medium text-sm">No parsed questions yet</p>
+                            <p className="text-xs text-muted-foreground max-w-sm mt-1">
+                              Start typing, paste an exam document, or load a text file to see the interactive live preview here.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter className="border-t pt-4 mt-6">
+                  <Button variant="outline" onClick={() => setShowImporterOpen(false)} disabled={isImporting}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSmartImportSubmit} 
+                    disabled={isImporting || parsedQuestions.length === 0}
+                    className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6 shadow-lg shadow-primary/20"
+                  >
+                    {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {autoCreateExam ? "Import & Create Exam" : `Import ${parsedQuestions.length} Questions`}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-question">
@@ -631,6 +1130,7 @@ export default function AdminQuestions() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">All Departments</SelectItem>
+                <SelectItem value="General">General</SelectItem>
                 <SelectItem value="Science">Science</SelectItem>
                 <SelectItem value="Commercial">Commercial</SelectItem>
                 <SelectItem value="Art">Art</SelectItem>
@@ -719,6 +1219,7 @@ export default function AdminQuestions() {
                   className="border rounded px-2 py-1 w-full"
                 >
                   <option value="">Select Department</option>
+                  <option value="General">General</option>
                   <option value="Science">Science</option>
                   <option value="Commercial">Commercial</option>
                   <option value="Art">Art</option>
@@ -1318,7 +1819,7 @@ export default function AdminQuestions() {
                 >
                   <SelectTrigger><SelectValue placeholder="Select Department" /></SelectTrigger>
                   <SelectContent>
-                    {["Science", "Commercial", "Art", "Others"].map(d => (
+                    {["Science", "Commercial", "Art", "Others", "General"].map(d => (
                       <SelectItem key={d} value={d}>{d}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1601,6 +2102,7 @@ function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initi
               <SelectValue placeholder="Select dept" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="General">General</SelectItem>
               <SelectItem value="Science">Science</SelectItem>
               <SelectItem value="Commercial">Commercial</SelectItem>
               <SelectItem value="Art">Art</SelectItem>

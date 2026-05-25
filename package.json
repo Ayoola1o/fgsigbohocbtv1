@@ -2,7 +2,7 @@
   "name": "faith-immaculate-academy-cbt",
   "version": "1.0.0",
   "type": "module",
-  "license": "MIT",
+  "license": "Azahadinc Dev",
   "description": "Faith Immaculate Academy CBT - Computer-based testing system",
   "scripts": {
     "dev": "tsx server/index.ts",

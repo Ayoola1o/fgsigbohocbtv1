@@ -253,10 +253,18 @@ function ExamForm({
 
   const availableQuestions = questions.filter((q) => {
     // Basic filters
-    let match = (formData.subject ? q.subject === formData.subject : true) &&
+    const selectedSubjects = formData.subject
+      ? formData.subject.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const matchDept = !formData.department || formData.department === "General"
+      ? (!q.department || q.department === "General")
+      : (!q.department || q.department === "General" || q.department === formData.department);
+
+    let match = (selectedSubjects.length > 0 ? selectedSubjects.includes(q.subject) : true) &&
       (formData.classLevel ? q.classLevel === formData.classLevel : true) &&
       (formData.term ? q.term === formData.term : true) &&
-      (formData.department ? q.department === formData.department : true);
+      matchDept;
 
 
     // Exam Type filter (checkboxes)
@@ -296,10 +304,11 @@ function ExamForm({
       // In manual mode, we already have the structure in state.
       // In auto mode, we re-generate it just to be sure (though preview should have done it).
       if (formData.theoryConfig.mode === "auto") {
+        const selectedSubjects = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
         const matchingQuestions = questions.filter(q =>
           (q.examType === "Theory" || q.questionType === "theory") &&
           q.classLevel === formData.classLevel &&
-          q.subject === formData.subject
+          (selectedSubjects.length === 0 || selectedSubjects.includes(q.subject))
         );
 
         if (matchingQuestions.length === 0) {
@@ -446,6 +455,7 @@ function ExamForm({
               data-testid="select-exam-department"
             >
               <option value="">Select Department</option>
+              <option value="General">General</option>
               <option value="Science">Science</option>
               <option value="Commercial">Commercial</option>
               <option value="Art">Art</option>
@@ -482,21 +492,99 @@ function ExamForm({
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="subject">Subject *</Label>
-            <select
-              id="subject"
-              value={formData.subject}
-              onChange={e => setFormData({ ...formData, subject: e.target.value, questionIds: [] })}
-              required
-              className="border rounded px-2 py-1 w-full"
-              data-testid="select-exam-subject"
-            >
-              <option value="">Select Subject</option>
-              {Array.from(new Set(questions.filter(q => q.classLevel === formData.classLevel).map(q => q.subject))).map(subject => (
-                <option key={subject} value={subject}>{subject}</option>
-              ))}
-            </select>
+          <div className="space-y-2 col-span-2 md:col-span-1">
+            <Label>Subject(s) *</Label>
+            <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2 bg-background">
+              {Array.from(new Set(questions.filter(q => q.classLevel === formData.classLevel).map(q => q.subject))).map(subject => {
+                const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
+                const isChecked = selectedList.includes(subject);
+                return (
+                  <div key={subject} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id={`subject-select-${subject}`}
+                      checked={isChecked}
+                      onChange={(e) => {
+                        let newList;
+                        if (e.target.checked) {
+                          newList = [...selectedList, subject];
+                        } else {
+                          newList = selectedList.filter(s => s !== subject);
+                        }
+                        setFormData({ ...formData, subject: newList.join(", "), questionIds: [] });
+                      }}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor={`subject-select-${subject}`} className="text-sm font-normal cursor-pointer select-none">
+                      {subject}
+                    </Label>
+                  </div>
+                );
+              })}
+              {questions.filter(q => q.classLevel === formData.classLevel).length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No questions found for this class level. Add a custom subject below.</p>
+              )}
+            </div>
+            <div className="flex gap-2 items-center mt-2">
+              <Input
+                placeholder="Or type a custom subject name..."
+                id="custom-subject"
+                className="h-8 text-xs flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = e.currentTarget.value.trim();
+                    if (val) {
+                      const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
+                      if (!selectedList.includes(val)) {
+                        setFormData({ ...formData, subject: [...selectedList, val].join(", "), questionIds: [] });
+                      }
+                      e.currentTarget.value = "";
+                    }
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => {
+                  const input = document.getElementById("custom-subject") as HTMLInputElement | null;
+                  const val = input?.value.trim();
+                  if (val) {
+                    const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
+                    if (!selectedList.includes(val)) {
+                      setFormData({ ...formData, subject: [...selectedList, val].join(", "), questionIds: [] });
+                    }
+                    if (input) input.value = "";
+                  }
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {formData.subject && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {formData.subject.split(",").map(s => s.trim()).filter(Boolean).map(subj => (
+                  <Badge key={subj} variant="secondary" className="text-[10px] py-0.5 pr-1 flex items-center gap-1">
+                    {subj}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
+                        const newList = selectedList.filter(s => s !== subj);
+                        setFormData({ ...formData, subject: newList.join(", "), questionIds: [] });
+                      }}
+                      className="text-muted-foreground hover:text-foreground rounded-full text-xs font-bold leading-none"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <input type="hidden" value={formData.subject} required />
           </div>
 
           <div className="space-y-2">
@@ -697,7 +785,12 @@ function ExamForm({
                   ...prev,
                   theoryConfig: { ...prev.theoryConfig, structure }
                 }))}
-                availableQuestions={questions.filter(q => q.examType === "Theory" && q.classLevel === formData.classLevel && q.subject === formData.subject)}
+                availableQuestions={questions.filter(q => {
+                  const selectedSubjects = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
+                  return q.examType === "Theory" &&
+                         q.classLevel === formData.classLevel &&
+                         (selectedSubjects.length === 0 || selectedSubjects.includes(q.subject));
+                })}
               />
             )}
 

@@ -161,9 +161,12 @@ export const createExam = async (exam: InsertExam): Promise<Exam> => {
 
     if ((!exam.questionIds || exam.questionIds.length === 0) && exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0) {
         const allQuestions = await getQuestions();
+        const examSubjects = exam.subject
+            ? exam.subject.split(",").map((s) => s.trim()).filter(Boolean)
+            : [];
         const pool = allQuestions.filter(q =>
             q.classLevel === exam.classLevel &&
-            (!exam.subject || q.subject === exam.subject) &&
+            (examSubjects.length === 0 || examSubjects.includes(q.subject)) &&
             (!exam.department || q.department === exam.department)
         );
 
