@@ -117,6 +117,27 @@ export async function apiRequest<T = unknown>(
     return fb.deleteStudent(match.id) as T;
   }
 
+  // Results Reset
+  match = matchPath("/api/results/:id/reset", url);
+  if (match && method === "POST") {
+    const result = await fb.getResult(match.id);
+    if (result) {
+      await fb.deleteResult(match.id);
+      await fb.deleteExamSessionsForStudent(result.studentId, result.examId);
+    }
+    return { ok: true } as T;
+  }
+  match = matchPath("/api/results/:id", url);
+  if (match && method === "DELETE") {
+    return fb.deleteResult(match.id) as T;
+  }
+
+  // Student Exam Block
+  match = matchPath("/api/students/:id/toggle-block", url);
+  if (match && method === "POST") {
+    return fb.toggleStudentExamBlock(match.id, data.examId, data.blockState) as T;
+  }
+
   throw new Error(`Unhandled API request: ${method} ${url}`);
 }
 

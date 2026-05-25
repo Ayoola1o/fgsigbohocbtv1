@@ -43,6 +43,17 @@ export default function ExamStart() {
     }
   });
 
+  const { data: students = [] } = useQuery<Student[]>({
+    queryKey: ["/api/students"],
+  });
+  const currentStudent = students.find(s => s.studentId === studentId);
+
+  const { data: results = [] } = useQuery<Result[]>({
+    queryKey: ["/api/results"],
+  });
+  const hasTaken = results.some(r => r.examId === examId && r.studentId === studentId);
+  const isBlocked = currentStudent?.blockedExams?.includes(examId!) || false;
+
   const startExamMutation = useMutation({
     mutationFn: async () => {
       console.log("startExamMutation: Starting creation of session...");
@@ -214,14 +225,30 @@ export default function ExamStart() {
                 )}
               </div>
 
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Once you start the exam, you cannot pause or restart it. Make sure
-                  you have a stable internet connection and enough time to complete
-                  it.
-                </AlertDescription>
-              </Alert>
+              {isBlocked ? (
+                <Alert variant="destructive" className="border-rose-200 bg-rose-50 text-rose-800">
+                  <AlertTriangle className="h-4 w-4 text-rose-600" />
+                  <AlertDescription className="font-semibold">
+                    This examination has been locked/blocked for you by the administrator. Please contact your coordinator to request access.
+                  </AlertDescription>
+                </Alert>
+              ) : hasTaken ? (
+                <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800">
+                  <CheckCircle className="h-4 w-4 text-emerald-600 animate-pulse" />
+                  <AlertDescription className="font-semibold">
+                    You have already completed this examination. Re-attempts are not permitted unless reset by the administrator.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Once you start the exam, you cannot pause or restart it. Make sure
+                    you have a stable internet connection and enough time to complete
+                    it.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="flex gap-4">
                 <Button
@@ -236,11 +263,11 @@ export default function ExamStart() {
                     console.log("Begin Exam Clicked. Mutation status:", startExamMutation.status);
                     startExamMutation.mutate();
                   }}
-                  disabled={startExamMutation.isPending}
-                  className="flex-1"
+                  disabled={startExamMutation.isPending || isBlocked || hasTaken}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
                   data-testid="button-begin-exam"
                 >
-                  {startExamMutation.isPending ? "Starting..." : "Begin Exam"}
+                  {startExamMutation.isPending ? "Starting..." : isBlocked ? "Blocked by Admin" : hasTaken ? "Exam Already Taken" : "Begin Exam"}
                 </Button>
               </div>
             </CardContent>

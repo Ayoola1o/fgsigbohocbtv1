@@ -416,3 +416,38 @@ export const getResult = async (id: string): Promise<Result | null> => {
     const d = await getDoc(doc(db, "results", id));
     return d.exists() ? docToData<Result>(d) : null;
 };
+
+export const deleteResult = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, "results", id));
+};
+
+export const deleteExamSessionsForStudent = async (studentId: string, examId: string): Promise<void> => {
+    const q = query(
+        collection(db, "exam_sessions"),
+        where("studentId", "==", studentId),
+        where("examId", "==", examId)
+    );
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(d => {
+        batch.delete(d.ref);
+    });
+    await batch.commit();
+};
+
+export const toggleStudentExamBlock = async (studentId: string, examId: string, blockState: boolean): Promise<void> => {
+    const q = query(collection(db, "students"), where("studentId", "==", studentId));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) throw new Error("Student not found");
+    const studentDoc = snapshot.docs[0];
+    const data = docToData<Student>(studentDoc);
+    let blockedExams = data.blockedExams || [];
+    if (blockState) {
+        if (!blockedExams.includes(examId)) {
+            blockedExams.push(examId);
+        }
+    } else {
+        blockedExams = blockedExams.filter(id => id !== examId);
+    }
+    await updateDoc(studentDoc.ref, { blockedExams });
+};

@@ -16,22 +16,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Authentication check removed to allow direct access
-  /*
+  // Authentication check enabled for secure hardcoded access
   useEffect(() => {
     const userStr = localStorage.getItem("admin_user");
     if (!userStr) {
       setLocation("/admin/login");
     }
   }, [setLocation]);
-  */
 
   async function handleLogout() {
     try {
       setIsLoggingOut(true);
-      await apiRequest("POST", "/api/admin/logout");
+      await apiRequest("POST", "/api/admin/logout").catch(() => {});
+      localStorage.removeItem("admin_user");
       toast({ title: "Logged out", description: "You have been logged out." });
-      setLocation("/");
+      setLocation("/admin/login");
     } catch (err) {
       console.error(err);
       toast({ title: "Logout failed", description: "Please try again." });
