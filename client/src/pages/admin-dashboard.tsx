@@ -45,8 +45,8 @@ export default function AdminDashboard() {
     : 0;
 
   const recentResults = results
-    ?.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-    .slice(0, 5);
+    ? [...results].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()).slice(0, 5)
+    : [];
 
   const subjectStats = exams?.reduce((acc, exam) => {
     const subjectResults = results?.filter((r) => r.examId === exam.id) || [];

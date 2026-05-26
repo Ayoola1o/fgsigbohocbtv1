@@ -535,7 +535,7 @@ export default function AdminStudentProfile() {
                          </TableHeader>
                          <TableBody>
                              {studentResults.length > 0 ? (
-                                 studentResults
+                                 [...studentResults]
                                      .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
                                      .map((result) => {
                                          const remark = getGradeRemark(result.percentage);
