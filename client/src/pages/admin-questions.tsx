@@ -55,7 +55,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, Sparkles, FileText } from "lucide-react";
+import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, Sparkles, FileText, BookOpen } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
 import { Loader2 } from "lucide-react";
@@ -676,7 +676,7 @@ export default function AdminQuestions() {
   });
 
 
-  const questionsBySubject = filteredQuestions
+  const questionsBySubject: Record<string, { questions: Question[]; classLevels: Set<string> }> = filteredQuestions
     ? filteredQuestions.reduce((acc, question) => {
       const subject = question.subject || "Uncategorized";
       if (!acc[subject]) {
@@ -881,21 +881,46 @@ export default function AdminQuestions() {
                           Paste Text
                         </button>
                         <label className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-550 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700 cursor-pointer transition-all flex items-center gap-1 font-bold">
-                          <Upload className="h-3 w-3" /> Load File (.txt / .csv)
+                          <Upload className="h-3 w-3" /> Load File (.txt / .csv / .docx / .doc)
                           <input
                             type="file"
-                            accept=".txt,.csv"
+                            accept=".txt,.csv,.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
                             className="hidden"
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
-                              const text = await file.text();
-                              setPastedText(text);
-                              setImporterTab('paste');
-                              toast({
-                                title: "File Loaded",
-                                description: `Loaded file "${file.name}" for parsing.`,
-                              });
+                              
+                              if (file.name.toLowerCase().endsWith(".docx") || file.name.toLowerCase().endsWith(".doc")) {
+                                try {
+                                  const arrayBuffer = await file.arrayBuffer();
+                                  if (!(window as any).mammoth) {
+                                    throw new Error("Word parser library not yet loaded. Please try again in a moment.");
+                                  }
+                                  const result = await (window as any).mammoth.extractRawText({ arrayBuffer });
+                                  const text = result.value;
+                                  setPastedText(text);
+                                  setImporterTab('paste');
+                                  toast({
+                                    title: "Word File Loaded",
+                                    description: `Extracted text from "${file.name}" successfully.`,
+                                  });
+                                } catch (error: any) {
+                                  console.error("Error reading Word file:", error);
+                                  toast({
+                                    title: "Error Reading Word Document",
+                                    description: error.message || "Failed to extract text. If it is an old binary .doc file, please convert it to .docx first or copy-paste the text directly.",
+                                    variant: "destructive",
+                                  });
+                                }
+                              } else {
+                                const text = await file.text();
+                                setPastedText(text);
+                                setImporterTab('paste');
+                                toast({
+                                  title: "File Loaded",
+                                  description: `Loaded file "${file.name}" for parsing.`,
+                                });
+                              }
                             }}
                           />
                         </label>
@@ -1338,7 +1363,7 @@ export default function AdminQuestions() {
                 className="h-10 rounded-xl"
                 onChange={async (e) => {
                   if (!e.target.files?.length) return;
-                  const files = Array.from(e.target.files);
+                  const files = Array.from(e.target.files) as File[];
                   const newMap = { ...uploadedImageMap };
                   let count = 0;
 

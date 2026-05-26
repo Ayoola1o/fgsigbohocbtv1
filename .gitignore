@@ -1,4 +1,5 @@
 node_modules
+old_node_modules
 dist
 .DS_Store
 server/public
@@ -7,6 +8,8 @@ vite.config.ts.*
 *.tar.gz
 .env
 .env.local
+node_modules/
+old_node_modules/
 
 # Local Data & Uploads
 uploads/

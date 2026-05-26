@@ -42,7 +42,7 @@ export default function StudentPortal() {
     enabled: !!student,
   });
 
-  const freshestStudent = students.find(s => s.studentId === student?.studentId) || student;
+  const freshestStudent = (student ? (students.find(s => s.studentId === student?.studentId) || student) : null)!;
 
   const { data: results = [] } = useQuery<Result[]>({
     queryKey: ["/api/results"],

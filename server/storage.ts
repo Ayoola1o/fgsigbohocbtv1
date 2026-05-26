@@ -340,6 +340,7 @@ export class MemStorage implements IStorage {
       classLevel: insertStudent.classLevel,
       sex: insertStudent.sex || null,
       department: insertStudent.department || null,
+      blockedExams: (insertStudent as any).blockedExams || null,
     };
     this.students.set(id, student);
     this.saveStudentsToDisk();

@@ -10,6 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Exam, ExamSession, Student, Result } from "@shared/schema";
 import { createExamSession, getExam } from "@/lib/firebase-api";
+import { Badge } from "@/components/ui/badge";
 
 export default function ExamStart() {
   const params = useParams<{ id: string }>();
