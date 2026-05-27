@@ -4,6 +4,8 @@ import {
   HelpCircle,
   BarChart3,
   GraduationCap,
+  TrendingUp,
+  Settings,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -49,6 +51,18 @@ const menuItems = [
     url: "/admin/students",
     icon: GraduationCap,
     testId: "link-students",
+  },
+  {
+    title: "Analytics",
+    url: "/admin/analytics",
+    icon: TrendingUp,
+    testId: "link-analytics",
+  },
+  {
+    title: "Settings",
+    url: "/admin/settings",
+    icon: Settings,
+    testId: "link-settings",
   },
 ];
 

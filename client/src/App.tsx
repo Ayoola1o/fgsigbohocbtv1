@@ -20,6 +20,10 @@ import AdminResults from "@/pages/admin-results";
 import AdminStudents from "@/pages/admin-students";
 import AdminStudentProfile from "@/pages/admin-student-profile";
 import AdminLoginPage from "@/pages/admin-login";
+import AdminAnalytics from "@/pages/admin-analytics";
+import AdminSettings from "@/pages/admin-settings";
+import AdminAnalytics from "@/pages/admin-analytics";
+import AdminSettings from "@/pages/admin-settings";
 
 function Router() {
   return (
@@ -37,6 +41,16 @@ function Router() {
       <Route path="/admin">
         <AdminLayout>
           <AdminDashboard />
+        </AdminLayout>
+      </Route>
+      <Route path="/admin/analytics">
+        <AdminLayout>
+          <AdminAnalytics />
+        </AdminLayout>
+      </Route>
+      <Route path="/admin/settings">
+        <AdminLayout>
+          <AdminSettings />
         </AdminLayout>
       </Route>
       <Route path="/admin/exams">

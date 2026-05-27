@@ -12,6 +12,8 @@ import multer from "multer";
 import path from "path";
 import express from "express";
 import fs from "fs";
+import { extractTextFromFile } from "./docx-reader";
+import { GoogleGenAI } from "@google/genai";
 
 // Configure multer for local storage
 // Configure multer for local storage
@@ -205,6 +207,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to import questions" });
     }
   });
+
+  // Smart AI Question Importer Route
+  app.post("/api/questions/import-ai", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Metadata fallback from query / body
+      const defaultMeta = {
+        classLevel: req.query.classLevel || req.body.classLevel || "SS3",
+        term: req.query.term || req.body.term || "First Term",
+        examType: req.query.examType || req.body.examType || "Examination",
+        subject: req.query.subject || req.body.subject || "Biology",
+        department: req.query.department || req.body.department || "General",
+      };
+
+      console.log("AI Importer: Extracting text from file:", req.file.path);
+      const rawText = await extractTextFromFile(req.file.path);
+      console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.warn("AI Importer: process.env.GEMINI_API_KEY is not defined. Falling back to local smart regex parser!");
+        const parsed = fallbackParseQuestions(rawText, defaultMeta);
+        return res.json(parsed);
+      }
+
+      console.log("AI Importer: Sending raw text to Gemini AI...");
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const examBatchSchema = {
+        type: "OBJECT",
+        properties: {
+          questions: {
+            type: "ARRAY",
+            description: "A list of exam questions extracted from the document.",
+            items: {
+              type: "OBJECT",
+              properties: {
+                classLevel: { type: "STRING" },
+                term: { type: "STRING" },
+                examType: { type: "STRING" },
+                subject: { type: "STRING" },
+                questionText: { type: "STRING" },
+                questionType: { type: "STRING", description: "Must be 'multiple_choice' or 'fill_in_the_blank'" },
+                difficulty: { type: "STRING", description: "Must be 'Easy', 'Medium', or 'Hard'" },
+                points: { type: "INTEGER" },
+                correctAnswer: { type: "STRING", description: "The exact text of the correct option or key" },
+                options: {
+                  type: "ARRAY",
+                  items: { type: "STRING" },
+                  description: "An array of all available choices (empty if fill_in_the_blank)"
+                }
+              },
+              required: ["classLevel", "term", "examType", "subject", "questionText", "questionType", "difficulty", "points", "correctAnswer", "options"]
+            }
+          }
+        },
+        required: ["questions"]
+      };
+
+      const prompt = `
+      Analyze the following messy text from a teacher's exam paper document. 
+      Extract all the questions, their options, and identify the correct answer.
+      
+      For fields like classLevel, term, examType, and subject, if they are not explicitly 
+      stated in the text for an individual question, fallback to these default values:
+      - classLevel: ${defaultMeta.classLevel}
+      - term: ${defaultMeta.term}
+      - examType: ${defaultMeta.examType}
+      - subject: ${defaultMeta.subject}
+      
+      Document text to parse:
+      ---
+      ${rawText}
+      ---
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: examBatchSchema,
+          temperature: 0.1
+        }
+      });
+
+      console.log("AI Importer: Received successful structured response from Gemini AI.");
+      const parsedData = JSON.parse(response.text());
+      res.json(parsedData);
+    } catch (error) {
+      console.error("AI Importer Error:", error);
+      res.status(500).json({ 
+        error: "Failed to parse questions with AI", 
+        details: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  // Local Smart Regex Fallback Parser
+  function fallbackParseQuestions(text: string, defaultMeta: any) {
+    const questions: any[] = [];
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    
+    let currentQuestion: any = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Match "1. What is...", "Q2: ...", "3) ..."
+      const questionMatch = line.match(/^(\d+)[\.\):]?\s*(.*)/);
+      
+      if (questionMatch) {
+        if (currentQuestion) {
+          questions.push(currentQuestion);
+        }
+        currentQuestion = {
+          classLevel: defaultMeta.classLevel || "SS3",
+          term: defaultMeta.term || "First Term",
+          examType: defaultMeta.examType || "Examination",
+          subject: defaultMeta.subject || "Biology",
+          questionText: questionMatch[2],
+          questionType: "multiple_choice",
+          difficulty: "Medium",
+          points: 1,
+          correctAnswer: "",
+          options: []
+        };
+      } else if (currentQuestion) {
+        // Match "A. Option", "b) Option", "[C] Option"
+        const optionMatch = line.match(/^[\[\(]?([A-Da-d])[\.\]\)]\s*(.*)/);
+        if (optionMatch) {
+          const optText = optionMatch[2].replace(/\(correct\)/i, "").replace(/\*/g, "").trim();
+          currentQuestion.options.push(optText);
+          if (line.toLowerCase().includes("(correct)") || line.toLowerCase().includes("*")) {
+            currentQuestion.correctAnswer = optText;
+          }
+        } else {
+          currentQuestion.questionText += " " + line;
+        }
+      }
+    }
+    
+    if (currentQuestion) {
+      questions.push(currentQuestion);
+    }
+    
+    // Clean up answers and options
+    questions.forEach(q => {
+      if (q.options.length === 0) {
+        q.questionType = "fill_in_the_blank";
+        q.correctAnswer = q.correctAnswer || "Answer";
+      } else {
+        if (!q.correctAnswer) {
+          q.correctAnswer = q.options[0];
+        }
+      }
+    });
+    
+    return { questions };
+  }
+
 
   app.delete("/api/questions/:id", async (req, res) => {
     try {
