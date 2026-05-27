@@ -211,10 +211,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Smart AI Question Importer Route
   app.post("/api/questions/import-ai", upload.single("file"), async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
       // Metadata fallback from query / body
       const defaultMeta = {
         classLevel: req.query.classLevel || req.body.classLevel || "SS3",
@@ -224,8 +220,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         department: req.query.department || req.body.department || "General",
       };
 
-      console.log("AI Importer: Extracting text from file:", req.file.path);
-      const rawText = await extractTextFromFile(req.file.path);
+      let rawText = "";
+      if (req.file) {
+        console.log("AI Importer: Extracting text from file:", req.file.path);
+        rawText = await extractTextFromFile(req.file.path);
+      } else if (req.body.rawText) {
+        console.log("AI Importer: Extracting text from direct JSON request body.");
+        rawText = req.body.rawText;
+      } else {
+        return res.status(400).json({ error: "No file uploaded and no direct rawText provided" });
+      }
+
+      console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
       console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
 
       const apiKey = process.env.GEMINI_API_KEY;
@@ -297,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log("AI Importer: Received successful structured response from Gemini AI.");
-      const parsedData = JSON.parse(response.text());
+      const parsedData = JSON.parse(response.text || '{}');
       res.json(parsedData);
     } catch (error) {
       console.error("AI Importer Error:", error);

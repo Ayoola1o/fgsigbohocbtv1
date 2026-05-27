@@ -22,8 +22,6 @@ import AdminStudentProfile from "@/pages/admin-student-profile";
 import AdminLoginPage from "@/pages/admin-login";
 import AdminAnalytics from "@/pages/admin-analytics";
 import AdminSettings from "@/pages/admin-settings";
-import AdminAnalytics from "@/pages/admin-analytics";
-import AdminSettings from "@/pages/admin-settings";
 
 function Router() {
   return (

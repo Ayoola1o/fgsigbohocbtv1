@@ -55,7 +55,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, Sparkles, FileText, BookOpen } from "lucide-react";
+import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, Sparkles, FileText, BookOpen, AlertTriangle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
 import { Loader2 } from "lucide-react";

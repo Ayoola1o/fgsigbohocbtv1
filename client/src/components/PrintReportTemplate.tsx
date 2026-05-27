@@ -40,6 +40,12 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     onPrint,
     showPrintButton = true
 }) => {
+    // Read reactive local storage settings for printing
+    const omitExamTitlesSetting = localStorage.getItem("fia_cbt_omit_exam_titles") === "true";
+    const principalSignatureSetting = localStorage.getItem("fia_cbt_principal_signature") !== "false"; // default true
+    const schoolSloganSetting = localStorage.getItem("fia_cbt_school_slogan") || "";
+    const scoreFormatSetting = localStorage.getItem("fia_cbt_score_format") || "points";
+
     const handlePrint = () => {
         if (onPrint) {
             onPrint();
@@ -91,7 +97,9 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                         <h1 className="text-xl sm:text-3xl font-black text-blue-900 tracking-tight leading-none mb-1 uppercase">{schoolInfo.name}</h1>
                         <p className="text-xs sm:text-sm font-bold text-gray-600 tracking-[0.1em] sm:tracking-[0.2em] mb-2">{schoolInfo.address}</p>
                         <div className="inline-block bg-blue-50 px-4 sm:px-6 py-1 rounded-full border border-blue-200">
-                            <span className="text-[10px] sm:text-xs font-bold text-blue-800 italic uppercase">Motto: {schoolInfo.motto}</span>
+                            <span className="text-[10px] sm:text-xs font-bold text-blue-800 italic uppercase">
+                                Motto: {schoolInfo.motto} {schoolSloganSetting ? `• Slogan: ${schoolSloganSetting}` : ''}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -119,7 +127,10 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                             {reportType === 'score-sheet' ? 'Subject / Examination:' : 'Academic Session:'}
                         </span>
                         <span className="font-bold text-gray-800 italic underline">
-                            {reportType === 'score-sheet' ? metadata.exam : metadata.session}
+                            {reportType === 'score-sheet' 
+                                ? (omitExamTitlesSetting ? '____________________' : metadata.exam) 
+                                : metadata.session
+                            }
                         </span>
                     </div>
                 </div>
@@ -166,7 +177,10 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                         {reportType === 'score-sheet' ? 'Examination Title' : 'Correct'}
                                     </th>
                                     <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20 sm:w-24">
-                                        {reportType === 'score-sheet' ? 'Score (%)' : 'Score (Correct / Total)'}
+                                        {reportType === 'score-sheet' 
+                                            ? 'Score' 
+                                            : (scoreFormatSetting === 'percentage' ? 'Score (%)' : 'Score (Correct / Total)')
+                                        }
                                     </th>
                                 </tr>
                             </thead>
@@ -181,12 +195,22 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                             {reportType === 'score-sheet' ? res.id : res.total || '-'}
                                         </td>
                                         <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm uppercase">
-                                            {reportType === 'score-sheet' ? res.subject : res.score}
+                                            {reportType === 'score-sheet' 
+                                                ? (omitExamTitlesSetting ? '____________________' : res.subject) 
+                                                : res.score
+                                            }
                                         </td>
                                         <td className={`border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm text-center font-bold ${res.percentage !== undefined ? (res.percentage >= 40 ? 'text-green-700' : 'text-red-600') : (res.score >= 40 ? 'text-green-700' : 'text-red-600')}`}>
                                             {reportType === 'score-sheet'
-                                                ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : res.score}%`
-                                                : `${res.score}/${res.total ?? '-'}`}
+                                                ? (scoreFormatSetting === 'percentage' 
+                                                    ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : res.score}%`
+                                                    : `${res.score}` // Render base normal score if points setting is chosen
+                                                  )
+                                                : (scoreFormatSetting === 'percentage'
+                                                    ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : ((res.score / (res.total || 1)) * 100).toFixed(0)}%`
+                                                    : `${res.score}/${res.total ?? '-'}`
+                                                  )
+                                            }
                                         </td>
                                     </tr>
                                 ))}
@@ -216,7 +240,11 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                         <p className="text-[8px] sm:text-[10px] font-bold uppercase text-gray-700">Exam Officer Signature</p>
                     </div>
                     <div className="flex flex-col items-center">
-                        <div className="w-full border-t-2 border-gray-800 mb-1 italic font-serif text-blue-900 font-bold text-[10px] sm:text-sm">Approved</div>
+                        {principalSignatureSetting ? (
+                            <div className="w-full border-t-2 border-gray-800 mb-1 italic font-serif text-blue-900 font-bold text-[10px] sm:text-sm">Approved</div>
+                        ) : (
+                            <div className="h-6 w-full mb-1"></div>
+                        )}
                         <p className="text-[8px] sm:text-[10px] font-bold uppercase text-gray-700">Principal's Stamp</p>
                     </div>
                 </div>

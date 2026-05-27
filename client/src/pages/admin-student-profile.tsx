@@ -36,7 +36,7 @@ import { createRoot } from "react-dom/client";
 import { ResultTemplate } from "@/components/ResultTemplate";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -126,6 +126,61 @@ export default function AdminStudentProfile() {
     const getExamTitle = (examId: string) => {
         return exams.find((e) => e.id === examId)?.title || "Unknown Exam";
     };
+
+    // Time-weighted linear regression forecast for next exam score
+    const predictedNextScore = useMemo(() => {
+        if (studentResults.length < 2) return averageScore;
+        const sorted = [...studentResults].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+        const M = sorted.length;
+        let sumX = 0;
+        let sumY = 0;
+        let sumXY = 0;
+        let sumXX = 0;
+        sorted.forEach((r, idx) => {
+            const x = idx + 1;
+            const y = r.percentage;
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumXX += x * x;
+        });
+        const denominator = M * sumXX - sumX * sumX;
+        if (denominator === 0) return averageScore;
+        const slope = (M * sumXY - sumX * sumY) / denominator;
+        const intercept = (sumY - slope * sumX) / M;
+        const nextX = M + 1;
+        const prediction = slope * nextX + intercept;
+        return Math.min(100, Math.max(0, Math.round(prediction)));
+    }, [studentResults, averageScore]);
+
+    // Personalized Strengths and Focus Areas (Weaknesses) breakdown
+    const subjectDiagnostics = useMemo(() => {
+        const diagnostics: Record<string, { correct: number; total: number }> = {};
+        studentResults.forEach(r => {
+            const exam = exams.find(e => e.id === r.examId);
+            if (!exam) return;
+            const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+            examQuestions.forEach(q => {
+                const isCorrect = r.correctAnswers && r.correctAnswers[q.id] === true;
+                if (!diagnostics[q.subject]) {
+                    diagnostics[q.subject] = { correct: 0, total: 0 };
+                }
+                diagnostics[q.subject].total++;
+                if (isCorrect) diagnostics[q.subject].correct++;
+            });
+        });
+
+        const strengths: string[] = [];
+        const weaknesses: string[] = [];
+
+        Object.entries(diagnostics).forEach(([subject, d]) => {
+            const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
+            if (pct >= 70) strengths.push(subject);
+            else if (pct < 50) weaknesses.push(subject);
+        });
+
+        return { strengths, weaknesses };
+    }, [studentResults, exams, questions]);
 
     const getGradeRemark = (percentage: number) => {
         if (percentage >= 75) return { label: "Excellent", color: "text-emerald-700 bg-emerald-50 border-emerald-100" };
@@ -246,7 +301,7 @@ export default function AdminStudentProfile() {
          return (
              <div className="space-y-6 animate-pulse">
                  <Skeleton className="h-10 w-48" />
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                      <Skeleton className="h-32 w-full" />
                      <Skeleton className="h-32 w-full" />
                      <Skeleton className="h-32 w-full" />
