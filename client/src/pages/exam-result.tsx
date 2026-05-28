@@ -71,21 +71,6 @@ export default function ExamResult() {
 
   const student = students?.find(s => s.studentId === result?.studentId);
 
-  if (resultLoading || !result) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="mx-auto max-w-5xl space-y-6">
-            <Skeleton className="h-48 w-full" />
-            <Skeleton className="h-96 w-full" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const correctCount = Object.values(result.correctAnswers).filter(Boolean).length;
-  
   // Calculate subject breakdown for diagnostics and printing
   const subjectBreakdown = useMemo(() => {
     if (!questions || !result) return [];
@@ -117,6 +102,21 @@ export default function ExamResult() {
     return `Focus your practice on ${weaknesses.join(", ")} to boost your performance. Review standard textbooks and complete mock exercises on these topics.`;
   }, [weaknesses]);
 
+  if (resultLoading || !result) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="mx-auto max-w-5xl space-y-6">
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-96 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const correctCount = Object.values(result.correctAnswers).filter(Boolean).length;
+  
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
