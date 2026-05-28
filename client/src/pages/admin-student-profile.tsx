@@ -401,6 +401,76 @@ export default function AdminStudentProfile() {
         return { strengths, weaknesses };
     }, [studentResults, exams, questions]);
 
+    const pedagogicalAnalysis = useMemo(() => {
+        if (studentResults.length === 0) {
+            return {
+                diagnosis: "No analytical data has been compiled for this candidate yet. Resolve at least one CBT examination session to generate clinical recommendations.",
+                planSteps: ["Assign the first syllabus diagnostic test inside the portal."]
+            };
+        }
+
+        const { strengths, weaknesses } = subjectDiagnostics;
+        const trend = academicTrajectory.trend;
+        const totalIncidents = forensicIncidents.length;
+
+        let diagnosis = "";
+
+        // Core diagnosis
+        if (averageScore >= 80) {
+            diagnosis += `Candidate displays exemplary concept mastery with a highly sophisticated average score of ${averageScore}%. `;
+            if (trend === "improving") {
+                diagnosis += "Their academic trend is consistently upward, signifying advanced conceptual grasp and excellent preparation. ";
+            } else if (trend === "declining") {
+                diagnosis += "However, a slight downward trend suggests recent regression or fatigue; verify if exam complexity has increased. ";
+            } else {
+                diagnosis += "They display robust, stable performance across all evaluated areas. ";
+            }
+        } else if (averageScore >= 55) {
+            diagnosis += `Candidate displays solid mid-tier aptitude with a satisfactory average of ${averageScore}%. `;
+            if (trend === "improving") {
+                diagnosis += "They demonstrate encouraging positive growth and steady mastery development. ";
+            } else if (trend === "declining") {
+                diagnosis += "A noticeable downward trajectory is present, indicating widening syllabus gaps or study neglect. ";
+            } else {
+                diagnosis += "Their performance is stable but has room for upward mobility. ";
+            }
+        } else {
+            diagnosis += `Candidate is currently flagged as 'Needs Remediation' due to a low cumulative average of ${averageScore}%. `;
+            if (trend === "declining") {
+                diagnosis += "Immediate academic intervention is mandatory as they are on a declining trajectory. ";
+            } else if (trend === "improving") {
+                diagnosis += "Encouragingly, they show signs of recovery with an improving trajectory, though starting from a lower baseline. ";
+            } else {
+                diagnosis += "They display stagnated performance patterns requiring targeted attention. ";
+            }
+        }
+
+        // Integrity factor
+        if (totalIncidents > 2) {
+            diagnosis += `Crucially, proctoring telemetry has flagged ${totalIncidents} suspicious incidents, indicating attention deviation, rapid pacing velocity (guesswork), or tab switches. This compromises result validity. `;
+        }
+
+        // Action Plan recommendations
+        const planSteps: string[] = [];
+        if (weaknesses.length > 0) {
+            planSteps.push(`Focus Remediation: Allocate 4-6 hours of targeted revision on: ${weaknesses.join(", ")}.`);
+        }
+        if (strengths.length > 0) {
+            planSteps.push(`Enrichment Scope: Promote advanced reading or mock exams in: ${strengths.join(", ")} to sustain high mastery.`);
+        }
+        if (totalIncidents > 2) {
+            planSteps.push("Proctoring Compliance: Mandate exam retakes under direct supervisor invigilation or lock the browser strictly.");
+        }
+        if (academicTrajectory.trend === "declining") {
+            planSteps.push("Support Protocol: Schedule an urgent parent-teacher session to evaluate study habits outside the classroom.");
+        }
+        if (planSteps.length === 0) {
+            planSteps.push("Sustainment: Continue current study schedule. Candidate is on a highly successful path.");
+        }
+
+        return { diagnosis, planSteps };
+    }, [studentResults, subjectDiagnostics, academicTrajectory, averageScore, forensicIncidents]);
+
     const getGradeRemark = (percentage: number) => {
         if (percentage >= 75) return { label: "Excellent", color: "text-emerald-700 bg-emerald-50 border-emerald-100" };
         if (percentage >= 60) return { label: "Very Good", color: "text-blue-700 bg-blue-50 border-blue-100" };
@@ -691,6 +761,96 @@ export default function AdminStudentProfile() {
                      </Card>
                  </div>
              </div>
+
+
+                          {/* Premium Pedagogical Diagnostic & Behavioral Analysis */}
+                          <Card className="border-none shadow-xl bg-white overflow-hidden bg-gradient-to-r from-white via-indigo-50/5 to-white dark:from-slate-900 dark:to-slate-900 mb-8">
+                              <div className="bg-gradient-to-r from-indigo-900 to-indigo-950 px-6 py-4 border-b border-indigo-950 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                      <Brain className="h-5 w-5 text-indigo-400 animate-pulse" />
+                                      <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                                          Candidate Performance Analysis & Action Plan
+                                      </h3>
+                                  </div>
+                                  <Badge className="bg-indigo-500/20 text-indigo-300 font-bold border-indigo-500/30 text-[10px] uppercase">
+                                      AI-Driven Diagnosis
+                                  </Badge>
+                              </div>
+                              <CardContent className="p-6">
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                      {/* Left Panel: Clinical Diagnosis */}
+                                      <div className="lg:col-span-2 space-y-4">
+                                          <div>
+                                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                  <Activity className="w-3.5 h-3.5 text-indigo-500" /> Pedagogical Evaluation
+                                              </h4>
+                                              <p className="text-[13.5px] font-semibold text-slate-700 dark:text-slate-300 leading-relaxed mt-2.5 bg-slate-50/40 p-4 rounded-2xl border border-slate-100/50">
+                                                  {pedagogicalAnalysis.diagnosis}
+                                              </p>
+                                          </div>
+                          
+                                          {/* Concept Strengths & Focus Areas Badges */}
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                              <div className="space-y-2">
+                                                  <h5 className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                                      <CheckCircle2 className="w-3.5 h-3.5" /> Concept Strengths (🏆 &ge;70%)
+                                                  </h5>
+                                                  <div className="flex flex-wrap gap-1.5">
+                                                      {subjectDiagnostics.strengths.length > 0 ? (
+                                                          subjectDiagnostics.strengths.map(sub => (
+                                                              <Badge key={sub} className="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-50 font-bold py-1">
+                                                                  {sub}
+                                                              </Badge>
+                                                          ))
+                                                      ) : (
+                                                          <span className="text-xs text-muted-foreground italic font-semibold">No distinct strengths identified yet.</span>
+                                                      )}
+                                                  </div>
+                                              </div>
+                          
+                                              <div className="space-y-2">
+                                                  <h5 className="text-[11px] font-black text-rose-600 dark:text-rose-450 uppercase tracking-wider flex items-center gap-1">
+                                                      <AlertTriangle className="w-3.5 h-3.5" /> Focus Areas (⚠️ &lt;50%)
+                                                  </h5>
+                                                  <div className="flex flex-wrap gap-1.5">
+                                                      {subjectDiagnostics.weaknesses.length > 0 ? (
+                                                          subjectDiagnostics.weaknesses.map(sub => (
+                                                              <Badge key={sub} className="bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-50 font-bold py-1">
+                                                                  {sub}
+                                                              </Badge>
+                                                          ))
+                                                      ) : (
+                                                          <span className="text-xs text-muted-foreground italic font-semibold">No urgent focus areas flagged.</span>
+                                                      )}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                          
+                                      {/* Right Panel: Prescribed Action Plan */}
+                                      <div className="lg:col-span-1 bg-slate-50/50 dark:bg-slate-900/40 p-5 rounded-2xl border border-slate-100/50 flex flex-col justify-between">
+                                          <div className="space-y-3">
+                                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 border-b pb-2">
+                                                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Prescribed Action Plan
+                                              </h4>
+                                              <ul className="space-y-3 pt-1">
+                                                  {pedagogicalAnalysis.planSteps.map((step, idx) => (
+                                                      <li key={idx} className="flex gap-2.5 items-start text-[12px] font-semibold text-slate-600 dark:text-slate-350">
+                                                          <span className="h-5 w-5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                              {idx + 1}
+                                                          </span>
+                                                          <span className="leading-tight">{step}</span>
+                                                      </li>
+                                                  ))}
+                                              </ul>
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground font-semibold pt-4 mt-4 border-t border-dashed text-center">
+                                              Evaluation updated on: {format(new Date(), "PPP")}
+                                          </div>
+                                      </div>
+                                  </div>
+                              </CardContent>
+                          </Card>
 
                           <Tabs defaultValue="academic-records" className="w-full space-y-6">
                  <TabsList className="bg-slate-100/85 border p-1 rounded-2xl w-full sm:w-auto grid grid-cols-2 max-w-lg shadow-sm">
