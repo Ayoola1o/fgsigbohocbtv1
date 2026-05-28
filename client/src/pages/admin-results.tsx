@@ -223,7 +223,7 @@ export default function AdminResults() {
             address: "IGBOHO, OYO STATE",
             motto: "KNOWLEDGE AND GODLINESS",
             logoText: "FIA",
-            logoUrl: "/igf/logo.png"
+            logoUrl: "/logo.png"
           }}
           metadata={{
             class: printData.candidate.gradeLevel,
@@ -295,7 +295,7 @@ export default function AdminResults() {
             address: "IGBOHO, OYO STATE",
             motto: "KNOWLEDGE AND GODLINESS",
             logoText: "FIA",
-            logoUrl: "/igf/logo.png"
+            logoUrl: "/logo.png"
           }}
           metadata={{
             class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
@@ -428,7 +428,7 @@ export default function AdminResults() {
                     address: "IGBOHO, OYO STATE",
                     motto: "KNOWLEDGE AND GODLINESS",
                     logoText: "FIA",
-                    logoUrl: "/igf/logo.png"
+                    logoUrl: "/logo.png"
                   }}
                   metadata={{
                     class: data.candidate.gradeLevel,
@@ -558,7 +558,7 @@ export default function AdminResults() {
                   address: "IGBOHO, OYO STATE",
                   motto: "KNOWLEDGE AND GODLINESS",
                   logoText: "FIA",
-                  logoUrl: "/igf/logo.png"
+                  logoUrl: "/logo.png"
                 }}
                 metadata={{
                   class: `${port.classLevel} (${port.department})`,

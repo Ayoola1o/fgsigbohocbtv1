@@ -153,7 +153,7 @@ export default function ExamResult() {
               address: "IGBOHO, OYO STATE",
               motto: "KNOWLEDGE AND GODLINESS",
               logoText: "FIA",
-              logoUrl: "/igf/logo.png"
+              logoUrl: "/logo.png"
             }}
             metadata={{
               class: student?.classLevel || "General",

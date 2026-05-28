@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ResultTemplate } from "@/components/ResultTemplate";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { Loader2 } from "lucide-react";
-import logo from "@/assets/igf/logo.png";
 
 export default function AdminPrintout() {
   const [selectedClassLevel, setSelectedClassLevel] = useState<string>("");
@@ -77,7 +76,7 @@ export default function AdminPrintout() {
 
       return {
       schoolName: "Faith Immaculate Academy",
-      schoolLogoUrl: logo, // Placeholder (unused by template)
+      schoolLogoUrl: "/logo.png", // Placeholder (unused by template)
       examTitle: exam?.title || "Exam Result",
       candidate: {
         name: student.name,
@@ -162,7 +161,7 @@ export default function AdminPrintout() {
                 address: "IGBOHO, OYO STATE",
                 motto: "KNOWLEDGE AND GODLINESS",
                 logoText: "FIA",
-                logoUrl: logo
+                logoUrl: "/logo.png"
               }}
               metadata={{
                 class: data.candidate.gradeLevel,
