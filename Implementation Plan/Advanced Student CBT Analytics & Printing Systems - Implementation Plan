@@ -1,0 +1,67 @@
+# Implementation Plan - Advanced Student CBT Analytics & Printing Systems
+
+This plan addresses:
+1. **Critical Bug Fix:** Resolving why student results do not display by implementing robust case-insensitive multi-identifier (UUID vs passcode) fallback selectors.
+2. **Detailed Print Reports:** Tying PDF letterhead parameters (scores formatted in points vs percentages, omitting examination titles, principal signatures, and school mottos) dynamically to existing admin settings.
+3. **Consolidated Academic Portfolios:** Transitioning the Consolidated Report to require candidate checkbox selection and group their respective results into single-page transcripts.
+4. **Interactive Dashboard Visualizations:** Implementing premium charts (Topic Mastery Radars, Pacing Curves, Forensics logs) directly in `admin-student-profile.tsx` and `exam-result.tsx` using `recharts` for teachers and candidates.
+
+## Proposed Changes
+
+---
+
+### Component: Core Settings Alignment & Printing Engine
+
+We will align print-key mappings in `PrintReportTemplate.tsx` with `admin-settings.tsx` to enable hot-reloading configurations.
+
+#### [MODIFY] [PrintReportTemplate.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/components/PrintReportTemplate.tsx)
+- Standardize localStorage getters to read settings stored by `admin-settings.tsx`:
+  - `fia_cbt_omit_exam_titles` $\rightarrow$ `fia_cbt_settings_remove_title`
+  - `fia_cbt_principal_signature` $\rightarrow$ `fia_cbt_settings_report_signature`
+  - `fia_cbt_school_slogan` $\rightarrow$ `fia_cbt_settings_school_motto`
+  - `fia_cbt_score_format` $\rightarrow$ `fia_cbt_settings_score_format`
+- Implement robust formatting logic inside the results table:
+  - Format scores in raw points (`score/total`) or direct percentage (`score%`) according to the active setting.
+  - Dynamically omit examination titles if `removeTitle` is configured.
+  - Add standard fallback values for missing records.
+
+---
+
+### Component: Student Profiles & Portals
+
+We will fix the filtering mismatches and implement a gorgeous, interactive analytics dashboard.
+
+#### [MODIFY] [admin-student-profile.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-student-profile.tsx)
+- **Robust Selector Filtering:** Match candidate database rows and completed exam results using case-insensitive, trimmed comparisons of both the custom passcode ID and the internal database UUID.
+- **Detailed Print Summary:** Replace the simplistic `window.print()` behavior with a dedicated, high-fidelity PDF scorecard compiler using `PrintReportTemplate` that aggregates student biodata, sub-topic skill trees, and pacing statistics.
+- **Interactive Analytics Panels (Recharts):**
+  - **Topic Mastery Radar Chart:** Visualizes student mastery in sub-topics contrasted against the class average.
+  - **Pacing Latency & Cognitive Fatigue Curve:** A detailed line chart showing average response latency per question index to identify stagnation and speed-guessing.
+  - **Forensic Malpractice incident log:** Renders tab-switching violations, warning timestamps, and response change rates in a chronological feed.
+  - **Proactive Early-Warning Intervention Card:** Alerts teachers if linear regression forecasts a downward trajectory or highlights immediate focus criteria.
+
+#### [MODIFY] [student-portal.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/student-portal.tsx)
+- Apply the bulletproof, case-insensitive, dual-identifier matching logic to `results.find()` queries to ensure that completed exam badges and review cards display correctly for students in their dashboard portal.
+
+---
+
+### Component: Administrative Results Ledger
+
+We will fix consolidated reporting and score sheets, and implement selecting actions.
+
+#### [MODIFY] [admin-results.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-results.tsx)
+- **Consolidated Report Requirements:** Check if results are selected before performing prints. Group selected student results by identifier and compile a single multi-exam portfolio transcript.
+- **Broadsheet Filter Safety:** Disable broadsheet prints unless a cohort (Class, Exam, or Department) is filtered.
+- **Case-Insensitive Student Mapping:** Clean student lookup strings to avoid blank cells due to formatting mismatch.
+
+#### [MODIFY] [exam-result.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/exam-result.tsx)
+- **Print Official Scorecard Button:** Introduce a prominent "Print scorecard" action in the student-facing review header.
+- **Visual Performance Diagnostics:** Implement a Recharts visual analysis card showing **Topic Mastery Diagnostics** and **Pacing Latency curves** directly to candidates on their results review screens.
+
+## Verification Plan
+
+### Automated & Manual Verification
+- Test student login and confirm that the full `student_user` schema (name, class, studentId passcode, department) persists in `localStorage`.
+- Grade mock exam attempts and verify that result entries display instantly on both the Student Portal and Admin Student Directory.
+- Trigger printouts for a class, confirm that toggling point-based formatting vs percentages matches Settings preferences.
+- Select checkboxes in `AdminResults`, click "Consolidated Report", and confirm it prints grouped portfolio cards.

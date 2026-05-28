@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,15 @@ export default function StudentPortal() {
     enabled: !!student,
   });
 
-  const freshestStudent = (student ? (students.find(s => s.studentId === student?.studentId) || student) : null)!;
+  const freshestStudent = useMemo(() => {
+    if (!student) return null;
+  const currentStudent = freshestStudent || student;
+    const match = students.find(s =>
+      s.studentId?.trim().toLowerCase() === student.studentId?.trim().toLowerCase() ||
+      s.id?.trim().toLowerCase() === student.id?.trim().toLowerCase()
+    );
+    return match || student;
+  }, [student, students]);
 
   const { data: results = [] } = useQuery<Result[]>({
     queryKey: ["/api/results"],
@@ -50,11 +58,15 @@ export default function StudentPortal() {
   });
 
   const getStudentResult = (examId: string) => {
-    return results.find(r => r.examId === examId && r.studentId === student?.studentId);
+    return results.find(r => 
+      r.examId === examId && 
+      (r.studentId?.trim().toLowerCase() === currentStudent?.studentId?.trim().toLowerCase() ||
+       r.studentId?.trim().toLowerCase() === currentStudent?.id?.trim().toLowerCase())
+    );
   };
 
   const isExamBlocked = (examId: string) => {
-    return freshestStudent?.blockedExams?.includes(examId) || false;
+    return currentStudent?.blockedExams?.includes(examId) || false;
   };
 
   const handleLogout = () => {
@@ -63,6 +75,7 @@ export default function StudentPortal() {
   };
 
   if (!student) return null;
+  const currentStudent = freshestStudent || student;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16 font-sans">
@@ -86,8 +99,8 @@ export default function StudentPortal() {
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
             <div className="hidden md:flex flex-col text-right">
-              <span className="text-xs font-black text-slate-800 dark:text-slate-200">{freshestStudent.name}</span>
-              <span className="text-[10px] text-slate-455 font-mono tracking-wider">{freshestStudent.studentId}</span>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-200">{currentStudent.name}</span>
+              <span className="text-[10px] text-slate-455 font-mono tracking-wider">{currentStudent.studentId}</span>
             </div>
             <Button
               variant="outline"
@@ -121,7 +134,7 @@ export default function StudentPortal() {
                 </div>
               </div>
               <h1 className="text-2.5xl sm:text-3.5xl font-black tracking-tight mt-2.5 leading-tight">
-                Welcome back, {freshestStudent.name}
+                Welcome back, {currentStudent.name}
               </h1>
               <p className="text-indigo-200 text-sm mt-1.5 font-medium">
                 Access your scheduled subject examinations, view grading result sheets, and track performance scores.
@@ -131,11 +144,11 @@ export default function StudentPortal() {
             <div className="flex flex-wrap gap-3 bg-white/5 dark:bg-slate-950/40 p-4.5 rounded-2xl border border-white/10 shrink-0">
               <div className="text-center px-4 py-1 border-r border-white/10">
                 <span className="block text-[10px] text-indigo-200 uppercase font-black tracking-wider">Class Level</span>
-                <span className="block text-lg font-black text-white mt-0.5">{freshestStudent.classLevel || '-'}</span>
+                <span className="block text-lg font-black text-white mt-0.5">{currentStudent.classLevel || '-'}</span>
               </div>
               <div className="text-center px-4 py-1">
                 <span className="block text-[10px] text-indigo-200 uppercase font-black tracking-wider">Department</span>
-                <span className="block text-lg font-black text-emerald-400 mt-0.5">{freshestStudent.department || 'General'}</span>
+                <span className="block text-lg font-black text-emerald-400 mt-0.5">{currentStudent.department || 'General'}</span>
               </div>
             </div>
           </div>
@@ -170,7 +183,7 @@ export default function StudentPortal() {
                   // If exam is general (no department or "General"), allow it for all
                   if (!exam.department || exam.department === "General") return true;
                   // If exam is specific to a department, student must match it
-                  return exam.department === freshestStudent.department;
+                  return exam.department === currentStudent.department;
                 })
                 .map((exam) => {
                   const examResult = getStudentResult(exam.id);
@@ -268,7 +281,7 @@ export default function StudentPortal() {
                           </div>
                         ) : (
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-805/40">
-                            <Link href={`/exam/${exam.id}/start?studentName=${encodeURIComponent(freshestStudent.name)}&studentId=${encodeURIComponent(freshestStudent.studentId)}`}>
+                            <Link href={`/exam/${exam.id}/start?studentName=${encodeURIComponent(currentStudent.name)}&studentId=${encodeURIComponent(currentStudent.studentId)}`}>
                               <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-lg shadow-indigo-500/10 hover:scale-[1.01] transition-all rounded-xl h-10 flex items-center justify-center gap-1.5 group-hover:bg-indigo-650" data-testid={`button-start-exam-${exam.id}`}>
                                 Start CBT Exam <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                               </Button>
@@ -288,7 +301,7 @@ export default function StudentPortal() {
                 </div>
                 <h3 className="mb-2 text-xl font-black text-slate-800 dark:text-slate-200">No Examinations Found</h3>
                 <p className="text-slate-500 dark:text-slate-400 max-w-sm mt-1 text-sm font-medium leading-relaxed">
-                  There are currently no active exams configured for your class level ({freshestStudent.classLevel || 'General'}). Please verify with your examiner or check back soon.
+                  There are currently no active exams configured for your class level ({currentStudent.classLevel || 'General'}). Please verify with your examiner or check back soon.
                 </p>
               </CardContent>
             </Card>

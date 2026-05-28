@@ -257,8 +257,8 @@ export default function AdminResults() {
   };
 
   const handlePrintBroadsheet = async () => {
-    if (filterExamId === "ALL" || !filteredResults || filteredResults.length === 0) {
-      toast({ title: "Action Required", description: "Please select a specific exam to print a score sheet.", variant: "destructive" });
+    if (!filteredResults || filteredResults.length === 0) {
+      toast({ title: "Action Required", description: "No results matched the current filters. Please adjust filters to generate a broadsheet.", variant: "destructive" });
       return;
     }
 
@@ -277,7 +277,7 @@ export default function AdminResults() {
         id: r.studentId,
         name: r.studentName,
         class: student?.classLevel || filterClassLevel || "-",
-        subject: exam?.title || "Examination",
+        subject: getExamTitle(r.examId),
         score: r.percentage
       };
     });
@@ -462,55 +462,116 @@ export default function AdminResults() {
   };
 
   const handlePrintFullReport = async () => {
-    if (!filteredResults || filteredResults.length === 0) {
-      toast({ title: "No Results", description: "There are no results to print.", variant: "destructive" });
+    const selectedIds = Array.from(selectedResultIds);
+    if (selectedIds.length === 0) {
+      toast({ 
+        title: "Selection Required", 
+        description: "Please check the checkbox next to the student results you wish to compile into a Consolidated Academic Portfolio.", 
+        variant: "default" 
+      });
       return;
     }
+
+    const selected = results?.filter(r => selectedResultIds.has(r.id));
+    if (!selected || selected.length === 0) return;
+
+    // Group selected results by Student ID
+    const studentGroups: { [studentId: string]: { studentName: string; results: Result[] } } = {};
+    selected.forEach(r => {
+      if (!studentGroups[r.studentId]) {
+        studentGroups[r.studentId] = {
+          studentName: r.studentName,
+          results: []
+        };
+      }
+      studentGroups[r.studentId].results.push(r);
+    });
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
       return;
     }
-    writePrintWindowDocument(printWindow, "Results Report");
 
-    const studentResults = filteredResults.map(r => {
-      const student = students?.find(s => s.studentId === r.studentId);
-      return {
-        id: r.studentId,
-        name: r.studentName,
-        class: student?.classLevel || filterClassLevel || "-",
-        subject: getExamTitle(r.examId),
-        score: r.percentage
-      };
-    });
+    writePrintWindowDocument(
+      printWindow,
+      "Consolidated Academic Portfolios",
+      `<style>
+         body { background-color: #f1f5f9; }
+         @media print { 
+           body { background-color: white; } 
+           .page-break { page-break-after: always; }
+         }
+         #print-root { display: flex; flex-direction: column; gap: 2rem; align-items: center; padding: 2rem; }
+         .report-wrapper { width: 100%; max-width: 8.5in; }
+       </style>`
+    );
 
     try {
       const container = await waitForPrintRoot(printWindow, 7000);
       cloneCurrentStylesIntoPrintWindow(printWindow);
 
       const root = createRoot(container);
+
+      // Map grouped portfolios
+      const portfolios = Object.keys(studentGroups).map(studentId => {
+        const group = studentGroups[studentId];
+        const studentObj = students?.find(s => s.studentId === studentId);
+        
+        return {
+          studentName: group.studentName,
+          studentId: studentId,
+          classLevel: studentObj?.classLevel || "General",
+          department: studentObj?.department || "General",
+          session: "2025/2026 ACADEMIC SESSION",
+          exams: group.results.map(r => ({
+            id: r.examId,
+            name: getExamTitle(r.examId),
+            class: studentObj?.classLevel || "-",
+            subject: format(new Date(r.completedAt), "dd MMM yyyy, hh:mm a"), // Date text
+            score: r.score,
+            total: r.totalPoints,
+            percentage: r.percentage,
+            passed: r.passed
+          }))
+        };
+      });
+
       root.render(
-        <PrintReportTemplate
-          reportType="score-sheet"
-          schoolInfo={{
-            name: "FAITH IMMACULATE ACADEMY",
-            address: "IGBOHO, OYO STATE",
-            motto: "KNOWLEDGE AND GODLINESS",
-            logoText: "FIA",
-            logoUrl: "/igf/logo.png"
-          }}
-          metadata={{
-            class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
-            exam: filterExamId === "ALL" ? "Consolidated Report" : getExamTitle(filterExamId),
-            date: new Date().toLocaleDateString(),
-            session: "2025/2026 ACADEMIC SESSION"
-          }}
-          results={studentResults}
-          onPrint={() => {
-            setTimeout(() => printWindow.print(), 500);
-          }}
-        />
+        <>
+          {/* Shared Print Button */}
+          <div className="fixed top-6 right-6 z-50 print:hidden">
+            <Button
+              onClick={() => printWindow.print()}
+              className="shadow-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-full px-6 py-2.5 transition-all hover:scale-105 flex items-center gap-2"
+            >
+              <Printer className="w-4 h-4" /> Print All Portfolios ({portfolios.length})
+            </Button>
+          </div>
+
+          {portfolios.map((port, idx) => (
+            <div key={idx} className="report-wrapper page-break">
+              <PrintReportTemplate
+                reportType="consolidated-portfolio"
+                schoolInfo={{
+                  name: "FAITH IMMACULATE ACADEMY",
+                  address: "IGBOHO, OYO STATE",
+                  motto: "KNOWLEDGE AND GODLINESS",
+                  logoText: "FIA",
+                  logoUrl: "/igf/logo.png"
+                }}
+                metadata={{
+                  class: `${port.classLevel} (${port.department})`,
+                  exam: `${port.studentName} (${port.studentId})`,
+                  date: format(new Date(), "dd MMM, yyyy"),
+                  session: port.session
+                }}
+                results={port.exams}
+                showPrintButton={false}
+              />
+            </div>
+          ))}
+        </>
       );
     } catch (err) {
       console.error("handlePrintFullReport: Could not prepare print document:", err);
@@ -732,16 +793,14 @@ export default function AdminResults() {
                     Consolidated Report
                   </Button>
 
-                  {filterExamId !== "ALL" && (
-                    <Button 
-                      variant="secondary" 
-                      onClick={handlePrintBroadsheet}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-350 dark:hover:bg-slate-750 px-4 h-9.5 rounded-xl text-xs font-bold"
-                    >
-                      <Printer className="mr-2 h-4 w-4" />
-                      Score Sheet (Broadsheet)
-                    </Button>
-                  )}
+                  <Button 
+                    variant="secondary" 
+                    onClick={handlePrintBroadsheet}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-350 dark:hover:bg-slate-750 px-4 h-9.5 rounded-xl text-xs font-bold"
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Score Sheet (Broadsheet)
+                  </Button>
                 </div>
               </div>
             </div>

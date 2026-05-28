@@ -328,7 +328,12 @@ export const updateExamSession = async (id: string, updates: Partial<ExamSession
     await updateDoc(doc(db, "exam_sessions", id), updates);
 };
 
-export const submitExamSession = async (sessionId: string, answers: Record<string, string>, submissionType: 'student' | 'auto' = 'student'): Promise<Result> => {
+export const submitExamSession = async (
+    sessionId: string, 
+    answers: Record<string, string>, 
+    submissionType: 'student' | 'auto' = 'student',
+    telemetry?: { tabSwitches: number; revisions: number; timeSpentPerQuestion: Record<string, number> }
+): Promise<Result> => {
     const session = await getExamSession(sessionId);
     if (!session) throw new Error("Session not found");
 
@@ -388,7 +393,8 @@ export const submitExamSession = async (sessionId: string, answers: Record<strin
         submissionType,
         answers,
         correctAnswers,
-        completedAt: new Date()
+        completedAt: new Date(),
+        telemetry: telemetry || { tabSwitches: 0, revisions: 0, timeSpentPerQuestion: {} }
     });
 
     console.log("submitExamSession: Saving result to Firestore...");

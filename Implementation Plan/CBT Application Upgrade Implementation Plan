@@ -1,0 +1,153 @@
+# CBT Application Upgrade Implementation Plan
+
+This plan details the architecture, design, and step-by-step changes required to upgrade the Computer-Based Testing (CBT) application for **Faith Immaculate Academy**. It leverages Google Gemini AI, psychometrics, and advanced report capabilities to transform a standard testing application into a premium academic platform.
+
+---
+
+## Proposed System Architecture
+
+```mermaid
+graph TD
+    subgraph Client-Side [Frontend (React + Recharts + Lucide)]
+        Dashboard[Admin & Student Portals]
+        SettingsUI[Settings Page - Results Toggles]
+        AnalyticsUI[Analytics Dashboard - Psychometrics & Trajectory]
+        ImporterUI[Smart Importer - Drag & Drop / Preview Grid]
+        PrintUI[PDF Printable Reports - Student Dossier & Broadscore]
+    end
+
+    subgraph Server-Side [Backend (Express.js + Gemini API + Mammoth)]
+        UploadAPI[File Upload API]
+        GeminiAPI[Gemini SDK parsing engine]
+        StorageAPI[MemStorage adapter & student lists]
+    end
+
+    ImporterUI -->|Upload .docx/.txt| UploadAPI
+    UploadAPI -->|Extract Text| GeminiAPI
+    GeminiAPI -->|Return Structured JSON| ImporterUI
+    ImporterUI -->|Review/Correct & Bulk Submit| StorageAPI
+    SettingsUI -->|Toggle score formats & headers| Dashboard
+    StorageAPI -->|Metrics data| AnalyticsUI
+```
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Key Architectural Decisions & Requirements:**
+> 1. **Gemini SDK Key**: The Smart Question Importer backend endpoint (`POST /api/questions/import-ai`) relies on `process.env.GEMINI_API_KEY` being set in the environment. We will support standard API key extraction from the process environment.
+> 2. **Print System Integration**: The student profile summary print report is converted from a standard browser screenshot into a beautiful, styled PDF document rendered in a sandboxed print window, maintaining absolute design fidelity.
+> 3. **Consolidated Reports vs. Broadsheets**:
+>    - **Consolidated Report**: Batch printout summarizing all completed exams for one or more selected students.
+>    - **Broadsheet/Score Sheet**: Class-wide or department-wide summary table displaying scores per subject/exam for multiple students, filtered properly.
+
+---
+
+## Proposed Changes
+
+### 1. Smart Question Importer (`FIA Smart Question Importer Ai.md`)
+
+We will add a new backend route `POST /api/questions/import-ai` that reads `.docx` files (using `mammoth`) or `.txt` files, extracts raw text, sends it to the Google Gemini API with a strict structured JSON schema, and returns parsed questions.
+On the frontend (`client/src/pages/admin-questions.tsx`), we will add a premium "AI Smart Importer" modal where teachers select global metadata (Class, Term, Exam Type, Subject, Department), upload a file, preview a gorgeous review grid with highlighted validation states, edit questions inline, and finalize import to the database.
+
+#### [NEW] [docx-reader.ts](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/server/docx-reader.ts)
+A helper utility using `mammoth` to extract text from Word documents, with support for standard `.txt` file reading.
+
+#### [MODIFY] [routes.ts](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/server/routes.ts)
+- Add standard import upload route: `POST /api/questions/import-ai` utilizing the `multer` disk storage.
+- Initialize the Google GenAI SDK `GoogleGenAI` using `process.env.GEMINI_API_KEY`.
+- Feed the raw text with a structural system prompt to the `gemini-1.5-flash` model using Structured JSON Output config.
+- Return the questions schema containing `classLevel`, `term`, `examType`, `subject`, `questionText`, `questionType` (`multiple_choice` or `fill_in_the_blank`), `difficulty`, `points`, `correctAnswer`, and `options`.
+
+#### [MODIFY] [admin-questions.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-questions.tsx)
+- Integrate an **AI Smart Importer** button next to the standard question controls.
+- Launch a modern dialog step-by-step:
+  - **Step 1**: Select Metadata (Class Level, Subject, Term, Exam Type, Department).
+  - **Step 2**: Drag & drop or browse `.docx` or `.txt` file. Showing high-fidelity uploading and processing animations.
+  - **Step 3**: Interactive review grid! Questions are listed in a spreadsheet-style card interface with validation alerts (e.g. missing options, missing correct answers, blank text) highlighted in premium warm HSL colors. Teachers can edit text, choices, difficulty, points, and delete invalid items inline.
+  - **Step 4**: Bulk insert directly via `/api/questions/bulk`.
+
+---
+
+### 2. High-Aesthetic Analytics Dashboard (`Cbt Anaylsis Intelligent.md`)
+
+We will create a new, state-of-the-art super admin and teacher Analytics panel at `/admin/analytics` and student diagnostics layout on their result dashboard.
+
+#### [NEW] [admin-analytics.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-analytics.tsx)
+A masterfully designed dashboard loaded with interactive charts (using `recharts`) showing deep insights:
+- **Item Analysis (Psychometrics)**:
+  - *Difficulty Index ($p$-value)*: Formula $p = \frac{\text{Correct}}{\text{Total}}$ flagged: Easy ($p > 0.85$), Sweet Spot ($0.30 - 0.70$), Hard ($p < 0.20$).
+  - *Discrimination Index ($d$)*: Categorized: Excellent ($d > 0.30$), Useless ($d \approx 0$), Negative/Flawed ($d < 0$). Shows teachers which questions are trick questions.
+- **Time Tracking & Pacing**:
+  - Visual pacing distributions, flagging speed guessing anomalies.
+  - Cognitive fatigue line chart comparing response time changes over active session progression.
+- **Cohort Analysis**:
+  - Grade distribution curve (Bell Curve).
+  - Subject and topic-level mastery heatmaps.
+- **System Health & Server Telemetry**:
+  - Live active session count, database endpoint roundtrip latency, client-side error drop-offs, and simple load capacity gauges.
+
+#### [MODIFY] [exam-result.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/exam-result.tsx)
+- Add a new "Personal Diagnostic Insights" tab/accordion at the top of the student's result:
+  - **Strengths vs. Weaknesses**: Topic analysis based on answered questions.
+  - **Pacing Metrics**: Displays average time spent per question and alerts on speed guesses or pacing flags.
+  - **Academic Recommendations**: Auto-generated personalized feedback based on performance standing.
+- Add a beautiful **Print Result** button that triggers a premium printed report of their scorecard and exam analysis.
+
+---
+
+### 3. Settings & Adjustments (`Results fix.md`)
+
+We will build a global Settings page to configure CBT outputs and refine printable report mechanics.
+
+#### [NEW] [admin-settings.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-settings.tsx)
+A gorgeous system management interface containing settings:
+- **Results Print Settings**:
+  - Toggle score presentation: **Normal Score** (e.g. `20` or `45`) or **Percentage** (e.g. `50%` or `49%`).
+  - Toggle visibility: **Remove Examination Title** from the result summary table.
+  - Persisted globally in client-side storage (Local Storage) for zero-latency instant print adjustment, and integrated as global reactive states.
+
+#### [MODIFY] [admin-results.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-results.tsx)
+- Add reactivity to Settings toggles. When Normal score is toggled, scores in grid table and PDF printout show raw points. When Percentage is toggled, score columns format to percent representation.
+- Read examination title toggle setting to omit the title in the result tables.
+- **Consolidated Report (Fix)**:
+  - Make "Consolidated Report" button require student result selections (using table checkboxes). If no items are selected, show a warning toast.
+  - When selected, aggregates results per-student, compiling a unified, high-aesthetic printable scorecard page summarizing all exams completed by the selected candidates in a batch print layout.
+- **Score Sheet (Broadsheet) (Fix)**:
+  - Make "Score Sheet" print out a wide table formatted grid where columns are subjects/exams and rows are candidates, filtered dynamically by class or department.
+
+#### [MODIFY] [admin-student-profile.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-student-profile.tsx)
+- **High-Fidelity PDF Printout (Fix)**:
+  - Replace the crude browser screen print (`window.print()`) with a dedicated PDF print wrapper.
+  - When the admin clicks "Print Summary", opens a dedicated, offscreen print context rendering a professional, branded student profile dossier including biodata, trajectory analysis, time-weighted linear regression score prediction ($y = mx + b$), and detailed chronological logs.
+
+---
+
+### 4. Navigation & Routes
+
+#### [MODIFY] [app-sidebar.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/components/app-sidebar.tsx)
+- Append sidebar items for **Analytics** (`/admin/analytics`) and **Settings** (`/admin/settings`) using modern Lucide icons (`TrendingUp` and `Settings`).
+
+#### [MODIFY] [App.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/App.tsx)
+- Define new route paths:
+  - `/admin/analytics` -> `AdminAnalytics`
+  - `/admin/settings` -> `AdminSettings`
+
+---
+
+## Verification Plan
+
+### Automated & Manual Verification Steps
+1. **AI Question Importer Test**:
+   - Upload sample `.txt` and `.docx` question sheets.
+   - Verify that Gemini correctly returns a structured JSON payload.
+   - Manually edit questions inside the interactive Review Grid and check successful bulk database commits.
+2. **Psychometrics & Trajectory Analysis Check**:
+   - Perform test exam completions on different student profiles.
+   - Verify Difficulty and Discrimination calculations are mathematically correct.
+   - Confirm trajectory trendlines and time-weighted linear predictions update correctly.
+3. **Settings Toggles & Print Flow**:
+   - Toggle Score Sheet style between Percentage and Raw Points. Confirm table lists update immediately.
+   - Toggle Exam Title off and verify printed tables omit exam headers.
+   - Validate batch printable PDF sheets trigger browser print dialogues successfully with zero cutoffs or alignment errors.

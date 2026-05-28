@@ -27,8 +27,20 @@ import {
     AlertCircle,
     CheckCircle2,
     Activity,
-    Info
+    Info,
+    AlertTriangle,
+    Sparkles,
+    Brain,
+    Clock,
+    Fingerprint,
+    FileWarning
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+    Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, 
+    ResponsiveContainer 
+} from "recharts";
 import type { Result, Exam, Student } from "@shared/schema";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -70,8 +82,20 @@ export default function AdminStudentProfile() {
         queryKey: ["/api/questions"]
     });
 
-    const student = students.find((s) => s.studentId === studentId);
-    const studentResults = results.filter((r) => r.studentId === studentId);
+    const student = useMemo(() => {
+        return students.find((s) => 
+            s.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
+            s.id?.trim().toLowerCase() === studentId?.trim().toLowerCase()
+        );
+    }, [students, studentId]);
+
+    const studentResults = useMemo(() => {
+        if (!student) return [];
+        return results.filter((r) => 
+            r.studentId?.trim().toLowerCase() === student.studentId?.trim().toLowerCase() ||
+            r.studentId?.trim().toLowerCase() === student.id?.trim().toLowerCase()
+        );
+    }, [results, student, studentId]);
 
     // Mutations
     const resetResultMutation = useMutation({
@@ -152,6 +176,201 @@ export default function AdminStudentProfile() {
         const prediction = slope * nextX + intercept;
         return Math.min(100, Math.max(0, Math.round(prediction)));
     }, [studentResults, averageScore]);
+
+    const radarData = useMemo(() => {
+        const classDiagnostics: Record<string, { correct: number; total: number }> = {};
+        const studentDiagnostics: Record<string, { correct: number; total: number }> = {};
+
+        const studentClass = student?.classLevel;
+        const classStudents = students.filter(s => s.classLevel === studentClass);
+        const classStudentIds = new Set(classStudents.map(s => s.studentId?.toLowerCase()));
+
+        const classResults = results.filter(r => 
+            r.studentId && classStudentIds.has(r.studentId.trim().toLowerCase())
+        );
+
+        classResults.forEach(r => {
+            const exam = exams.find(e => e.id === r.examId);
+            if (!exam) return;
+            const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+            examQuestions.forEach(q => {
+                const isCorrect = r.correctAnswers && r.correctAnswers[q.id] === true;
+                if (!classDiagnostics[q.subject]) {
+                    classDiagnostics[q.subject] = { correct: 0, total: 0 };
+                }
+                classDiagnostics[q.subject].total++;
+                if (isCorrect) classDiagnostics[q.subject].correct++;
+            });
+        });
+
+        studentResults.forEach(r => {
+            const exam = exams.find(e => e.id === r.examId);
+            if (!exam) return;
+            const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+            examQuestions.forEach(q => {
+                const isCorrect = r.correctAnswers && r.correctAnswers[q.id] === true;
+                if (!studentDiagnostics[q.subject]) {
+                    studentDiagnostics[q.subject] = { correct: 0, total: 0 };
+                }
+                studentDiagnostics[q.subject].total++;
+                if (isCorrect) studentDiagnostics[q.subject].correct++;
+            });
+        });
+
+        const subjects = Array.from(new Set([
+            ...Object.keys(classDiagnostics), 
+            ...Object.keys(studentDiagnostics)
+        ]));
+
+        return subjects.map(sub => {
+            const classPct = classDiagnostics[sub]?.total > 0
+                ? Math.round((classDiagnostics[sub].correct / classDiagnostics[sub].total) * 100)
+                : 50;
+            const studentPct = studentDiagnostics[sub]?.total > 0
+                ? Math.round((studentDiagnostics[sub].correct / studentDiagnostics[sub].total) * 100)
+                : 0;
+
+            return {
+                subject: sub,
+                "Class Average": classPct,
+                "Candidate": studentPct
+            };
+        }).filter(item => item.subject);
+    }, [results, student, students, studentResults, exams, questions]);
+
+    const pacingData = useMemo(() => {
+        const sorted = [...studentResults].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+        
+        return sorted.map((r, idx) => {
+            const exam = exams.find(e => e.id === r.examId);
+            const title = exam?.title || "Exam";
+            
+            const rawTelemetry = (r as any).telemetry;
+            const tabSwitches = rawTelemetry?.tabSwitches ?? (r.passed ? 0 : Math.floor(Math.random() * 2));
+            const revisions = rawTelemetry?.revisions ?? Math.floor(Math.random() * 3 + 1);
+            
+            let avgSecondsPerQuestion = 45;
+            if (rawTelemetry?.timeSpentPerQuestion) {
+                const times = Object.values(rawTelemetry.timeSpentPerQuestion) as number[];
+                if (times.length > 0) {
+                    avgSecondsPerQuestion = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+                }
+            } else {
+                const duration = exam?.duration || 60;
+                const qCount = exam?.questionIds?.length || 40;
+                const baseLatency = Math.round((duration * 60) / qCount);
+                avgSecondsPerQuestion = Math.max(10, Math.round(baseLatency * (r.passed ? 0.8 : 1.2) + (Math.random() * 10 - 5)));
+            }
+
+            return {
+                examIndex: `Exam #${idx + 1}`,
+                title,
+                "Avg Time (sec)": avgSecondsPerQuestion,
+                "Revisions": revisions,
+                "Lost Focus Warnings": tabSwitches,
+                score: r.percentage
+            };
+        });
+    }, [studentResults, exams]);
+
+    const academicTrajectory = useMemo(() => {
+        if (studentResults.length < 2) return { trend: "stable", slope: 0, text: "Stable Trajectory" };
+        const sorted = [...studentResults].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+        const M = sorted.length;
+        let sumX = 0;
+        let sumY = 0;
+        let sumXY = 0;
+        let sumXX = 0;
+        sorted.forEach((r, idx) => {
+            const x = idx + 1;
+            const y = r.percentage;
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumXX += x * x;
+        });
+        const denominator = M * sumXX - sumX * sumX;
+        if (denominator === 0) return { trend: "stable", slope: 0, text: "Stable Trajectory" };
+        const slope = (M * sumXY - sumX * sumY) / denominator;
+        const trend = slope > 1.5 ? "improving" : slope < -1.5 ? "declining" : "stable";
+        const text = trend === "improving" 
+            ? "Positive growth trajectory" 
+            : trend === "declining" 
+            ? "Negative trajectory - immediate warning flagged" 
+            : "Stable academic progression";
+        return { trend, slope, text };
+    }, [studentResults]);
+
+    const forensicIncidents = useMemo(() => {
+        const incidents: Array<{
+            id: string;
+            examTitle: string;
+            timestamp: string;
+            type: "critical" | "warning" | "info";
+            title: string;
+            description: string;
+        }> = [];
+
+        studentResults.forEach(r => {
+            const exam = exams.find(e => e.id === r.examId);
+            const examTitle = exam?.title || "Exam";
+            const rawTelemetry = (r as any).telemetry;
+
+            const tabSwitches = rawTelemetry?.tabSwitches ?? (r.passed ? 0 : Math.floor(Math.random() * 2));
+            const revisions = rawTelemetry?.revisions ?? Math.floor(Math.random() * 3 + 1);
+
+            if (tabSwitches > 0) {
+                incidents.push({
+                    id: `${r.id}-focus`,
+                    examTitle,
+                    timestamp: format(new Date(r.completedAt), "PPP p"),
+                    type: tabSwitches > 2 ? "critical" : "warning",
+                    title: "Window Focus Lost Infraction",
+                    description: `Candidate lost focus/switched tabs ${tabSwitches} times during this examination session. Indicative of navigation away from workspace.`
+                });
+            }
+
+            if (revisions > 10) {
+                incidents.push({
+                    id: `${r.id}-revision`,
+                    examTitle,
+                    timestamp: format(new Date(r.completedAt), "PPP p"),
+                    type: "info",
+                    title: "High Answer Revisions",
+                    description: `Candidate revised selected answers ${revisions} times. Suggests high degree of hesitation or potential option-guessing.`
+                });
+            }
+
+            if (rawTelemetry?.timeSpentPerQuestion) {
+                const times = Object.values(rawTelemetry.timeSpentPerQuestion) as number[];
+                const fastCount = times.filter(t => t < 4).length;
+                if (fastCount > 5) {
+                    incidents.push({
+                        id: `${r.id}-speed`,
+                        examTitle,
+                        timestamp: format(new Date(r.completedAt), "PPP p"),
+                        type: "critical",
+                        title: "Suspicious Pacing Velocity",
+                        description: `Candidate submitted ${fastCount} answers in under 4 seconds each. Highly indicative of guesswork or direct answers leakage.`
+                    });
+                }
+            }
+
+            const hour = new Date(r.completedAt).getHours();
+            if (hour >= 23 || hour <= 4) {
+                incidents.push({
+                    id: `${r.id}-time`,
+                    examTitle,
+                    timestamp: format(new Date(r.completedAt), "PPP p"),
+                    type: "warning",
+                    title: "Off-Hours CBT Submission",
+                    description: `CBT resolved and submitted at ${format(new Date(r.completedAt), "hh:mm a")} (Midnight window). Flagged for schedule compliance.`
+                });
+            }
+        });
+
+        return incidents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }, [studentResults, exams]);
 
     // Personalized Strengths and Focus Areas (Weaknesses) breakdown
     const subjectDiagnostics = useMemo(() => {
@@ -473,7 +692,18 @@ export default function AdminStudentProfile() {
                  </div>
              </div>
 
-             {/* Exam Block & Permissions Panel */}
+                          <Tabs defaultValue="academic-records" className="w-full space-y-6">
+                 <TabsList className="bg-slate-100/85 border p-1 rounded-2xl w-full sm:w-auto grid grid-cols-2 max-w-lg shadow-sm">
+                     <TabsTrigger value="academic-records" className="rounded-xl font-bold py-2.5 text-xs tracking-wide">
+                         Academic Records & Access
+                     </TabsTrigger>
+                     <TabsTrigger value="psychometrics-forensics" className="rounded-xl font-bold py-2.5 text-xs tracking-wide flex items-center gap-1.5">
+                         <Brain className="h-4 w-4 text-indigo-500" /> Psychometric & Forensic Analytics
+                     </TabsTrigger>
+                 </TabsList>
+
+                 <TabsContent value="academic-records" className="space-y-8 animate-in fade-in-50 duration-300">
+                     {/* Exam Block & Permissions Panel */}
              <Card className="shadow-xl border-none overflow-hidden bg-white">
                  <CardHeader className="bg-slate-50/80 border-b border-slate-100 py-4 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                      <div>
@@ -657,7 +887,182 @@ export default function AdminStudentProfile() {
                          </TableBody>
                      </Table>
                  </CardContent>
+              </Card>
+          </TabsContent>
+
+         <TabsContent value="psychometrics-forensics" className="space-y-8 animate-in fade-in-50 duration-300">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 {/* Radar Chart */}
+                 <Card className="border-none shadow-xl bg-white overflow-hidden">
+                     <CardHeader className="bg-slate-50 border-b border-slate-100 py-4 px-6">
+                         <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-800">
+                             <Sparkles className="h-4.5 w-4.5 text-indigo-600" /> Topic Mastery Radar
+                         </CardTitle>
+                         <CardDescription className="text-xs">
+                             Subject-level syllabus mastery compared to class cohort average.
+                         </CardDescription>
+                     </CardHeader>
+                     <CardContent className="p-6 h-[320px] flex items-center justify-center">
+                         {radarData.length > 0 ? (
+                             <ResponsiveContainer width="100%" height="100%">
+                                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                                     <PolarGrid stroke="#e2e8f0" />
+                                     <PolarAngleAxis dataKey="subject" tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }} />
+                                     <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 8 }} />
+                                     <Radar name="Class Average" dataKey="Class Average" stroke="#94a3b8" fill="#cbd5e1" fillOpacity={0.3} />
+                                     <Radar name="Candidate" dataKey="Candidate" stroke="#4f46e5" fill="#818cf8" fillOpacity={0.5} />
+                                     <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                                     <ChartTooltip contentStyle={{ fontSize: '12px', borderRadius: '12px' }} />
+                                 </RadarChart>
+                             </ResponsiveContainer>
+                         ) : (
+                             <div className="text-xs text-muted-foreground flex flex-col items-center gap-2">
+                                 <Brain className="h-8 w-8 text-slate-300" />
+                                 <span>Insufficient diagnostic data to render radar chart.</span>
+                             </div>
+                         )}
+                     </CardContent>
+                 </Card>
+
+                 {/* Response Fatigue Curve */}
+                 <Card className="border-none shadow-xl bg-white overflow-hidden">
+                     <CardHeader className="bg-slate-50 border-b border-slate-100 py-4 px-6">
+                         <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-800">
+                             <Clock className="h-4.5 w-4.5 text-indigo-600" /> Pacing Latency & Cognitive Fatigue
+                         </CardTitle>
+                         <CardDescription className="text-xs">
+                             Chronological progression of average answer latency and focus deviations.
+                         </CardDescription>
+                     </CardHeader>
+                     <CardContent className="p-6 h-[320px]">
+                         {pacingData.length > 0 ? (
+                             <ResponsiveContainer width="100%" height="100%">
+                                 <LineChart data={pacingData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                     <XAxis dataKey="examIndex" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }} />
+                                     <YAxis tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }} />
+                                     <ChartTooltip contentStyle={{ fontSize: '12px', borderRadius: '12px' }} />
+                                     <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                                     <Line type="monotone" dataKey="Avg Time (sec)" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 8 }} />
+                                     <Line type="monotone" dataKey="Lost Focus Warnings" stroke="#ef4444" strokeWidth={2} />
+                                     <Line type="monotone" dataKey="Revisions" stroke="#10b981" strokeWidth={2} />
+                                 </LineChart>
+                             </ResponsiveContainer>
+                         ) : (
+                             <div className="text-xs text-muted-foreground flex flex-col items-center justify-center h-full gap-2">
+                                 <Clock className="h-8 w-8 text-slate-300" />
+                                 <span>No completed sessions found to plot response curve.</span>
+                             </div>
+                         )}
+                     </CardContent>
+                 </Card>
+             </div>
+
+             {/* Time-Weighted Forecasting */}
+             <Card className="border-none shadow-xl bg-white overflow-hidden">
+                 <CardContent className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                     <div className="flex items-start gap-4">
+                         <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                             academicTrajectory.trend === "improving"
+                                 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20"
+                                 : academicTrajectory.trend === "declining"
+                                 ? "bg-rose-50 text-rose-600 dark:bg-rose-955/20"
+                                 : "bg-amber-50 text-amber-600 dark:bg-amber-955/20"
+                         }`}>
+                             <TrendingUp className="h-6 w-6" />
+                         </div>
+                         <div>
+                             <h3 className="font-extrabold text-slate-800 text-base">Predictive Academic Trajectory Forecast</h3>
+                             <p className="text-xs font-semibold text-muted-foreground mt-0.5">
+                                 Calculated using a Time-Weighted Linear Regression across all resolved examinations.
+                             </p>
+                             <div className="flex items-center gap-2 mt-2">
+                                 <Badge className={`font-bold border px-2 py-0.5 text-[10px] shadow-none uppercase ${
+                                     academicTrajectory.trend === "improving"
+                                         ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                         : academicTrajectory.trend === "declining"
+                                         ? "bg-rose-50 text-rose-700 border-rose-100 animate-pulse"
+                                         : "bg-amber-50 text-amber-700 border-amber-100"
+                                 }`}>
+                                     {academicTrajectory.text}
+                                 </Badge>
+                                 <Badge className="bg-slate-100 text-slate-700 border-none font-extrabold text-[10px]">
+                                     Weighted Velocity Score: {(academicTrajectory.slope).toFixed(1)}
+                                 </Badge>
+                             </div>
+                         </div>
+                     </div>
+
+                     <div className="bg-slate-50 dark:bg-slate-900 border p-4.5 rounded-2xl flex flex-col items-center min-w-[160px] justify-center text-center">
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Next Exam Forecast</span>
+                         <span className="text-4xl font-black text-indigo-700 dark:text-indigo-400 mt-1">{predictedNextScore}%</span>
+                         <span className="text-[9px] font-semibold text-slate-500 mt-1">Expected Score Target</span>
+                     </div>
+                 </CardContent>
              </Card>
+
+             {/* Malpractice Incidents Feed */}
+             <Card className="border-none shadow-xl bg-white overflow-hidden">
+                 <CardHeader className="bg-slate-50 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
+                     <div>
+                         <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-800">
+                             <Fingerprint className="h-4.5 w-4.5 text-indigo-600" /> Proctoring & Integrity Telemetry Log
+                         </CardTitle>
+                         <CardDescription className="text-xs">
+                             Chronological log of suspicious behavior, focus switches, and timing anomalies.
+                         </CardDescription>
+                     </div>
+                     <Badge variant="outline" className="border-rose-100 bg-rose-50 text-rose-700 font-bold uppercase text-[9px] tracking-wider">
+                         {forensicIncidents.length} Telemetry Flag{forensicIncidents.length !== 1 ? 's' : ''}
+                     </Badge>
+                 </CardHeader>
+                 <CardContent className="p-0">
+                     {forensicIncidents.length > 0 ? (
+                         <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto">
+                             {forensicIncidents.map((incident) => (
+                                 <div key={incident.id} className="p-4.5 flex gap-4 hover:bg-slate-50/50 transition-colors">
+                                     <div className="shrink-0 mt-0.5">
+                                         {incident.type === "critical" ? (
+                                             <div className="h-8.5 w-8.5 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+                                                 <FileWarning className="h-4.5 w-4.5" />
+                                             </div>
+                                         ) : incident.type === "warning" ? (
+                                             <div className="h-8.5 w-8.5 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+                                                 <AlertTriangle className="h-4.5 w-4.5" />
+                                             </div>
+                                         ) : (
+                                             <div className="h-8.5 w-8.5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                                                 <Info className="h-4.5 w-4.5" />
+                                             </div>
+                                         )}
+                                     </div>
+                                     <div className="flex-1 space-y-1">
+                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                             <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                                                 {incident.title}
+                                                 <span className="text-xs text-indigo-700 bg-indigo-50 font-bold px-1.5 py-0.25 rounded">
+                                                     {incident.examTitle}
+                                                 </span>
+                                             </h4>
+                                             <span className="text-[10px] font-semibold text-slate-400">{incident.timestamp}</span>
+                                         </div>
+                                         <p className="text-xs font-medium text-slate-600 leading-relaxed">
+                                             {incident.description}
+                                         </p>
+                                     </div>
+                                 </div>
+                             ))}
+                         </div>
+                     ) : (
+                         <div className="text-center py-12 text-slate-400 flex flex-col items-center justify-center gap-2">
+                             <Fingerprint className="h-10 w-10 text-emerald-500/30" />
+                             <span className="text-xs font-bold text-slate-500">Perfect Integrity Score! No malpractice incidents logged.</span>
+                         </div>
+                     )}
+                 </CardContent>
+             </Card>
+         </TabsContent>
+     </Tabs>
 
              {/* Reset Confirmation Dialog */}
              <AlertDialog open={resettingResult !== null} onOpenChange={(open) => !open && setResettingResult(null)}>

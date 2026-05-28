@@ -3,7 +3,7 @@ import { Printer, FileText, Users, Calendar, Award, GraduationCap } from 'lucide
 import { Button } from "@/components/ui/button";
 
 interface PrintReportTemplateProps {
-    reportType: 'score-sheet' | 'result-report' | 'exam-paper';
+    reportType: 'score-sheet' | 'result-report' | 'exam-paper' | 'consolidated-portfolio';
     schoolInfo: {
         name: string;
         address: string;
@@ -40,11 +40,10 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     onPrint,
     showPrintButton = true
 }) => {
-    // Read reactive local storage settings for printing
-    const omitExamTitlesSetting = localStorage.getItem("fia_cbt_omit_exam_titles") === "true";
-    const principalSignatureSetting = localStorage.getItem("fia_cbt_principal_signature") !== "false"; // default true
-    const schoolSloganSetting = localStorage.getItem("fia_cbt_school_slogan") || "";
-    const scoreFormatSetting = localStorage.getItem("fia_cbt_score_format") || "points";
+    const omitExamTitlesSetting = localStorage.getItem("fia_cbt_settings_remove_title") === "true";
+    const principalSignatureSetting = localStorage.getItem("fia_cbt_settings_report_signature") !== "false"; // default true
+    const schoolSloganSetting = localStorage.getItem("fia_cbt_settings_school_motto") !== "false"; // default true
+    const scoreFormatSetting = localStorage.getItem("fia_cbt_settings_score_format") || "percentage";
 
     const handlePrint = () => {
         if (onPrint) {
@@ -61,7 +60,15 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                 <div className="w-full max-w-4xl bg-white mb-6 p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap items-center justify-between gap-4 print:hidden mx-auto">
                     <div className="flex gap-2">
                         <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-bold border border-blue-100 flex items-center gap-2">
-                            <FileText size={18} /> {reportType === 'score-sheet' ? 'Score Sheet' : reportType === 'exam-paper' ? 'Question Paper' : 'Result Report'}
+                            <FileText size={18} /> {
+                                reportType === 'score-sheet' 
+                                    ? 'Score Sheet' 
+                                    : reportType === 'exam-paper' 
+                                    ? 'Question Paper' 
+                                    : reportType === 'consolidated-portfolio'
+                                    ? 'Consolidated Portfolio'
+                                    : 'Result Report'
+                            }
                         </div>
                     </div>
 
@@ -95,41 +102,62 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
 
                     <div className="flex-1 text-center pr-24 sm:pr-28">
                         <h1 className="text-xl sm:text-3xl font-black text-blue-900 tracking-tight leading-none mb-1 uppercase">{schoolInfo.name}</h1>
-                        <p className="text-xs sm:text-sm font-bold text-gray-600 tracking-[0.1em] sm:tracking-[0.2em] mb-2">{schoolInfo.address}</p>
-                        <div className="inline-block bg-blue-50 px-4 sm:px-6 py-1 rounded-full border border-blue-200">
-                            <span className="text-[10px] sm:text-xs font-bold text-blue-800 italic uppercase">
-                                Motto: {schoolInfo.motto} {schoolSloganSetting ? `• Slogan: ${schoolSloganSetting}` : ''}
-                            </span>
-                        </div>
+                        {schoolSloganSetting && (
+                            <>
+                                <p className="text-xs sm:text-sm font-bold text-gray-600 tracking-[0.1em] sm:tracking-[0.2em] mb-2">{schoolInfo.address}</p>
+                                <div className="inline-block bg-blue-50 px-4 sm:px-6 py-1 rounded-full border border-blue-200">
+                                    <span className="text-[10px] sm:text-xs font-bold text-blue-800 italic uppercase">
+                                        Motto: {schoolInfo.motto}
+                                    </span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 {/* Report Title Banner */}
                 <div className="bg-gray-900 text-white text-center py-2 mb-6">
                     <h2 className="text-sm sm:text-lg font-bold tracking-widest uppercase">
-                        {reportType === 'score-sheet' ? 'OFFICIAL EXAMINATION SCORE SHEET' : reportType === 'exam-paper' ? 'EXAMINATION QUESTION PAPER' : 'STUDENT PERFORMANCE REPORT'}
+                        {
+                            reportType === 'score-sheet' 
+                                ? 'OFFICIAL EXAMINATION SCORE SHEET' 
+                                : reportType === 'exam-paper' 
+                                ? 'EXAMINATION QUESTION PAPER' 
+                                : reportType === 'consolidated-portfolio'
+                                ? 'CONSOLIDATED ACADEMIC PERFORMANCE PORTFOLIO'
+                                : 'STUDENT PERFORMANCE REPORT'
+                        }
                     </h2>
                 </div>
 
                 {/* Metadata Grid */}
                 <div className="grid grid-cols-2 gap-y-3 gap-x-8 mb-8 text-xs sm:text-sm">
                     <div className="flex justify-between border-b border-gray-200 pb-1">
-                        <span className="text-gray-500 flex items-center gap-2 font-medium uppercase"><GraduationCap size={14} /> Class:</span>
+                        <span className="text-gray-500 flex items-center gap-2 font-medium uppercase"><GraduationCap size={14} /> Class / Level:</span>
                         <span className="font-bold text-gray-800">{metadata.class}</span>
                     </div>
                     <div className="flex justify-between border-b border-gray-200 pb-1">
-                        <span className="text-gray-500 flex items-center gap-2 font-medium uppercase"><Calendar size={14} /> Date:</span>
+                        <span className="text-gray-500 flex items-center gap-2 font-medium uppercase"><Calendar size={14} /> Date Compiled:</span>
                         <span className="font-bold text-gray-800">{metadata.date}</span>
                     </div>
                     <div className="flex justify-between border-b border-gray-200 pb-1 col-span-2">
                         <span className="text-gray-500 flex items-center gap-2 font-medium uppercase">
-                            {reportType === 'score-sheet' ? <Award size={14} /> : <FileText size={14} />}
-                            {reportType === 'score-sheet' ? 'Subject / Examination:' : 'Academic Session:'}
+                            {reportType === 'consolidated-portfolio' ? <GraduationCap size={14} /> : reportType === 'score-sheet' ? <Award size={14} /> : <FileText size={14} />}
+                            {
+                                reportType === 'consolidated-portfolio'
+                                    ? 'Candidate Identifier & Name:'
+                                    : reportType === 'score-sheet' 
+                                    ? 'Subject / Examination:' 
+                                    : 'Academic Session:'
+                            }
                         </span>
                         <span className="font-bold text-gray-800 italic underline">
-                            {reportType === 'score-sheet' 
-                                ? (omitExamTitlesSetting ? '____________________' : metadata.exam) 
-                                : metadata.session
+                            {
+                                reportType === 'consolidated-portfolio'
+                                    ? metadata.exam
+                                    : reportType === 'score-sheet' 
+                                    ? (omitExamTitlesSetting ? '____________________' : metadata.exam) 
+                                    : metadata.session
                             }
                         </span>
                     </div>
@@ -161,6 +189,85 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    ) : reportType === 'consolidated-portfolio' ? (
+                        <div className="space-y-6">
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider w-8 sm:w-12">S/N</th>
+                                        <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider">
+                                            Examination / Subject Title
+                                        </th>
+                                        <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider w-32 sm:w-40">
+                                            Completion Date
+                                        </th>
+                                        <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-24 sm:w-32">
+                                            Raw Score
+                                        </th>
+                                        <th className="border border-gray-400 px-2 sm:px-4 py-2 sm:py-3 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-24 sm:w-32">
+                                            Percentage Grade
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {results.map((res, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-2 text-[10px] sm:text-sm text-center font-mono">{index + 1}</td>
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-2 text-[10px] sm:text-sm font-bold uppercase text-blue-900">
+                                                {res.name}
+                                            </td>
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-2 text-[10px] sm:text-sm font-semibold text-gray-650">
+                                                {res.subject}
+                                            </td>
+                                            <td className="border border-gray-300 px-2 sm:px-4 py-2 text-[10px] sm:text-sm text-center font-semibold text-gray-700">
+                                                {res.score} <span className="text-gray-400 text-xs font-normal">/ {res.total ?? '-'}</span>
+                                            </td>
+                                            <td className={`border border-gray-300 px-2 sm:px-4 py-2 text-[10px] sm:text-sm text-center font-black ${res.percentage !== undefined ? (res.percentage >= 45 ? 'text-green-700' : 'text-red-600') : 'text-gray-800'}`}>
+                                                {res.percentage !== undefined ? `${res.percentage.toFixed(0)}%` : '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {/* Empty rows for layout stability */}
+                                    {[...Array(Math.max(0, 8 - results.length))].map((_, i) => (
+                                        <tr key={`empty-${i}`} className="h-8 sm:h-10">
+                                            <td className="border border-gray-200 px-2 sm:px-4 py-2"></td>
+                                            <td className="border border-gray-200 px-2 sm:px-4 py-2"></td>
+                                            <td className="border border-gray-200 px-2 sm:px-4 py-2"></td>
+                                            <td className="border border-gray-200 px-2 sm:px-4 py-2"></td>
+                                            <td className="border border-gray-200 px-2 sm:px-4 py-2 text-center text-gray-350 font-mono">---</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {/* Portfolio Cumulative Summary Stats Box */}
+                            {results.length > 0 && (
+                                <div className="mt-4 p-4 rounded-xl border border-blue-100 bg-blue-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div>
+                                        <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900">Academic Standing Summary</h4>
+                                        <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
+                                            Cumulative performance index calculated across {results.length} evaluated session{results.length !== 1 ? 's' : ''}.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-right">
+                                            <span className="text-[10px] font-black text-gray-400 block uppercase">Cumulative Average</span>
+                                            <span className="text-2xl font-black text-blue-900">
+                                                {(results.reduce((acc, r) => acc + (r.percentage || 0), 0) / results.length).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                        <div className="px-3.5 py-1.5 rounded-lg bg-blue-900 text-white font-extrabold text-xs uppercase tracking-wide">
+                                            {(results.reduce((acc, r) => acc + (r.percentage || 0), 0) / results.length) >= 75 
+                                                ? 'Distinction' 
+                                                : (results.reduce((acc, r) => acc + (r.percentage || 0), 0) / results.length) >= 50 
+                                                ? 'Satisfactory Pass' 
+                                                : 'Improvement Required'
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <table className="w-full border-collapse">
@@ -221,7 +328,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
                                         <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2"></td>
-                                        <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2 text-center text-gray-300 font-mono">---</td>
+                                        <td className="border border-gray-200 px-2 sm:px-4 py-1.5 sm:py-2 text-center text-gray-305 font-mono">---</td>
                                     </tr>
                                 ))}
                             </tbody>

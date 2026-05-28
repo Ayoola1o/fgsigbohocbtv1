@@ -536,7 +536,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // ignore session set failure
       }
 
-      res.json({ id: student.id, name: student.name, classLevel: (student as any).classLevel });
+      res.json({
+        id: student.id,
+        name: student.name,
+        studentId: student.studentId,
+        classLevel: (student as any).classLevel,
+        department: (student as any).department || "General",
+        sex: (student as any).sex || "M"
+      });
     } catch (error) {
       console.error("Student login error:", error);
       res.status(500).json({ error: "Failed to login" });

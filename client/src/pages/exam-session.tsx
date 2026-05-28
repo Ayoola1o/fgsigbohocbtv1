@@ -147,6 +147,13 @@ export default function ExamSessionPage() {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
 
+  // Forensic & integrity telemetry refs
+  const tabSwitchesRef = useRef<number>(0);
+  const revisionsRef = useRef<number>(0);
+  const timeSpentPerQuestionRef = useRef<Record<string, number>>({});
+  const lastQuestionTimeRef = useRef<number>(Date.now());
+  const prevIndexRef = useRef<number>(0);
+
   const { data: session, isLoading: sessionLoading } = useQuery<(ExamSession & { serverTime?: string }) | null>({
     queryKey: ["/api/exam-sessions", sessionId],
     queryFn: async () => {
@@ -160,7 +167,6 @@ export default function ExamSessionPage() {
 
   useEffect(() => {
     if (!sessionId || sessionId === "undefined") {
-      // If there's no sessionId in the route, redirect back to exams list
       setLocation("/");
     }
   }, [sessionId, setLocation]);
@@ -186,6 +192,36 @@ export default function ExamSessionPage() {
     enabled: !!session?.sessionQuestionIds && session.sessionQuestionIds.length > 0,
   });
 
+  // Track pacing and duration per question
+  useEffect(() => {
+    if (!session || !questions || questions.length === 0) return;
+    const now = Date.now();
+    const prevQ = questions[prevIndexRef.current];
+    if (prevQ) {
+      const elapsed = Math.max(0, Math.round((now - lastQuestionTimeRef.current) / 1000));
+      timeSpentPerQuestionRef.current[prevQ.id] = (timeSpentPerQuestionRef.current[prevQ.id] || 0) + elapsed;
+    }
+    lastQuestionTimeRef.current = now;
+    prevIndexRef.current = currentQuestionIndex;
+  }, [currentQuestionIndex, questions, session]);
+
+  // Tab switch warning listener
+  useEffect(() => {
+    if (!session || session.isCompleted) return;
+    const handleVisibility = () => {
+      if (document.hidden) {
+        tabSwitchesRef.current += 1;
+        toast({
+          title: "Warning: Malpractice Flagged",
+          description: `Window focus lost. This incident (Lost Focus #${tabSwitchesRef.current}) has been logged to the forensic database. Please remain within the examination screen.`,
+          variant: "destructive",
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [session, toast]);
+
   const saveProgressMutation = useMutation({
     mutationFn: async (data: { answers: Record<string, string>; currentQuestionIndex: number }) => {
       return updateExamSession(sessionId, data);
@@ -193,7 +229,11 @@ export default function ExamSessionPage() {
   });
 
   const submitExamMutation = useMutation({
-    mutationFn: async (vars: { submissionType: 'student' | 'auto', answers: Record<string, string> }) => {
+    mutationFn: async (vars: { 
+      submissionType: 'student' | 'auto', 
+      answers: Record<string, string>,
+      telemetry?: { tabSwitches: number; revisions: number; timeSpentPerQuestion: Record<string, number> }
+    }) => {
       console.log("submitExamMutation: Starting submission...");
 
       // 10 second timeout for the UI to wait before assuming success (local save)
@@ -201,7 +241,7 @@ export default function ExamSessionPage() {
         setTimeout(() => reject(new Error("SUBMISSION_TIMEOUT")), 10000);
       });
 
-      const submitPromise = submitExamSession(sessionId, vars.answers, vars.submissionType);
+      const submitPromise = submitExamSession(sessionId, vars.answers, vars.submissionType, vars.telemetry);
 
       try {
         return await Promise.race([submitPromise, timeoutPromise]);
@@ -235,9 +275,21 @@ export default function ExamSessionPage() {
 
   const handleAutoSubmit = useCallback(() => {
     if (!submitExamMutation.isPending) {
-      submitExamMutation.mutate({ submissionType: 'auto', answers });
+      // Finalize the last question's time
+      const now = Date.now();
+      const currentQ = questions?.[currentQuestionIndex];
+      if (currentQ) {
+        const elapsed = Math.max(0, Math.round((now - lastQuestionTimeRef.current) / 1000));
+        timeSpentPerQuestionRef.current[currentQ.id] = (timeSpentPerQuestionRef.current[currentQ.id] || 0) + elapsed;
+      }
+      const telemetryObj = {
+        tabSwitches: tabSwitchesRef.current,
+        revisions: revisionsRef.current,
+        timeSpentPerQuestion: timeSpentPerQuestionRef.current
+      };
+      submitExamMutation.mutate({ submissionType: 'auto', answers, telemetry: telemetryObj });
     }
-  }, [submitExamMutation, answers]);
+  }, [submitExamMutation, answers, questions, currentQuestionIndex]);
 
   // Track if we've initialized the session state to prevent overwriting user input
   const isInitialized = useRef<boolean>(false);
@@ -300,6 +352,10 @@ export default function ExamSessionPage() {
 
 
   const handleAnswerChange = (questionId: string, answer: string) => {
+    const prevAnswer = answers[questionId];
+    if (prevAnswer && prevAnswer !== answer) {
+      revisionsRef.current += 1;
+    }
     const newAnswers = { ...answers, [questionId]: answer };
     setAnswers(newAnswers);
     saveProgressMutation.mutate({
@@ -690,7 +746,20 @@ export default function ExamSessionPage() {
               Continue Solving
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => submitExamMutation.mutate({ submissionType: 'student', answers })}
+              onClick={() => {
+                const now = Date.now();
+                const currentQ = questions?.[currentQuestionIndex];
+                if (currentQ) {
+                  const elapsed = Math.max(0, Math.round((now - lastQuestionTimeRef.current) / 1000));
+                  timeSpentPerQuestionRef.current[currentQ.id] = (timeSpentPerQuestionRef.current[currentQ.id] || 0) + elapsed;
+                }
+                const telemetryObj = {
+                  tabSwitches: tabSwitchesRef.current,
+                  revisions: revisionsRef.current,
+                  timeSpentPerQuestion: timeSpentPerQuestionRef.current
+                };
+                submitExamMutation.mutate({ submissionType: 'student', answers, telemetry: telemetryObj });
+              }}
               disabled={submitExamMutation.isPending}
               className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold rounded-xl h-11 px-6 shadow-md transition-all shrink-0"
               data-testid="button-confirm-submit"

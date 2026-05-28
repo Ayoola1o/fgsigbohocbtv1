@@ -83,6 +83,40 @@ export default function AdminQuestions() {
   const [examDuration, setExamDuration] = useState(30);
   const [examPassingScore, setExamPassingScore] = useState(50);
 
+  const extractSameLineOptions = (text: string) => {
+    // 1. Try parenthesized: (a) OptionText (b) OptionText...
+    let matches = Array.from(text.matchAll(/\(([a-eA-E])\)\s*([^\s].*?)(?=\s+\(([a-eA-E])\)|$)/g));
+    if (matches.length > 0) {
+      return matches.map(m => ({
+        letter: m[1],
+        val: m[2],
+        full: m[0]
+      }));
+    }
+
+    // 2. Try bracketed: a) OptionText b) OptionText...
+    matches = Array.from(text.matchAll(/(?:\s|^)([a-eA-E])\)\s*([^\s].*?)(?=\s+[a-eA-E]\)|$)/g));
+    if (matches.length > 0) {
+      return matches.map(m => ({
+        letter: m[1],
+        val: m[2],
+        full: m[0].trim()
+      }));
+    }
+
+    // 3. Try dotted: a. OptionText b. OptionText...
+    matches = Array.from(text.matchAll(/(?:\s|^)([a-eA-E])\.\s+([^\s].*?)(?=\s+[a-eA-E]\.|$)/g));
+    if (matches.length > 0) {
+      return matches.map(m => ({
+        letter: m[1],
+        val: m[2],
+        full: m[0].trim()
+      }));
+    }
+
+    return [];
+  };
+
   const parseTextToQuestions = (text: string) => {
     const lines = text.split(/\r?\n/);
     const questionsList: any[] = [];
@@ -98,14 +132,26 @@ export default function AdminQuestions() {
         if (currentQuestion) {
           questionsList.push(currentQuestion);
         }
+        
+        const restOfText = questionMatch[3].trim();
         currentQuestion = {
-          questionText: questionMatch[3].trim(),
+          questionText: restOfText,
           options: [] as string[],
           correctAnswer: "",
           questionType: "multiple-choice",
           difficulty: "medium",
           points: 1,
         };
+
+        // Check for same-line options using sequential parser
+        const optMatches = extractSameLineOptions(restOfText);
+        if (optMatches.length > 0) {
+          const firstOptIndex = restOfText.indexOf(optMatches[0].full);
+          currentQuestion.questionText = restOfText.substring(0, firstOptIndex).trim();
+          for (const m of optMatches) {
+            currentQuestion.options.push(`(${m.letter.toLowerCase()}) ${m.val.trim()}`);
+          }
+        }
         continue;
       }
 
@@ -240,7 +286,16 @@ export default function AdminQuestions() {
       );
 
       const cols = hasHeader
-        ? headerParts
+        ? headerParts.map((h) => {
+            const normalized = h.toLowerCase().trim();
+            if (normalized === "image" || normalized === "imageurl" || normalized === "image_url" || normalized === "image_name" || normalized === "imagename" || normalized === "imagepath" || normalized === "image_path") {
+              return "imageUrl";
+            }
+            if (normalized === "dept" || normalized === "dept_name" || normalized === "department_name") {
+              return "department";
+            }
+            return h;
+          })
         : ["questionText", "questionType", "difficulty", "options", "correctAnswer", "points", "imageUrl", "classLevel", "term", "examType", "subject", "department"];
 
 
@@ -736,7 +791,9 @@ export default function AdminQuestions() {
       "questionText",
       "questionType",
       "difficulty",
-      "points"
+      "points",
+      "imageUrl",
+      "department"
     ];
 
     if (type === 'objectives') {
@@ -1370,7 +1427,8 @@ export default function AdminQuestions() {
                   setImageUploadProgress({ current: 0, total: files.length });
 
                   for (const file of files) {
-                    if (missingImages.includes(file.name)) {
+                    const matchedImageKey = missingImages.find(img => img.toLowerCase().trim() === file.name.toLowerCase().trim());
+                    if (matchedImageKey) {
                       try {
                         const formData = new FormData();
                         formData.append("file", file);
@@ -1383,7 +1441,7 @@ export default function AdminQuestions() {
                         if (!res.ok) throw new Error("Upload failed");
 
                         const data = await res.json();
-                        newMap[file.name] = data.url;
+                        newMap[matchedImageKey] = data.url;
                         count++;
                       } catch (err: any) {
                         console.error(`Failed to upload ${file.name}`, err);
