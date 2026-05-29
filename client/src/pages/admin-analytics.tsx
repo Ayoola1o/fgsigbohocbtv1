@@ -26,6 +26,7 @@ interface AnalyticsData {
   }[];
   topicMastery: { subject: string; mastery: number; fullMark: number }[];
   totalCandidates: number;
+  speedGuessingFlags: number;
 }
 
 export default function AdminAnalytics() {
@@ -53,6 +54,7 @@ export default function AdminAnalytics() {
   const itemAnalysis = analytics?.itemAnalysis || [];
   const topicMastery = analytics?.topicMastery || [];
   const totalCandidates = analytics?.totalCandidates || 0;
+  const speedGuessingFlags = analytics?.speedGuessingFlags || 0;
 
   const visibleItems = useMemo(() => {
     return itemAnalysis.slice(0, visibleCount);
@@ -155,7 +157,7 @@ export default function AdminAnalytics() {
           </div>
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Speed Guessing Flags</span>
-            <h3 className="text-2xl font-black text-rose-500">2</h3>
+            <h3 className="text-2xl font-black text-rose-500">{speedGuessingFlags}</h3>
             <span className="text-[10px] text-rose-400 font-bold flex items-center gap-0.5 mt-0.5">
               <AlertTriangle className="h-3 w-3 shrink-0 animate-pulse" /> Anomalous pacing detected
             </span>

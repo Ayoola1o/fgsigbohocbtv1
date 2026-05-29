@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { getFirestoreResults, getFirestoreQuestions, getFirestoreExams } from "./firebase";
 import {
   insertQuestionSchema,
   insertExamSchema,
@@ -810,9 +811,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const selectedExamId = (req.query.examId as string) || "__all__";
 
       const [allResults, allQuestions, allExams] = await Promise.all([
-        storage.getResults(),
-        storage.getQuestions(),
-        storage.getExams(),
+        getFirestoreResults(),
+        getFirestoreQuestions(),
+        getFirestoreExams(),
       ]);
 
       // 1. Filtered results
@@ -842,6 +843,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       filteredResults.forEach((r: any) => {
         const idx = Math.min(Math.floor(r.percentage / 10), 9);
         scoreDistribution[idx].count++;
+      });
+
+      // Calculate speed guessing/anomalous pacing flags
+      let speedGuessingFlags = 0;
+      filteredResults.forEach((r: any) => {
+        const telemetry = r.telemetry;
+        if (telemetry) {
+          let fastAnswers = 0;
+          if (telemetry.timeSpentPerQuestion) {
+            Object.values(telemetry.timeSpentPerQuestion).forEach((sec: any) => {
+              if (Number(sec) < 4) fastAnswers++;
+            });
+          }
+          if (fastAnswers >= 3 || (telemetry.tabSwitches && telemetry.tabSwitches > 3)) {
+            speedGuessingFlags++;
+          }
+        }
       });
 
       // 4. Pre-index for item analysis
@@ -962,6 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scoreDistribution,
         itemAnalysis,
         topicMastery,
+        speedGuessingFlags,
         totalCandidates: filteredResults.length,
       });
     } catch (error) {
