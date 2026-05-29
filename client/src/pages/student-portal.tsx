@@ -44,7 +44,6 @@ export default function StudentPortal() {
 
   const freshestStudent = useMemo(() => {
     if (!student) return null;
-  const currentStudent = freshestStudent || student;
     const match = students.find(s =>
       s.studentId?.trim().toLowerCase() === student.studentId?.trim().toLowerCase() ||
       s.id?.trim().toLowerCase() === student.id?.trim().toLowerCase()

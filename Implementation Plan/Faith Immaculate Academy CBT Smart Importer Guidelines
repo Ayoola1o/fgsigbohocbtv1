@@ -1,0 +1,82 @@
+# Faith Immaculate Academy CBT Smart Importer Guidelines
+
+To ensure your Microsoft Word (`.docx`) or Notepad (`.txt`) exam papers import with **100% flawless accuracy**, follow these simple formatting guidelines. 
+
+The smart importer uses both Google Gemini AI and a resilient local regex engine to understand your questions, choices, and answer keys automatically.
+
+---
+
+## 1. Multiple-Choice Questions (Objectives)
+
+For objectives questions, list the question first, followed by options labeled `A` through `E`. You can specify the correct answer using an **Answer Tag** or an **Asterisk (`*`)**.
+
+### Format Style A: Using "Answer:" Tags (Recommended)
+```text
+1. What is the main organ responsible for pumping blood throughout the human body?
+A. Brain
+B. Lungs
+C. Heart
+D. Liver
+Answer: C
+
+2. Which of the following elements has the chemical symbol "O"?
+A. Gold
+B. Oxygen
+C. Helium
+D. Iron
+Answer: B
+```
+
+### Format Style B: Using Asterisks or "(correct)" Labels
+If you don't want to write "Answer: " lines, simply place a `*` or `(correct)` immediately next to the right option:
+```text
+1. Who is considered the father of modern physics?
+A. Isaac Newton
+B. Albert Einstein*
+C. Nikola Tesla
+D. Galileo Galilei
+
+2. Which planet is closest to the sun?
+A. Mercury (correct)
+B. Venus
+C. Earth
+D. Mars
+```
+
+### Format Style C: Same-Line Options
+If your options are written horizontally to save page space, the importer will split them correctly:
+```text
+1. What is 5 + 7?
+(A) 10  (B) 11  (C) 12  (D) 13
+Answer: C
+```
+
+---
+
+## 2. True / False Questions
+
+For True/False items, write the statement followed by `True` and `False` as choices:
+```text
+1. The Earth revolves around the Sun.
+A. True
+B. False
+Answer: A
+```
+
+---
+
+## 3. Theory & Short-Answer Questions
+
+For theory or descriptive questions, **do not list any options**. The importer will automatically detect this and set the question type to **Theory**:
+```text
+1. Explain the process of photosynthesis in green plants.
+
+2. State Newton's third law of motion.
+```
+
+---
+
+## 4. Pro-Tips for Word Document (.docx) Prep
+1. **Remove Headers and Footers**: Ensure text doesn't contain page numbers, headers, or teacher instructions (e.g. *"Attempt all questions"*).
+2. **Convert Old Files**: If you have an old binary Word file ending in `.doc`, save it as a modern Word Document (`.docx`) in Microsoft Word before uploading.
+3. **Double-Check Keys**: Make sure every multiple-choice question has exactly one correct answer marked.

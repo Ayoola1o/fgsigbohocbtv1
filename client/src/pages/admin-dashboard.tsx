@@ -17,7 +17,8 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import type { Exam, Question, Result } from "@shared/schema";
+import type { Exam, Question, Result, Student } from "@shared/schema";
+import { useMemo } from "react";
 
 export default function AdminDashboard() {
   const { data: exams, isLoading: examsLoading } = useQuery<Exam[]>({
@@ -32,7 +33,109 @@ export default function AdminDashboard() {
     queryKey: ["/api/results"],
   });
 
-  const isLoading = examsLoading || questionsLoading || resultsLoading;
+  const { data: students, isLoading: studentsLoading } = useQuery<Student[]>({
+    queryKey: ["/api/students"],
+  });
+
+  const schoolAnalysis = useMemo(() => {
+    if (!results || results.length === 0) {
+      return {
+        schoolAvg: 0,
+        classScores: {} as Record<string, { total: number; sum: number; avg: number }>,
+        deptScores: {} as Record<string, { total: number; sum: number; avg: number }>,
+        topStudents: [] as { name: string; score: number; class: string; dept: string }[],
+      };
+    }
+
+    // Map student details by ID and passcode for instant O(1) lookup
+    const studentMap = new Map<string, Student>();
+    if (students) {
+      students.forEach(s => {
+        if (s.id) studentMap.set(s.id.toLowerCase(), s);
+        if (s.studentId) studentMap.set(s.studentId.trim().toLowerCase(), s);
+      });
+    }
+
+    // Map exam details by ID
+    const examMap = new Map<string, Exam>();
+    if (exams) {
+      exams.forEach(e => examMap.set(e.id, e));
+    }
+
+    let totalScoreSum = 0;
+    const classScores: Record<string, { total: number; sum: number; avg: number }> = {};
+    const deptScores: Record<string, { total: number; sum: number; avg: number }> = {};
+    const studentRankings: Record<string, { name: string; sum: number; count: number; class: string; dept: string }> = {};
+
+    results.forEach(r => {
+      totalScoreSum += r.percentage;
+
+      // Find student profile to get accurate class and department
+      const lookupKey = r.studentId ? r.studentId.trim().toLowerCase() : "";
+      const sProfile = studentMap.get(lookupKey);
+      
+      const examProfile = examMap.get(r.examId);
+
+      // fallback to SS3 or general if missing
+      const classLevel = sProfile?.classLevel || examProfile?.classLevel || "SS3";
+      const department = sProfile?.department || examProfile?.department || "General";
+
+      // Class-specific calculations
+      if (!classScores[classLevel]) {
+        classScores[classLevel] = { total: 0, sum: 0, avg: 0 };
+      }
+      classScores[classLevel].total++;
+      classScores[classLevel].sum += r.percentage;
+
+      // Department-specific calculations
+      if (!deptScores[department]) {
+        deptScores[department] = { total: 0, sum: 0, avg: 0 };
+      }
+      deptScores[department].total++;
+      deptScores[department].sum += r.percentage;
+
+      // Student performance calculations
+      const sKey = r.studentName || "Candidate";
+      if (!studentRankings[sKey]) {
+        studentRankings[sKey] = { name: sKey, sum: 0, count: 0, class: classLevel, dept: department };
+      }
+      studentRankings[sKey].sum += r.percentage;
+      studentRankings[sKey].count++;
+    });
+
+    // Calculate averages
+    const schoolAvg = Math.round(totalScoreSum / results.length);
+
+    Object.keys(classScores).forEach(c => {
+      const item = classScores[c];
+      item.avg = Math.round(item.sum / item.total);
+    });
+
+    Object.keys(deptScores).forEach(d => {
+      const item = deptScores[d];
+      item.avg = Math.round(item.sum / item.total);
+    });
+
+    // Sort student rankings to find top performers
+    const sortedRankings = Object.values(studentRankings)
+      .map((s: any) => ({
+        name: s.name,
+        score: Math.round(s.sum / s.count),
+        class: s.class,
+        dept: s.dept
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4);
+
+    return {
+      schoolAvg,
+      classScores,
+      deptScores,
+      topStudents: sortedRankings,
+    };
+  }, [results, students, exams]);
+
+  const isLoading = examsLoading || questionsLoading || resultsLoading || studentsLoading;
 
   const stats = {
     totalExams: exams?.length || 0,
@@ -202,6 +305,117 @@ export default function AdminDashboard() {
           </>
         )}
       </div>
+
+      {/* Analysis Summary Indicators Dashboard */}
+      {isLoading ? (
+        <Skeleton className="h-[200px] w-full rounded-2xl animate-pulse" />
+      ) : (
+        <div className="grid gap-6 md:grid-cols-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* Class-by-Class Analysis Card */}
+          <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
+            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
+              <CardTitle className="text-sm font-extrabold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                <GraduationCap className="h-4.5 w-4.5 text-indigo-500" /> Class Level Performance
+              </CardTitle>
+              <CardDescription className="text-[10px]">Real average grade index segmented by grade level.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-5 space-y-4">
+              {Object.keys(schoolAnalysis.classScores).length > 0 ? (
+                Object.entries(schoolAnalysis.classScores).map(([classLevel, scoreData]) => {
+                  const data = scoreData as { total: number; sum: number; avg: number };
+                  return (
+                  <div key={classLevel} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
+                      <span>{classLevel} ({data.total} candidates)</span>
+                      <span className="font-extrabold text-slate-800 dark:text-white">{data.avg}% Avg</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          data.avg >= 70 ? "bg-emerald-500" :
+                          data.avg >= 50 ? "bg-indigo-500" : "bg-rose-500"
+                        }`}
+                        style={{ width: `${data.avg}%` }}
+                      />
+                    </div>
+                  </div>
+                );})
+              ) : (
+                <div className="text-center text-slate-400 text-xs py-8">No class data found yet</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Department Performance Card */}
+          <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
+            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
+              <CardTitle className="text-sm font-extrabold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                <TrendingUp className="h-4.5 w-4.5 text-indigo-500" /> Department Performance
+              </CardTitle>
+              <CardDescription className="text-[10px]">Comparative analytics across school segments.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-5 space-y-4">
+              {Object.keys(schoolAnalysis.deptScores).length > 0 ? (
+                Object.entries(schoolAnalysis.deptScores).map(([dept, scoreData]) => {
+                  const data = scoreData as { total: number; sum: number; avg: number };
+                  return (
+                  <div key={dept} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
+                      <span>{dept} Department</span>
+                      <span className="font-extrabold text-slate-800 dark:text-white">{data.avg}% Avg</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          data.avg >= 70 ? "bg-emerald-500" :
+                          data.avg >= 50 ? "bg-violet-500" : "bg-amber-500"
+                        }`}
+                        style={{ width: `${data.avg}%` }}
+                      />
+                    </div>
+                  </div>
+                );})
+              ) : (
+                <div className="text-center text-slate-400 text-xs py-8">No department data found yet</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Top Performer Rankings Card */}
+          <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
+            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
+              <CardTitle className="text-sm font-extrabold flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                <Award className="h-4.5 w-4.5 text-indigo-500" /> High-Performing Candidates
+              </CardTitle>
+              <CardDescription className="text-[10px]">Leaderboard of the school's top scoring active students.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4.5 space-y-3">
+              {schoolAnalysis.topStudents.length > 0 ? (
+                schoolAnalysis.topStudents.map((s, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100/40 dark:border-slate-800/40 hover:scale-[1.01] transition-transform duration-200">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-6 w-6 rounded-lg font-black text-xs flex items-center justify-center shrink-0 ${
+                        idx === 0 ? "bg-amber-100 text-amber-700" :
+                        idx === 1 ? "bg-slate-200 text-slate-700" :
+                        idx === 2 ? "bg-orange-100 text-orange-700" : "bg-indigo-50 text-indigo-700"
+                      }`}>
+                        {idx === 0 ? "🏆" : idx + 1}
+                      </div>
+                      <div>
+                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">{s.name}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{s.class} • {s.dept}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">{s.score}%</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-slate-400 text-xs py-8">No results loaded yet</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Charts and Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-2">

@@ -76,6 +76,8 @@ export default function AdminQuestions() {
   const [pastedText, setPastedText] = useState("");
   const [parsedQuestions, setParsedQuestions] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [parsingEngine, setParsingEngine] = useState<'regex' | 'gemini'>('regex');
+  const [isParsingAI, setIsParsingAI] = useState(false);
 
   // Auto Exam creation states
   const [autoCreateExam, setAutoCreateExam] = useState(false);
@@ -105,7 +107,8 @@ export default function AdminQuestions() {
     }
 
     // 3. Try dotted: a. OptionText b. OptionText...
-    matches = Array.from(text.matchAll(/(?:\s|^)([a-eA-E])\.\s+([^\s].*?)(?=\s+[a-eA-E]\.|$)/g));
+    // Resilient: \.\s* instead of \.\s+
+    matches = Array.from(text.matchAll(/(?:\s|^)([a-eA-E])\.\s*([^\s].*?)(?=\s+[a-eA-E]\.|$)/g));
     if (matches.length > 0) {
       return matches.map(m => ({
         letter: m[1],
@@ -158,21 +161,25 @@ export default function AdminQuestions() {
       if (!currentQuestion) continue;
 
       // Check for correct answer start: "Answer: ", "Correct: ", "Ans. "
-      const answerMatch = trimmed.match(/^\s*(?:correct\s*|key\s*|correct\s*option\s*)?ans(?:wer)?\s*[:.-]+\s*(.+)/i);
+      const answerMatch = trimmed.match(/^\s*(?:correct\s*|key\s*|correct\s*option\s*)?ans(?:wer)?\s*[:.=-]*\s*(.+)/i);
       if (answerMatch) {
         currentQuestion.correctAnswer = answerMatch[1].trim();
         continue;
       }
 
       // Check for options start: "A. OptionText" or "(A) OptionText" or "A) OptionText"
-      const optMatches = Array.from(trimmed.matchAll(/(?:\(?([a-eA-E])\)?[\s.)\]:-]+)\s*([^\s].*?)(?=\s+(?:\(?([a-eA-E])\)?[\s.)\]:-]+)|$)/g));
-      if (optMatches.length > 0) {
-        for (const m of optMatches) {
-          const letter = m[1].toUpperCase();
-          const optionVal = m[2].trim();
-          currentQuestion.options.push(`(${letter.toLowerCase()}) ${optionVal}`);
+      // Extremely robust check to ensure it actually starts with a valid option prefix
+      const isOptionStart = /^\s*(?:\(([a-eA-E])\)|([a-eA-E])[.)\]:-]+)/i.test(trimmed);
+      if (isOptionStart) {
+        const optMatches = Array.from(trimmed.matchAll(/(?:\(?([a-eA-E])\)?[\s.)\]:-]+)\s*([^\s].*?)(?=\s+(?:\(?([a-eA-E])\)?[\s.)\]:-]+)|$)/g));
+        if (optMatches.length > 0) {
+          for (const m of optMatches) {
+            const letter = m[1].toUpperCase();
+            const optionVal = m[2].trim();
+            currentQuestion.options.push(`(${letter.toLowerCase()}) ${optionVal}`);
+          }
+          continue;
         }
-        continue;
       }
 
       // Otherwise, treat as continuation of question text
@@ -205,12 +212,85 @@ export default function AdminQuestions() {
     });
   };
 
+  const handleAIParsing = async () => {
+    if (!pastedText.trim()) {
+      toast({
+        title: "No text to parse",
+        description: "Please paste your exam text first or load a file.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsParsingAI(true);
+    try {
+      const response = await fetch("/api/questions/import-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rawText: pastedText,
+          classLevel: csvClassLevel,
+          subject: csvSubject,
+          term: csvTerm,
+          examType: csvExamType,
+          department: csvDepartment
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "AI Parsing request failed.");
+      }
+      
+      const data = await response.json();
+      const parsed = data.questions ? data.questions : data;
+      
+      if (!Array.isArray(parsed)) {
+        throw new Error("Invalid response format from parser.");
+      }
+
+      // Clean up options inside parsed questions (convert multiple_choice to multiple-choice, fill_in_the_blank to theory)
+      const normalized = parsed.map((q: any) => {
+        let type = q.questionType;
+        if (type === "multiple_choice") type = "multiple-choice";
+        if (type === "fill_in_the_blank") type = "theory";
+        
+        let opts = q.options;
+        if (type === "theory") opts = undefined;
+        
+        return {
+          questionText: q.questionText,
+          questionType: type,
+          correctAnswer: q.correctAnswer,
+          options: opts,
+          difficulty: q.difficulty || "medium",
+          points: q.points || 1
+        };
+      });
+      
+      setParsedQuestions(normalized);
+      toast({
+        title: "AI Parsing Complete",
+        description: `Successfully extracted ${normalized.length} questions using Google Gemini AI!`,
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "AI Parsing Failed",
+        description: err.message || "Could not reach the AI parser service.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsParsingAI(false);
+    }
+  };
+
   useEffect(() => {
-    if (importerTab === 'paste') {
+    if (importerTab === 'paste' && parsingEngine === 'regex') {
       const parsed = parseTextToQuestions(pastedText);
       setParsedQuestions(parsed);
     }
-  }, [pastedText, importerTab]);
+  }, [pastedText, importerTab, parsingEngine]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditDialog, setBulkEditDialog] = useState<{
@@ -950,10 +1030,25 @@ export default function AdminQuestions() {
                               if (file.name.toLowerCase().endsWith(".docx") || file.name.toLowerCase().endsWith(".doc")) {
                                 try {
                                   const arrayBuffer = await file.arrayBuffer();
-                                  if (!(window as any).mammoth) {
+                                  let mammothLib = (window as any).mammoth;
+                                  if (!mammothLib) {
+                                    try {
+                                      await new Promise<void>((resolve, reject) => {
+                                        const script = document.createElement("script");
+                                        script.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js";
+                                        script.onload = () => resolve();
+                                        script.onerror = () => reject(new Error("Failed to load local Word library or external CDN."));
+                                        document.head.appendChild(script);
+                                      });
+                                      mammothLib = (window as any).mammoth;
+                                    } catch (err) {
+                                      throw new Error("Word parser library not yet loaded. Please ensure you have internet access to download the parser or copy-paste your text directly.");
+                                    }
+                                  }
+                                  if (!mammothLib) {
                                     throw new Error("Word parser library not yet loaded. Please try again in a moment.");
                                   }
-                                  const result = await (window as any).mammoth.extractRawText({ arrayBuffer });
+                                  const result = await mammothLib.extractRawText({ arrayBuffer });
                                   const text = result.value;
                                   setPastedText(text);
                                   setImporterTab('paste');

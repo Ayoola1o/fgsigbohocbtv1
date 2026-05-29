@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,188 +11,64 @@ import {
 } from "recharts";
 import { 
   TrendingUp, Activity, HelpCircle, Users, Award, ShieldAlert, Zap, Hourglass, 
-  Cpu, Database, Sparkles, Brain, AlertTriangle, ArrowUpRight
+  Cpu, Database, Sparkles, Brain, AlertTriangle, ArrowUpRight, Loader2
 } from "lucide-react";
-import type { Question, Result, Exam } from "@shared/schema";
+import type { Exam } from "@shared/schema";
+
+// Types for pre-computed server analytics
+interface AnalyticsData {
+  cohortStats: { mean: number; median: number; high: number; low: number; passRate: number };
+  scoreDistribution: { range: string; count: number }[];
+  itemAnalysis: {
+    id: string; questionText: string; subject: string; difficulty: string;
+    correctCount: number; totalCount: number; pIndex: number; dIndex: number;
+    difficultyStatus: string; discriminationStatus: string;
+  }[];
+  topicMastery: { subject: string; mastery: number; fullMark: number }[];
+  totalCandidates: number;
+}
 
 export default function AdminAnalytics() {
   const [selectedExamId, setSelectedExamId] = useState<string>("__all__");
+  const [visibleCount, setVisibleCount] = useState<number>(30);
 
-  // Fetch data
-  const { data: results = [], isLoading: isLoadingResults } = useQuery<Result[]>({
-    queryKey: ["/api/results"],
-  });
-
-  const { data: questions = [], isLoading: isLoadingQuestions } = useQuery<Question[]>({
-    queryKey: ["/api/questions"],
-  });
-
-  const { data: exams = [], isLoading: isLoadingExams } = useQuery<Exam[]>({
+  // Fetch exam list only (lightweight)
+  const { data: exams = [] } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
 
-  // 1. Filtered Results & Exams
-  const filteredResults = useMemo(() => {
-    if (selectedExamId === "__all__") return results;
-    return results.filter(r => r.examId === selectedExamId);
-  }, [results, selectedExamId]);
+  // Fetch ALL analytics pre-computed from the server — ZERO client-side math
+  const { data: analytics, isLoading } = useQuery<AnalyticsData>({
+    queryKey: ["/api/analytics", selectedExamId],
+    queryFn: async () => {
+      const params = selectedExamId !== "__all__" ? `?examId=${selectedExamId}` : "";
+      const res = await fetch(`/api/analytics${params}`);
+      if (!res.ok) throw new Error("Failed to fetch analytics");
+      return res.json();
+    },
+  });
 
-  const activeExam = useMemo(() => {
-    return exams.find(e => e.id === selectedExamId);
-  }, [exams, selectedExamId]);
+  const cohortStats = analytics?.cohortStats || { mean: 0, median: 0, high: 0, low: 0, passRate: 0 };
+  const scoreDistribution = analytics?.scoreDistribution || [];
+  const itemAnalysis = analytics?.itemAnalysis || [];
+  const topicMastery = analytics?.topicMastery || [];
+  const totalCandidates = analytics?.totalCandidates || 0;
 
-  // 2. Cohort Performance Stats & Bell Curve
-  const cohortStats = useMemo(() => {
-    if (filteredResults.length === 0) return { mean: 0, median: 0, high: 0, low: 0, passRate: 0 };
-    const scores = filteredResults.map(r => r.percentage);
-    scores.sort((a, b) => a - b);
-    
-    const sum = scores.reduce((acc, s) => acc + s, 0);
-    const mean = Math.round(sum / scores.length);
-    const median = scores[Math.floor(scores.length / 2)];
-    const high = scores[scores.length - 1];
-    const low = scores[0];
-    const passCount = filteredResults.filter(r => r.passed).length;
-    const passRate = Math.round((passCount / filteredResults.length) * 100);
+  const visibleItems = useMemo(() => {
+    return itemAnalysis.slice(0, visibleCount);
+  }, [itemAnalysis, visibleCount]);
 
-    return { mean, median, high, low, passRate };
-  }, [filteredResults]);
-
-  // Distribution chart data (Bell Curve simulation)
-  const scoreDistribution = useMemo(() => {
-    const intervals = Array.from({ length: 10 }, (_, i) => ({
-      range: `${i * 10}-${(i + 1) * 10}%`,
-      count: 0,
-      min: i * 10,
-      max: (i + 1) * 10
-    }));
-
-    filteredResults.forEach(r => {
-      const pct = r.percentage;
-      const idx = Math.min(Math.floor(pct / 10), 9);
-      if (intervals[idx]) intervals[idx].count++;
-    });
-
-    return intervals;
-  }, [filteredResults]);
-
-  // 3. Question Item Analysis (Psychometrics)
-  const itemAnalysis = useMemo(() => {
-    if (questions.length === 0) return [];
-
-    // Filter questions that correspond to the active exam if selected
-    const activeQuestions = selectedExamId === "__all__" 
-      ? questions 
-      : questions.filter(q => activeExam?.questionIds.includes(q.id));
-
-    return activeQuestions.map(q => {
-      // Find all completed sessions containing answers for this question
-      const totalAnswers = results.filter(r => r.answers && r.answers[q.id] !== undefined);
-      const totalCount = totalAnswers.length;
-
-      if (totalCount === 0) {
-        return {
-          id: q.id,
-          questionText: q.questionText,
-          subject: q.subject,
-          difficulty: q.difficulty,
-          correctCount: 0,
-          totalCount: 0,
-          pIndex: 0.5, // neutral
-          dIndex: 0,
-          difficultyStatus: "Sweet Spot",
-          discriminationStatus: "Useless"
-        };
-      }
-
-      const correctCount = totalAnswers.filter(r => r.correctAnswers && r.correctAnswers[q.id] === true).length;
-      
-      // Calculate Difficulty Index p = Correct / Total
-      const pIndex = correctCount / totalCount;
-      let difficultyStatus = "Sweet Spot";
-      if (pIndex > 0.85) difficultyStatus = "Easy";
-      else if (pIndex < 0.20) difficultyStatus = "Hard";
-
-      // Calculate Discrimination Index d
-      // Rank the results of the specific exam containing this question
-      const examResults = results.filter(r => {
-        const exam = exams.find(e => e.id === r.examId);
-        const matchesExam = exam && exam.questionIds.includes(q.id);
-        return matchesExam && (selectedExamId === "__all__" || r.examId === selectedExamId);
-      });
-      examResults.sort((a, b) => b.percentage - a.percentage); // high to low
-
-      const groupSize = Math.max(1, Math.floor(examResults.length * 0.27));
-      const upperGroup = examResults.slice(0, groupSize);
-      const lowerGroup = examResults.slice(-groupSize);
-
-      const upperCorrect = upperGroup.filter(r => r.correctAnswers && r.correctAnswers[q.id] === true).length;
-      const lowerCorrect = lowerGroup.filter(r => r.correctAnswers && r.correctAnswers[q.id] === true).length;
-
-      const dIndex = groupSize > 0 ? (upperCorrect - lowerCorrect) / groupSize : 0;
-      let discriminationStatus = "Useless";
-      if (dIndex > 0.30) discriminationStatus = "Excellent";
-      else if (dIndex < 0) discriminationStatus = "Negative (Flawed)";
-
-      return {
-        id: q.id,
-        questionText: q.questionText,
-        subject: q.subject,
-        difficulty: q.difficulty,
-        correctCount,
-        totalCount,
-        pIndex: Math.round(pIndex * 100) / 100,
-        dIndex: Math.round(dIndex * 100) / 100,
-        difficultyStatus,
-        discriminationStatus
-      };
-    });
-  }, [questions, results, selectedExamId, activeExam]);
-
-  // 4. Topic Mastery Data (Radar Map)
-  const topicMastery = useMemo(() => {
-    const topics: Record<string, { correct: number; total: number }> = {};
-    
-    results.forEach(r => {
-      if (!r.correctAnswers) return;
-      Object.entries(r.correctAnswers).forEach(([qId, isCorrect]) => {
-        const q = questions.find(question => question.id === qId);
-        if (q) {
-          const topic = q.subject;
-          if (!topics[topic]) topics[topic] = { correct: 0, total: 0 };
-          topics[topic].total++;
-          if (isCorrect) topics[topic].correct++;
-        }
-      });
-    });
-
-    return Object.entries(topics).map(([topic, data]) => ({
-      subject: topic,
-      mastery: Math.round((data.correct / data.total) * 100),
-      fullMark: 100
-    }));
-  }, [results, questions]);
-
-  // 5. Simulated Time Tracking & Cognitive Fatigue Index (Line Chart)
-  // Maps response latency against progression of exam questions
+  // Static fatigue simulation data (no computation needed)
   const fatigueIndexData = useMemo(() => {
-    return Array.from({ length: 20 }, (_, i) => {
-      // average seconds spent per question index, simulating a rising trajectory (cognitive fatigue)
-      const baseTime = 12; // 12 seconds per question base
-      const fatigueFactor = i * 0.65; // linear slowdown
-      const complexityOffset = Math.sin(i * 1.5) * 3; // simulated content differences
-      
-      return {
-        questionIndex: `Q${i + 1}`,
-        averageTime: Math.round((baseTime + fatigueFactor + complexityOffset) * 10) / 10,
-        pacingTarget: 15
-      };
-    });
+    return Array.from({ length: 20 }, (_, i) => ({
+      questionIndex: `Q${i + 1}`,
+      averageTime: Math.round((12 + i * 0.65 + Math.sin(i * 1.5) * 3) * 10) / 10,
+      pacingTarget: 15
+    }));
   }, []);
 
-  // System health telemetries (Simulated premium sockets monitors)
   const healthChecks = {
-    activeSessions: Math.round(results.length * 0.12) || 4,
+    activeSessions: Math.round(totalCandidates * 0.12) || 4,
     dbLatency: "14ms",
     clientErrorRate: "0.02%",
     capacityLimit: 85 // Percent
@@ -199,6 +76,14 @@ export default function AdminAnalytics() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {isLoading && (
+        <div className="fixed inset-0 bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+            <span className="text-xs font-bold text-slate-500">Computing psychometric indices...</span>
+          </div>
+        </div>
+      )}
       
       {/* Premium Header */}
       <div className="bg-glass border border-slate-100 dark:border-slate-800/80 p-6 rounded-2xl shadow-xl shadow-slate-100/10 dark:shadow-none flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -283,7 +168,7 @@ export default function AdminAnalytics() {
           </div>
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Candidates</span>
-            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">{filteredResults.length}</h3>
+            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">{totalCandidates}</h3>
             <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
               Across registered sessions
             </span>
@@ -305,7 +190,8 @@ export default function AdminAnalytics() {
             </CardDescription>
           </CardHeader>
           <CardContent className="h-[280px] p-0">
-            <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full h-full relative min-h-0 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={scoreDistribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="bellGrad" x1="0" y1="0" x2="0" y2="1">
@@ -323,6 +209,7 @@ export default function AdminAnalytics() {
                 <Area type="monotone" dataKey="count" name="Students count" stroke="#4f46e5" strokeWidth={2.5} fillOpacity={1} fill="url(#bellGrad)" />
               </AreaChart>
             </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -336,9 +223,10 @@ export default function AdminAnalytics() {
               Cohort mastery percentage levels categorized by topic tags.
             </CardDescription>
           </CardHeader>
-          <CardContent className="h-[280px] p-0 flex items-center justify-center">
+          <CardContent className="h-[280px] p-0">
             {topicMastery.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <div className="w-full h-full relative min-h-0 min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={topicMastery}>
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis dataKey="subject" stroke="#64748b" fontSize={9} />
@@ -347,6 +235,7 @@ export default function AdminAnalytics() {
                   <Legend verticalAlign="bottom" height={36} fontSize={10} />
                 </RadarChart>
               </ResponsiveContainer>
+              </div>
             ) : (
               <div className="text-center text-slate-400 text-xs py-12">Complete exams to view topic maps.</div>
             )}
@@ -364,7 +253,8 @@ export default function AdminAnalytics() {
             </CardDescription>
           </CardHeader>
           <CardContent className="h-[260px] p-0">
-            <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full h-full relative min-h-0 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
               <LineChart data={fatigueIndexData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="questionIndex" stroke="#94a3b8" fontSize={10} tickLine={false} />
@@ -377,6 +267,7 @@ export default function AdminAnalytics() {
                 <Line type="monotone" dataKey="pacingTarget" name="Benchmark Limit" stroke="#64748b" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -431,6 +322,7 @@ export default function AdminAnalytics() {
         </CardHeader>
         <CardContent className="p-0">
           {itemAnalysis.length > 0 ? (
+            <>
             <Table>
               <TableHeader className="bg-slate-50/50 dark:bg-slate-950/30">
                 <TableRow className="border-b border-slate-100 dark:border-slate-800">
@@ -443,7 +335,7 @@ export default function AdminAnalytics() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {itemAnalysis.map((item) => (
+                {visibleItems.map((item) => (
                   <TableRow key={item.id} className="border-b border-slate-50 dark:border-slate-850 hover:bg-slate-50/30 dark:hover:bg-slate-900/40 transition-colors">
                     <TableCell className="max-w-md">
                       <p className="text-xs font-bold text-slate-700 dark:text-slate-350 truncate">{item.questionText}</p>
@@ -491,6 +383,18 @@ export default function AdminAnalytics() {
                 ))}
               </TableBody>
             </Table>
+            {itemAnalysis.length > visibleCount && (
+              <div className="p-4 border-t border-slate-50 dark:border-slate-800/40 text-center bg-slate-50/20 dark:bg-slate-950/20 rounded-b-2xl">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setVisibleCount(prev => prev + 50)}
+                  className="text-xs font-extrabold text-indigo-650 hover:text-indigo-755 dark:text-indigo-400 rounded-xl"
+                >
+                  Load Next 50 Psychometric Items...
+                </Button>
+              </div>
+            )}
+            </>
           ) : (
             <div className="text-center text-slate-400 text-xs py-16">No questions found matching active filters. Complete test runs to populate indices.</div>
           )}

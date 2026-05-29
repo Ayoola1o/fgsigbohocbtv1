@@ -803,6 +803,173 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Server-Side Psychometric Analytics Engine ───
+  // Moves ALL heavy computation off the browser thread to eliminate client freezing.
+  app.get("/api/analytics", async (req, res) => {
+    try {
+      const selectedExamId = (req.query.examId as string) || "__all__";
+
+      const [allResults, allQuestions, allExams] = await Promise.all([
+        storage.getResults(),
+        storage.getQuestions(),
+        storage.getExams(),
+      ]);
+
+      // 1. Filtered results
+      const filteredResults = selectedExamId === "__all__"
+        ? allResults
+        : allResults.filter((r: any) => r.examId === selectedExamId);
+
+      // 2. Cohort stats
+      let cohortStats = { mean: 0, median: 0, high: 0, low: 0, passRate: 0 };
+      if (filteredResults.length > 0) {
+        const scores = filteredResults.map((r: any) => r.percentage).sort((a: number, b: number) => a - b);
+        const sum = scores.reduce((acc: number, s: number) => acc + s, 0);
+        cohortStats = {
+          mean: Math.round(sum / scores.length),
+          median: scores[Math.floor(scores.length / 2)],
+          high: scores[scores.length - 1],
+          low: scores[0],
+          passRate: Math.round((filteredResults.filter((r: any) => r.passed).length / filteredResults.length) * 100),
+        };
+      }
+
+      // 3. Score distribution (bell curve buckets)
+      const scoreDistribution = Array.from({ length: 10 }, (_, i) => ({
+        range: `${i * 10}-${(i + 1) * 10}%`,
+        count: 0,
+      }));
+      filteredResults.forEach((r: any) => {
+        const idx = Math.min(Math.floor(r.percentage / 10), 9);
+        scoreDistribution[idx].count++;
+      });
+
+      // 4. Pre-index for item analysis
+      const questionsMap = new Map<string, any>();
+      allQuestions.forEach((q: any) => questionsMap.set(q.id, q));
+
+      const questionExamsMap = new Map<string, any[]>();
+      allExams.forEach((exam: any) => {
+        (exam.questionIds || []).forEach((qId: string) => {
+          const list = questionExamsMap.get(qId) || [];
+          list.push(exam);
+          questionExamsMap.set(qId, list);
+        });
+      });
+
+      const resultsByExam = new Map<string, any[]>();
+      allResults.forEach((r: any) => {
+        const list = resultsByExam.get(r.examId) || [];
+        list.push(r);
+        resultsByExam.set(r.examId, list);
+      });
+
+      const answersByQuestion = new Map<string, any[]>();
+      const correctByQuestion = new Map<string, any[]>();
+      allResults.forEach((r: any) => {
+        if (r.answers) {
+          Object.keys(r.answers).forEach((qId: string) => {
+            const list = answersByQuestion.get(qId) || [];
+            list.push(r);
+            answersByQuestion.set(qId, list);
+          });
+        }
+        if (r.correctAnswers) {
+          Object.entries(r.correctAnswers).forEach(([qId, isCorrect]) => {
+            if (isCorrect === true) {
+              const list = correctByQuestion.get(qId) || [];
+              list.push(r);
+              correctByQuestion.set(qId, list);
+            }
+          });
+        }
+      });
+
+      // 5. Item analysis
+      const activeExam = allExams.find((e: any) => e.id === selectedExamId);
+      const activeQuestions = selectedExamId === "__all__"
+        ? allQuestions
+        : allQuestions.filter((q: any) => activeExam?.questionIds?.includes(q.id));
+
+      const itemAnalysis = activeQuestions.map((q: any) => {
+        const totalAnswersForQ = answersByQuestion.get(q.id) || [];
+        const totalCount = totalAnswersForQ.length;
+
+        if (totalCount === 0) {
+          return {
+            id: q.id, questionText: q.questionText, subject: q.subject,
+            difficulty: q.difficulty, correctCount: 0, totalCount: 0,
+            pIndex: 0.5, dIndex: 0, difficultyStatus: "Sweet Spot", discriminationStatus: "Useless",
+          };
+        }
+
+        const correctCount = (correctByQuestion.get(q.id) || []).length;
+        const pIndex = correctCount / totalCount;
+        let difficultyStatus = "Sweet Spot";
+        if (pIndex > 0.85) difficultyStatus = "Easy";
+        else if (pIndex < 0.20) difficultyStatus = "Hard";
+
+        const matchingExams = questionExamsMap.get(q.id) || [];
+        const examResults: any[] = [];
+        if (selectedExamId === "__all__") {
+          matchingExams.forEach((exam: any) => {
+            examResults.push(...(resultsByExam.get(exam.id) || []));
+          });
+        } else {
+          examResults.push(...(resultsByExam.get(selectedExamId) || []));
+        }
+        examResults.sort((a: any, b: any) => b.percentage - a.percentage);
+
+        const groupSize = Math.max(1, Math.floor(examResults.length * 0.27));
+        const upperCorrect = examResults.slice(0, groupSize).filter((r: any) => r.correctAnswers && r.correctAnswers[q.id] === true).length;
+        const lowerCorrect = examResults.slice(-groupSize).filter((r: any) => r.correctAnswers && r.correctAnswers[q.id] === true).length;
+        const dIndex = groupSize > 0 ? (upperCorrect - lowerCorrect) / groupSize : 0;
+
+        let discriminationStatus = "Useless";
+        if (dIndex > 0.30) discriminationStatus = "Excellent";
+        else if (dIndex < 0) discriminationStatus = "Negative (Flawed)";
+
+        return {
+          id: q.id, questionText: q.questionText, subject: q.subject,
+          difficulty: q.difficulty, correctCount, totalCount,
+          pIndex: Math.round(pIndex * 100) / 100,
+          dIndex: Math.round(dIndex * 100) / 100,
+          difficultyStatus, discriminationStatus,
+        };
+      });
+
+      // 6. Topic mastery
+      const topics: Record<string, { correct: number; total: number }> = {};
+      allResults.forEach((r: any) => {
+        if (!r.correctAnswers) return;
+        Object.entries(r.correctAnswers).forEach(([qId, isCorrect]) => {
+          const q = questionsMap.get(qId);
+          if (q) {
+            if (!topics[q.subject]) topics[q.subject] = { correct: 0, total: 0 };
+            topics[q.subject].total++;
+            if (isCorrect) topics[q.subject].correct++;
+          }
+        });
+      });
+      const topicMastery = Object.entries(topics).map(([subject, data]) => ({
+        subject,
+        mastery: Math.round((data.correct / data.total) * 100),
+        fullMark: 100,
+      }));
+
+      res.json({
+        cohortStats,
+        scoreDistribution,
+        itemAnalysis,
+        topicMastery,
+        totalCandidates: filteredResults.length,
+      });
+    } catch (error) {
+      console.error("Analytics computation error:", error);
+      res.status(500).json({ error: "Failed to compute analytics" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

@@ -587,6 +587,67 @@ A clear RBAC system mirrors real-world responsibilities and ensures that users o
 ---
 
 
-* ** Technical Stack Recommendation
+* **Technical Stack Recommendation**
 If you built this as a web app (React, Vue, or Vanilla JS), wrapping it inside an Electron.js or Tauri wrapper allows you to package it as a downloadable desktop application.
 A desktop app gives you deeper native access to the operating system to enforce browser lockdowns much more aggressively than standard Chrome or Edge will allow.
+
+
+* Advanced Phase
+To build a comprehensive psychometric and analytics suite into your Computer-Based Testing (CBT) application, you should organize your metrics into four distinct layers.
+Here is the complete catalog of standard psychometric metrics and advanced, innovative analytics you can implement.
+------------------------------
+## 1. Classical Test Theory (CTT) Metrics (Essential)
+These are the foundational metrics for standard item analysis. They require a student-by-item matrix of responses.
+
+* Item Difficulty Index ($p$-value): Percentage of candidates answering an item correctly.
+* Item Discrimination Index ($D$): Difference in correct rates between top 27% and bottom 27% of scorers.
+* Point-Biserial Correlation ($r_{pbis}$): Correlation between a student's score on a specific item and their total test score.
+* Cronbach’s Alpha ($\alpha$): Measure of internal consistency and reliability across the entire test.
+* Standard Error of Measurement (SEM): Estimates how much a student's score might vary due to measurement error.
+* Distractor Selection Rate: Percentage of students choosing each incorrect option (flag options $< 5\%$).
+* Distractor Discrimination: Point-biserial correlation specifically calculated for the incorrect choices.
+* Kuder-Richardson Formula 20 (KR-20): Reliability measure specifically optimized for strictly binary (correct/incorrect) test items.
+
+## 2. Item Response Theory (IRT) Metrics (Advanced)
+IRT isolates the difficulty of the question from the ability of the specific student group. These require heavier processing power.
+
+* 1PL / Rasch Model (Difficulty parameter $b$): Item difficulty calculated on a logistic scale independent of the sample group.
+* 2PL Model (Discrimination parameter $a$): Measures how steeply the probability of a correct answer changes with student ability.
+* 3PL Model (Guessing parameter $c$): Probability that a low-ability student will answer the item correctly by pure chance.
+* Item Information Function (IIF): Shows exactly at which student ability level a specific question provides the highest measurement precision.
+* Test Information Function (TIF): The sum of all IIFs, showing where the overall exam is most accurate.
+* Student Ability Estimate ($\theta$ - Theta): The student's true latent ability score, typically ranging from -3.0 to +3.0.
+
+## 3. Behavioral & Process Analytics (Innovative)
+Since your app controls the testing interface, you can track physical behaviors to flag cheating, anxiety, or bad UI design.
+
+* Response Time (RT) per Item: Total seconds spent on a single question screen.
+* Response Time Residuals: Flags students spending abnormally short time on hard items (potential leakage) or long time on easy items.
+* Rapid Guessing Threshold: Identifies items where students clicked an answer faster than human reading speed (e.g., $<2$ seconds).
+* Item Change / Revision Count: Tracks how many times a student changed their mind on an answer before submitting.
+* Navigation Pattern Factor: Tracks if students follow a linear path or heavily skip around (high skipping correlates with anxiety or guessing).
+* Focus Loss Count: Tracks how many times the user switched browser tabs, minimized the app, or clicked outside the test window.
+* Click-to-Answer Latency: Time elapsed between entering the question screen and making the first selection.
+
+## 4. Test Health & Curriculum Analytics (For Schools)
+These metrics aggregate individual data to give school administrators actionable insights into their teaching quality.
+
+* Speededness Index: Percentage of students who failed to reach or finish the final 10% of questions due to running out of time.
+* Curriculum Mastery Mastery Score: Grouping item scores by subject tags to pinpoint exactly which academic topic needs re-teaching.
+* Item Exposure Rate: How many times a specific question from the item bank has been shown across different test sessions (prevents question leakage).
+* Differential Item Functioning (DIF): Statistically checks if a question unfairly disadvantages a specific demographic group (e.g., gender, region) with equal overall ability.
+* Grade Inflation / Deflation Metric: Compares historical test distributions against current distributions to monitor shifting grading standards.
+
+------------------------------
+## 🚀 Recommended Feature Stack Blueprint
+
+| Tier | Metrics to Implement | Target Audience | Dev Complexity |
+|---|---|---|---|
+| Phase 1 | Difficulty ($p$), Discrimination ($D$), Distractor Analysis, Test Duration | Teachers / Schools | Low (Simple loops) |
+| Phase 2 | Cronbach's Alpha, Item Response Time, Focus Loss Tracking, Topic Mastery | School Admins | Medium (State tracking) |
+| Phase 3 | IRT ($\theta$, $a$, $b$, $c$), Speededness, Differential Item Functioning (DIF) | Examination Boards | High (Math engines) |
+
+## Worker Threads (Built into Node.js)
+a suggestion If you do not want to set up Redis or extra background processes, you can keep everything inside your Express/NestJS app by utilizing Node's built-in Worker Threads.Your admin clicks "Generate Report" inside your NestJS app.Your NestJS controller spawns a native Node.js worker thread (new Worker('./psychometric-math.js')).This worker thread operates on a completely separate CPU core, leaving your main Express/NestJS framework free to continue serving tests to students without lagging.When the thread finishes the math, it sends the report back to the main controller to display to the admin.
+
+
