@@ -52,10 +52,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
-      // Return relative path that can be served by the static middleware
-      const url = `/uploads/${req.file.filename}`;
+      // Return relative path that can be served by the static middleware, or base64 Data URI if using memory storage
+      const url = req.file.filename
+        ? `/uploads/${req.file.filename}`
+        : `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
       res.json({ url });
     } catch (error) {
+      console.error("Upload error:", error);
       res.status(500).json({ error: "Failed to upload file" });
     }
   });

@@ -1525,18 +1525,38 @@ export default function AdminQuestions() {
                     const matchedImageKey = missingImages.find(img => img.toLowerCase().trim() === file.name.toLowerCase().trim());
                     if (matchedImageKey) {
                       try {
-                        const formData = new FormData();
-                        formData.append("file", file);
+                        let downloadUrl = "";
 
-                        const res = await fetch("/api/upload", {
-                          method: "POST",
-                          body: formData
-                        });
+                        // 1. Try Firebase Storage first (ideal for standard cloud production)
+                        try {
+                          const { storage: fbStorage } = await import("@/lib/firebase");
+                          const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+                          if (fbStorage) {
+                            const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
+                            const snapshot = await uploadBytes(storageRef, file);
+                            downloadUrl = await getDownloadURL(snapshot.ref);
+                          }
+                        } catch (fbErr) {
+                          console.warn("Firebase Storage upload failed, falling back to local server upload:", fbErr);
+                        }
 
-                        if (!res.ok) throw new Error("Upload failed");
+                        // 2. Fallback to Express backend /api/upload
+                        if (!downloadUrl) {
+                          const formData = new FormData();
+                          formData.append("file", file);
 
-                        const data = await res.json();
-                        newMap[matchedImageKey] = data.url;
+                          const res = await fetch("/api/upload", {
+                            method: "POST",
+                            body: formData
+                          });
+
+                          if (!res.ok) throw new Error("Upload failed");
+
+                          const data = await res.json();
+                          downloadUrl = data.url;
+                        }
+
+                        newMap[matchedImageKey] = downloadUrl;
                         count++;
                       } catch (err: any) {
                         console.error(`Failed to upload ${file.name}`, err);
@@ -2166,19 +2186,40 @@ function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initi
     if (!file) return;
 
     setIsUploading(true);
-    const formDataUpload = new FormData();
-    formDataUpload.append("file", file);
 
     try {
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formDataUpload,
-      });
+      let downloadUrl = "";
 
-      if (!response.ok) throw new Error("Upload failed");
+      // 1. Try Firebase Storage first (ideal for standard cloud production)
+      try {
+        const { storage: fbStorage } = await import("@/lib/firebase");
+        const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+        if (fbStorage) {
+          const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
+          const snapshot = await uploadBytes(storageRef, file);
+          downloadUrl = await getDownloadURL(snapshot.ref);
+        }
+      } catch (fbErr) {
+        console.warn("Firebase Storage upload failed, falling back to local server upload:", fbErr);
+      }
 
-      const data = await response.json();
-      setFormData((prev) => ({ ...prev, imageUrl: data.url }));
+      // 2. Fallback to Express backend /api/upload
+      if (!downloadUrl) {
+        const formDataUpload = new FormData();
+        formDataUpload.append("file", file);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formDataUpload,
+        });
+
+        if (!response.ok) throw new Error("Upload failed");
+
+        const data = await response.json();
+        downloadUrl = data.url;
+      }
+
+      setFormData((prev) => ({ ...prev, imageUrl: downloadUrl }));
       toast({ title: "Image uploaded", description: "Image has been attached to the question." });
     } catch (error) {
       toast({
