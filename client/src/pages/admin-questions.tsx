@@ -1653,29 +1653,57 @@ export default function AdminQuestions() {
                       if (!filterSubject) return true;
                       return subject.toLowerCase().includes(filterSubject.toLowerCase());
                     })
-                    .map(([subject, { questions: subjectQuestions, classLevels }]) => (
-                      <Card 
-                        key={subject}
-                        onClick={() => {
-                          setSelectedSubject(subject);
-                          setSelectedClass(null);
-                          setSubTermFilter("All");
-                        }}
-                        className="group border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl hover:border-indigo-400 hover:shadow-xl transition-all duration-350 overflow-hidden cursor-pointer hover-glow"
-                      >
-                        {/* Subject Top Banner */}
-                        <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-                        
-                        <CardHeader className="py-5 px-6">
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <div className="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-650 dark:text-indigo-400 group-hover:scale-110 transition-transform">
-                                <BookOpen className="h-5 w-5" />
+                    .map(([subject, { questions: subjectQuestions, classLevels }]) => {
+                      const sName = subject.toLowerCase();
+                      const sStyle = sName.includes("math") || sName.includes("phys") || sName.includes("chem") || sName.includes("bio") || sName.includes("agric") || sName.includes("science") || sName.includes("computer")
+                        ? {
+                            card: "bg-emerald-50/60 border-emerald-100/80 dark:bg-emerald-950/10 dark:border-emerald-900/30 hover:border-emerald-450",
+                            stripe: "bg-emerald-500",
+                            icon: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400",
+                            badge: "bg-emerald-100 text-emerald-800 border-emerald-250/60 dark:bg-emerald-950/30 dark:text-emerald-400"
+                          }
+                        : sName.includes("english") || sName.includes("literature") || sName.includes("history") || sName.includes("crs") || sName.includes("irs") || sName.includes("civic")
+                        ? {
+                            card: "bg-sky-50/60 border-sky-100/80 dark:bg-sky-950/10 dark:border-sky-900/30 hover:border-sky-450",
+                            stripe: "bg-sky-500",
+                            icon: "bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400",
+                            badge: "bg-sky-100 text-sky-800 border-sky-250/60 dark:bg-sky-950/30 dark:text-sky-400"
+                          }
+                        : sName.includes("acc") || sName.includes("comm") || sName.includes("econ") || sName.includes("bus") || sName.includes("geo")
+                        ? {
+                            card: "bg-amber-50/60 border-amber-100/80 dark:bg-amber-950/10 dark:border-amber-900/30 hover:border-amber-450",
+                            stripe: "bg-amber-500",
+                            icon: "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400",
+                            badge: "bg-amber-100 text-amber-800 border-amber-250/60 dark:bg-amber-950/30 dark:text-amber-400"
+                          }
+                        : {
+                            card: "bg-rose-50/60 border-rose-100/80 dark:bg-rose-955/10 dark:border-rose-900/30 hover:border-rose-450",
+                            stripe: "bg-rose-500",
+                            icon: "bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400",
+                            badge: "bg-rose-105 text-rose-800 border-rose-250/60 dark:bg-rose-955/30 dark:text-rose-400"
+                          };
+                      return (
+                        <Card 
+                          key={subject}
+                          onClick={() => {
+                            setSelectedSubject(subject);
+                            setSelectedClass(null);
+                            setSubTermFilter("All");
+                          }}
+                          className={`relative overflow-hidden group border rounded-2xl hover:shadow-xl transition-all duration-350 cursor-pointer ${sStyle.card}`}
+                        >
+                          <div className={`absolute top-0 left-0 w-1.5 h-full ${sStyle.stripe}`} />
+                          
+                          <CardHeader className="py-5 px-6">
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`h-9 w-9 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${sStyle.icon}`}>
+                                  <BookOpen className="h-5 w-5" />
+                                </div>
+                                <CardTitle className="text-base font-extrabold text-slate-800 dark:text-slate-200 transition-colors">
+                                  {subject}
+                                </CardTitle>
                               </div>
-                              <CardTitle className="text-base font-extrabold text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-400 transition-colors">
-                                {subject}
-                              </CardTitle>
-                            </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
@@ -1719,20 +1747,30 @@ export default function AdminQuestions() {
                         </CardHeader>
 
                         <CardContent className="px-6 pb-6 pt-0 space-y-4">
-                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wide">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
                             <span>Questions Pool</span>
-                            <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200">{subjectQuestions.length} Questions</Badge>
+                            <Badge className={`font-extrabold ${sStyle.badge}`}>{subjectQuestions.length} Questions</Badge>
                           </div>
 
                           <div className="space-y-1.5">
                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Available Classes</span>
                             <div className="flex flex-wrap gap-1.5">
                               {classLevels.size > 0 ? (
-                                Array.from(classLevels).map(cls => (
-                                  <Badge key={cls} variant="outline" className="text-[9px] font-bold px-2 py-0.5 border-slate-200 bg-slate-50/50">
-                                    {cls}
-                                  </Badge>
-                                ))
+                                Array.from(classLevels).map(cls => {
+                                  const cName = cls.toUpperCase();
+                                  const cClass = cName.includes("JSS1") || cName.includes("JSS2")
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                    : cName.includes("JSS3") || cName.includes("SS1")
+                                    ? "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/20 dark:text-sky-400"
+                                    : cName.includes("SS2") || cName.includes("SS3")
+                                    ? "bg-amber-50 text-amber-850 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400"
+                                    : "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-955/20 dark:text-rose-450";
+                                  return (
+                                    <Badge key={cls} variant="outline" className={`text-[9px] font-extrabold px-2 py-0.5 border ${cClass}`}>
+                                      {cls}
+                                    </Badge>
+                                  );
+                                })
                               ) : (
                                 <span className="text-xs text-slate-400 italic">No classes linked yet</span>
                               )}
@@ -1740,7 +1778,8 @@ export default function AdminQuestions() {
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-2xl">

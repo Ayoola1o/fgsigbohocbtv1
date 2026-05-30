@@ -146,57 +146,63 @@ export default function AdminAnalytics() {
             </div>
           </div>
         </Card>
-      )}
-
-      {/* Cohort Diagnostic Summary Cards */}
+      )}      {/* Cohort Diagnostic Summary Cards */}
       <div className="grid gap-6 md:grid-cols-4">
-        <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-shadow duration-300">
-          <div className="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+        {/* Class Average Card - Light Blue */}
+        <Card className="border-none shadow-md bg-sky-50/75 border border-sky-100 dark:bg-sky-950/20 dark:border-sky-900/30 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-500" />
+          <div className="h-12 w-12 rounded-2xl bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
             <Award className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Class Avg Score</span>
-            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">{cohortStats.mean}%</h3>
-            <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5 mt-0.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-sky-655 dark:text-sky-305">Class Avg Score</span>
+            <h3 className="text-2xl font-black text-sky-900 dark:text-sky-100">{cohortStats.mean}%</h3>
+            <span className="text-[10px] text-sky-600 dark:text-sky-300 font-bold flex items-center gap-0.5 mt-0.5">
               Normal curve distribution <ArrowUpRight className="h-3 w-3" />
             </span>
           </div>
         </Card>
 
-        <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-shadow duration-300">
-          <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+        {/* Exam Pass Rate Card - Light Green */}
+        <Card className="border-none shadow-md bg-emerald-50/75 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500" />
+          <div className="h-12 w-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
             <Activity className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Exam Pass Rate</span>
-            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">{cohortStats.passRate}%</h3>
-            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-655 dark:text-emerald-305">Exam Pass Rate</span>
+            <h3 className="text-2xl font-black text-emerald-900 dark:text-emerald-100">{cohortStats.passRate}%</h3>
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-300 font-bold block mt-0.5">
               Threshold benchmark: 50%
             </span>
           </div>
         </Card>
 
-        <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-shadow duration-300">
-          <div className="h-12 w-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-650 dark:text-amber-400 shrink-0">
+        {/* Speed Guessing Card - Light Red */}
+        <Card className="border-none shadow-md bg-rose-50/75 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500" />
+          <div className="h-12 w-12 rounded-2xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-600 dark:text-rose-450 shrink-0">
             <Hourglass className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Speed Guessing Flags</span>
-            <h3 className="text-2xl font-black text-rose-500">{speedGuessingFlags}</h3>
-            <span className="text-[10px] text-rose-400 font-bold flex items-center gap-0.5 mt-0.5">
-              <AlertTriangle className="h-3 w-3 shrink-0 animate-pulse" /> Anomalous pacing detected
+            <span className="text-[10px] font-black uppercase tracking-wider text-rose-655 dark:text-rose-305">Speed Guessing Flags</span>
+            <h3 className="text-2xl font-black text-rose-600 dark:text-rose-100">{speedGuessingFlags}</h3>
+            <span className="text-[10px] text-rose-600 dark:text-rose-300 font-bold flex items-center gap-0.5 mt-0.5">
+              <AlertTriangle className="h-3 w-3 shrink-0 animate-pulse" /> Anomalous pacing
             </span>
           </div>
         </Card>
 
-        <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-shadow duration-300">
-          <div className="h-12 w-12 rounded-2xl bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center text-violet-650 dark:text-violet-400 shrink-0">
+        {/* Active Candidates Card - Orange */}
+        <Card className="border-none shadow-md bg-amber-50/75 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/30 rounded-2xl p-6 flex items-center gap-4 hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500" />
+          <div className="h-12 w-12 rounded-2xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-655 dark:text-amber-400 shrink-0">
             <Users className="h-6 w-6" />
           </div>
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Candidates</span>
-            <h3 className="text-2xl font-black text-slate-800 dark:text-slate-100">{totalCandidates}</h3>
-            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-655 dark:text-amber-305">Active Candidates</span>
+            <h3 className="text-2xl font-black text-amber-900 dark:text-amber-100">{totalCandidates}</h3>
+            <span className="text-[10px] text-amber-600 dark:text-amber-300 font-bold block mt-0.5">
               Across registered sessions
             </span>
           </div>

@@ -290,11 +290,27 @@ export default function AdminExams() {
                       {/* Class & Dept */}
                       <TableCell className="py-4.5 px-4 text-center">
                         <div className="flex flex-col items-center gap-1 justify-center">
-                          <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/40 font-bold text-[10px]">
+                          <Badge className={
+                            exam.classLevel.toUpperCase().includes("JSS1") || exam.classLevel.toUpperCase().includes("JSS2")
+                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-450 dark:border-emerald-900/40 font-extrabold text-[10px]"
+                              : exam.classLevel.toUpperCase().includes("JSS3") || exam.classLevel.toUpperCase().includes("SS1")
+                              ? "bg-sky-50 text-sky-800 border border-sky-200 dark:bg-sky-950/30 dark:text-sky-450 dark:border-sky-900/40 font-extrabold text-[10px]"
+                              : exam.classLevel.toUpperCase().includes("SS2") || exam.classLevel.toUpperCase().includes("SS3")
+                              ? "bg-amber-50 text-amber-850 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-450 dark:border-amber-900/40 font-extrabold text-[10px]"
+                              : "bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/30 dark:text-rose-450 dark:border-rose-900/40 font-extrabold text-[10px]"
+                          }>
                             {exam.classLevel}
                           </Badge>
                           {exam.department && (
-                            <Badge variant="outline" className="text-[9px] uppercase font-bold border-slate-200/60 dark:border-slate-800">
+                            <Badge variant="outline" className={
+                              exam.department.toLowerCase().includes("science")
+                                ? "bg-emerald-50/50 text-emerald-800 border border-emerald-200/50 dark:bg-emerald-950/10 dark:text-emerald-400 text-[9px] uppercase font-bold"
+                                : exam.department.toLowerCase().includes("commercial")
+                                ? "bg-sky-50/50 text-sky-800 border border-sky-200/50 dark:bg-sky-950/10 dark:text-sky-400 text-[9px] uppercase font-bold"
+                                : exam.department.toLowerCase().includes("art")
+                                ? "bg-amber-50/50 text-amber-850 border border-amber-200/50 dark:bg-amber-950/10 dark:text-amber-400 text-[9px] uppercase font-bold"
+                                : "bg-rose-50/50 text-rose-805 border border-rose-200/50 dark:bg-rose-950/10 dark:text-rose-400 text-[9px] uppercase font-bold"
+                            }>
                               {exam.department}
                             </Badge>
                           )}

@@ -21,6 +21,84 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import type { Exam, Question, Result, Student } from "@shared/schema";
 import { useMemo } from "react";
 
+const getClassStyle = (classLevel: string) => {
+  const level = classLevel.toUpperCase();
+  if (level.includes("JSS1") || level.includes("JSS2")) {
+    return {
+      bg: "bg-emerald-50/75 border border-emerald-100/50 dark:bg-emerald-950/20 dark:border-emerald-900/30",
+      stripe: "bg-emerald-500",
+      text: "text-emerald-900 dark:text-emerald-250 font-black",
+      subText: "text-emerald-700/90 dark:text-emerald-300/80 font-bold",
+      faintText: "text-emerald-600/80 dark:text-emerald-400/80 font-bold",
+      badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200/50"
+    };
+  } else if (level.includes("JSS3") || level.includes("SS1")) {
+    return {
+      bg: "bg-sky-50/75 border border-sky-100/50 dark:bg-sky-950/20 dark:border-sky-900/30",
+      stripe: "bg-sky-500",
+      text: "text-sky-900 dark:text-sky-255 font-black",
+      subText: "text-sky-700/90 dark:text-sky-300/80 font-bold",
+      faintText: "text-sky-600/80 dark:text-sky-400/80 font-bold",
+      badge: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 border-sky-200/50"
+    };
+  } else if (level.includes("SS2") || level.includes("SS3")) {
+    return {
+      bg: "bg-amber-50/75 border border-amber-100/50 dark:bg-amber-950/20 dark:border-amber-900/30",
+      stripe: "bg-amber-500",
+      text: "text-amber-900 dark:text-amber-255 font-black",
+      subText: "text-amber-700/90 dark:text-amber-300/80 font-bold",
+      faintText: "text-amber-600/80 dark:text-amber-400/80 font-bold",
+      badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200/50"
+    };
+  } else {
+    return {
+      bg: "bg-rose-50/75 border border-rose-100/50 dark:bg-rose-950/20 dark:border-rose-900/30",
+      stripe: "bg-rose-500",
+      text: "text-rose-900 dark:text-rose-255 font-black",
+      subText: "text-rose-700/90 dark:text-rose-300/80 font-bold",
+      faintText: "text-rose-600/80 dark:text-rose-400/80 font-bold",
+      badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200/50"
+    };
+  }
+};
+
+const getDeptStyle = (dept: string) => {
+  const name = dept.toLowerCase();
+  if (name.includes("science")) {
+    return {
+      bg: "bg-emerald-50/75 border border-emerald-100/50 dark:bg-emerald-950/20 dark:border-emerald-900/30",
+      stripe: "bg-emerald-500",
+      text: "text-emerald-900 dark:text-emerald-255 font-black",
+      subText: "text-emerald-700/90 dark:text-emerald-300/80 font-bold",
+      badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-350 border-emerald-250/50"
+    };
+  } else if (name.includes("commercial")) {
+    return {
+      bg: "bg-sky-50/75 border border-sky-100/50 dark:bg-sky-950/20 dark:border-sky-900/30",
+      stripe: "bg-sky-500",
+      text: "text-sky-900 dark:text-sky-255 font-black",
+      subText: "text-sky-700/90 dark:text-sky-300/80 font-bold",
+      badge: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-355 border-sky-250/50"
+    };
+  } else if (name.includes("art")) {
+    return {
+      bg: "bg-amber-50/75 border border-amber-100/50 dark:bg-amber-950/20 dark:border-amber-900/30",
+      stripe: "bg-amber-500",
+      text: "text-amber-900 dark:text-amber-255 font-black",
+      subText: "text-amber-700/90 dark:text-amber-300/80 font-bold",
+      badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-355 border-amber-250/50"
+    };
+  } else {
+    return {
+      bg: "bg-rose-50/75 border border-rose-100/50 dark:bg-rose-950/20 dark:border-rose-900/30",
+      stripe: "bg-rose-500",
+      text: "text-rose-900 dark:text-rose-255 font-black",
+      subText: "text-rose-700/90 dark:text-rose-300/80 font-bold",
+      badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-355 border-rose-250/50"
+    };
+  }
+};
+
 export default function AdminDashboard() {
   const { data: exams, isLoading: examsLoading } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
@@ -256,98 +334,99 @@ export default function AdminDashboard() {
         ) : (
           <>
             {/* Total Exams Card */}
-            <Card className="border-none shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
-              <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-all duration-300">
-                <FileText className="h-20 w-20 text-slate-800 dark:text-white" />
+            <Card className="border-none shadow-lg bg-sky-50/75 border border-sky-100 dark:bg-sky-950/20 dark:border-sky-900/30 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
+              <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+                <FileText className="h-20 w-20 text-sky-850 dark:text-sky-400" />
               </div>
-              <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-500" />
               <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-black text-slate-400 dark:text-slate-500 flex items-center gap-2 tracking-widest uppercase">
-                  <FileText className="h-4 w-4 text-indigo-500" /> Total Exams
+                <CardTitle className="text-xs font-black text-sky-700 dark:text-sky-400 flex items-center gap-2 tracking-widest uppercase">
+                  <FileText className="h-4 w-4 text-sky-500" /> Total Exams
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-4.5xl font-black text-slate-800 dark:text-white leading-none" data-testid="text-total-exams">
+                <div className="text-4.5xl font-black text-sky-900 dark:text-sky-100 leading-none" data-testid="text-total-exams">
                   {stats.totalExams}
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div className="w-full bg-sky-200/50 dark:bg-sky-900/40 h-1.5 rounded-full mt-3 overflow-hidden">
                   <div 
                     style={{ width: `${stats.totalExams > 0 ? (stats.activeExams / stats.totalExams) * 100 : 0}%` }} 
-                    className="bg-indigo-500 h-full rounded-full" 
+                    className="bg-sky-500 h-full rounded-full" 
                   />
                 </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 font-bold uppercase tracking-wider">
+                <p className="text-[10px] text-sky-650 dark:text-sky-300 mt-2 font-bold uppercase tracking-wider">
                   {stats.activeExams} active evaluation sets
                 </p>
               </CardContent>
             </Card>
 
             {/* Questions Bank Card */}
-            <Card className="border-none shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
-              <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-all duration-300">
-                <HelpCircle className="h-20 w-20 text-slate-800 dark:text-white" />
+            <Card className="border-none shadow-lg bg-emerald-50/75 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
+              <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+                <HelpCircle className="h-20 w-20 text-emerald-850 dark:text-emerald-400" />
               </div>
-              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500" />
               <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-black text-slate-400 dark:text-slate-500 flex items-center gap-2 tracking-widest uppercase">
+                <CardTitle className="text-xs font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-2 tracking-widest uppercase">
                   <HelpCircle className="h-4 w-4 text-emerald-500" /> Question Bank
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-4.5xl font-black text-slate-800 dark:text-white leading-none" data-testid="text-total-questions">
+                <div className="text-4.5xl font-black text-emerald-900 dark:text-emerald-100 leading-none" data-testid="text-total-questions">
                   {stats.totalQuestions}
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3" />
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 font-bold uppercase tracking-wider">
+                <div className="w-full bg-emerald-200/50 dark:bg-emerald-900/40 h-1.5 rounded-full mt-3" />
+                <p className="text-[10px] text-emerald-655 dark:text-emerald-300 mt-2 font-bold uppercase tracking-wider">
                   Available query objects
                 </p>
               </CardContent>
             </Card>
 
             {/* Total Students Card */}
-            <Card className="border-none shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
-              <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-all duration-300">
-                <Users className="h-20 w-20 text-slate-800 dark:text-white" />
+            <Card className="border-none shadow-lg bg-amber-50/75 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/30 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
+              <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+                <Users className="h-20 w-20 text-amber-850 dark:text-amber-400" />
               </div>
-              <div className="absolute top-0 left-0 w-1 h-full bg-violet-500" />
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500" />
               <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-black text-slate-400 dark:text-slate-500 flex items-center gap-2 tracking-widest uppercase">
-                  <Users className="h-4 w-4 text-violet-500" /> Tested Candidates
+                <CardTitle className="text-xs font-black text-amber-700 dark:text-amber-400 flex items-center gap-2 tracking-widest uppercase">
+                  <Users className="h-4 w-4 text-amber-500" /> Tested Candidates
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-4.5xl font-black text-slate-800 dark:text-white leading-none" data-testid="text-total-students">
+                <div className="text-4.5xl font-black text-amber-900 dark:text-amber-100 leading-none" data-testid="text-total-students">
                   {stats.totalStudents}
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3" />
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 font-bold uppercase tracking-wider">
+                <div className="w-full bg-amber-200/50 dark:bg-amber-900/40 h-1.5 rounded-full mt-3" />
+                <p className="text-[10px] text-amber-655 dark:text-amber-300 mt-2 font-bold uppercase tracking-wider">
                   Unique student test attempts
                 </p>
               </CardContent>
             </Card>
 
             {/* Pass Rate Card */}
-            <Card className="border-none shadow-lg bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 text-white relative overflow-hidden group hover:scale-[1.01] hover:shadow-indigo-500/20 transition-all duration-300 rounded-2xl">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-25 transition-all duration-300">
-                <TrendingUp className="h-20 w-20 text-white" />
+            <Card className="border-none shadow-lg bg-rose-50/75 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 relative overflow-hidden group hover:scale-[1.01] hover:shadow-xl transition-all duration-300 rounded-2xl">
+              <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+                <TrendingUp className="h-20 w-20 text-rose-850 dark:text-rose-400" />
               </div>
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500" />
               <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-black text-indigo-200 flex items-center gap-2 tracking-widest uppercase">
-                  <TrendingUp className="h-4 w-4 text-indigo-200" /> Average Pass Rate
+                <CardTitle className="text-xs font-black text-rose-700 dark:text-rose-400 flex items-center gap-2 tracking-widest uppercase">
+                  <TrendingUp className="h-4 w-4 text-rose-550" /> Average Pass Rate
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-4.5xl font-black text-white leading-none" data-testid="text-pass-rate">
+                <div className="text-4.5xl font-black text-rose-900 dark:text-rose-100 leading-none" data-testid="text-pass-rate">
                   {passRate}%
                 </div>
-                <div className="w-full bg-white/20 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div className="w-full bg-rose-200/50 dark:bg-rose-900/40 h-1.5 rounded-full mt-3 overflow-hidden">
                   <div 
                     style={{ width: `${passRate}%` }} 
-                    className="bg-emerald-400 h-full rounded-full" 
+                    className="bg-rose-500 h-full rounded-full" 
                   />
                 </div>
-                <p className="text-[10px] text-indigo-100 mt-2 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                  <Award className="h-3 w-3 text-emerald-400" /> School standards metrics
+                <p className="text-[10px] text-rose-655 dark:text-rose-300 mt-2 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Award className="h-3 w-3 text-rose-550" /> School standards metrics
                 </p>
               </CardContent>
             </Card>
@@ -372,7 +451,7 @@ export default function AdminDashboard() {
             {/* 1. Classroom Performance Summaries Column */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-black uppercase text-slate-455 tracking-wider flex items-center gap-1.5">
+                <h3 className="text-xs font-black uppercase text-slate-500 dark:text-slate-350 tracking-wider flex items-center gap-1.5">
                   <GraduationCap className="h-4 w-4 text-indigo-500" /> Grade Level Summaries
                 </h3>
                 <Badge className="bg-indigo-50 text-indigo-700 text-[9px] font-bold border-indigo-200">
@@ -381,48 +460,51 @@ export default function AdminDashboard() {
               </div>
 
               {Object.keys(schoolAnalysis.classScores).length > 0 ? (
-                Object.entries(schoolAnalysis.classScores).map(([classLevel, data]) => (
-                  <Card key={classLevel} className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
-                    <CardHeader className="py-4 px-5 border-b border-slate-50 dark:border-slate-850/40">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-sm font-extrabold text-slate-850 dark:text-slate-200">
-                          Class: {classLevel}
-                        </CardTitle>
-                        <Badge className={`text-[10px] font-black uppercase px-2 py-0.5 border ${
-                          data.avg >= 70 ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
-                          data.avg >= 50 ? "bg-indigo-50 text-indigo-700 border-indigo-250" : "bg-rose-50 text-rose-700 border-rose-250"
-                        }`}>
-                          {data.avg}% Average
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-5 space-y-3">
-                      <div className="flex justify-between text-xs font-bold text-slate-455">
-                        <span>Tested Candidates</span>
-                        <span className="text-slate-800 dark:text-white font-extrabold">{data.total} students</span>
-                      </div>
-                      
-                      {data.topScore >= 0 && (
-                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 p-2.5 rounded-xl flex items-center justify-between">
-                          <span className="flex items-center gap-1">👑 Top score</span>
-                          <span className="text-indigo-650 font-extrabold truncate max-w-[120px]">{data.topName} ({data.topScore}%)</span>
+                Object.entries(schoolAnalysis.classScores).map(([classLevel, data]) => {
+                  const style = getClassStyle(classLevel);
+                  return (
+                    <Card key={classLevel} className={`border-none shadow-md ${style.bg} rounded-2xl hover:shadow-lg transition-all duration-300 relative overflow-hidden group`}>
+                      <div className={`absolute top-0 left-0 w-1.5 h-full ${style.stripe}`} />
+                      <CardHeader className="py-4 px-5 border-b border-black/[0.03] dark:border-white/[0.04]">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className={`text-sm font-extrabold ${style.text}`}>
+                            Class: {classLevel}
+                          </CardTitle>
+                          <Badge className={`text-[10px] font-black uppercase px-2 py-0.5 border ${
+                            data.avg >= 70 ? "bg-emerald-100 text-emerald-800 border-emerald-300" :
+                            data.avg >= 50 ? "bg-sky-100 text-sky-800 border-sky-300" : "bg-rose-100 text-rose-800 border-rose-300"
+                          }`}>
+                            {data.avg}% Average
+                          </Badge>
                         </div>
-                      )}
+                      </CardHeader>
+                      <CardContent className="p-5 space-y-3">
+                        <div className="flex justify-between text-xs font-bold text-slate-650 dark:text-slate-300">
+                          <span>Tested Candidates</span>
+                          <span className={`${style.text} font-black`}>{data.total} students</span>
+                        </div>
+                        
+                        {data.topScore >= 0 && (
+                          <div className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white/50 dark:bg-black/20 border border-black/[0.05] dark:border-white/[0.05] p-2.5 rounded-xl flex items-center justify-between">
+                            <span className="flex items-center gap-1 font-extrabold">👑 Top score</span>
+                            <span className="font-black truncate max-w-[120px]">{data.topName} ({data.topScore}%)</span>
+                          </div>
+                        )}
 
-                      <div className="space-y-1">
-                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Department Breakout</span>
-                        <div className="flex flex-wrap gap-1">
-                          {Object.entries(data.depts).map(([dept, count]) => (
-                            <Badge key={dept} variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 border-slate-250 text-slate-500">
-                              {dept}: {count}
-                            </Badge>
-                          ))}
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Department Breakout</span>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(data.depts).map(([dept, count]) => (
+                              <Badge key={dept} variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 border-black/[0.08] dark:border-white/[0.08] text-slate-655 dark:text-slate-300 bg-white/40 dark:bg-black/10">
+                                {dept}: {count}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  );
+                })
               ) : (
                 <div className="text-center text-slate-400 text-xs py-8">No class level metrics found.</div>
               )}
@@ -431,7 +513,7 @@ export default function AdminDashboard() {
             {/* 2. Departmental-Class Breakdowns Column */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-black uppercase text-slate-455 tracking-wider flex items-center gap-1.5">
+                <h3 className="text-xs font-black uppercase text-slate-500 dark:text-slate-350 tracking-wider flex items-center gap-1.5">
                   <TrendingUp className="h-4 w-4 text-violet-500" /> Department Summaries
                 </h3>
                 <Badge className="bg-violet-50 text-violet-700 text-[9px] font-bold border-violet-200">
@@ -440,39 +522,42 @@ export default function AdminDashboard() {
               </div>
 
               {Object.keys(schoolAnalysis.deptScores).length > 0 ? (
-                Object.entries(schoolAnalysis.deptScores).map(([dept, data]) => (
-                  <Card key={dept} className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-violet-500" />
-                    <CardHeader className="py-4 px-5 border-b border-slate-50 dark:border-slate-850/40">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-sm font-extrabold text-slate-850 dark:text-slate-200">
-                          {dept} Dept
-                        </CardTitle>
-                        <Badge className="text-[10px] font-black uppercase px-2 py-0.5 bg-violet-50 text-violet-700 border-violet-200 border">
-                          {data.avg}% Overall Avg
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-5 space-y-3.5">
-                      <div className="flex justify-between text-xs font-bold text-slate-455">
-                        <span>Total Department Candidates</span>
-                        <span className="text-slate-800 dark:text-white font-extrabold">{data.total} attempts</span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Class Averages Breakdowns</span>
-                        <div className="space-y-1.5">
-                          {Object.entries(data.classes).map(([classLevel, classItem]) => (
-                            <div key={classLevel} className="flex justify-between items-center text-[10px] font-bold text-slate-600 dark:text-slate-400 border-b border-slate-50 dark:border-slate-850/40 pb-1.5 last:border-0 last:pb-0">
-                              <span>{classLevel} ({classItem.total} candidates)</span>
-                              <span className="text-violet-650 font-extrabold">{classItem.avg}% Avg</span>
-                            </div>
-                          ))}
+                Object.entries(schoolAnalysis.deptScores).map(([dept, data]) => {
+                  const style = getDeptStyle(dept);
+                  return (
+                    <Card key={dept} className={`border-none shadow-md ${style.bg} rounded-2xl hover:shadow-lg transition-all duration-300 relative overflow-hidden group`}>
+                      <div className={`absolute top-0 left-0 w-1.5 h-full ${style.stripe}`} />
+                      <CardHeader className="py-4 px-5 border-b border-black/[0.03] dark:border-white/[0.04]">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className={`text-sm font-extrabold ${style.text}`}>
+                            {dept} Dept
+                          </CardTitle>
+                          <Badge className={`text-[10px] font-black uppercase px-2 py-0.5 border ${style.badge}`}>
+                            {data.avg}% Overall Avg
+                          </Badge>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardHeader>
+                      <CardContent className="p-5 space-y-3.5">
+                        <div className="flex justify-between text-xs font-bold text-slate-655 dark:text-slate-300">
+                          <span>Total Department Candidates</span>
+                          <span className={`${style.text} font-black`}>{data.total} attempts</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">Class Averages Breakdowns</span>
+                          <div className="space-y-1.5">
+                            {Object.entries(data.classes).map(([classLevel, classItem]) => (
+                              <div key={classLevel} className="flex justify-between items-center text-[10px] font-bold text-slate-650 dark:text-slate-300 border-b border-black/[0.03] dark:border-white/[0.04] pb-1.5 last:border-0 last:pb-0">
+                                <span>{classLevel} ({classItem.total} candidates)</span>
+                                <span className="font-extrabold">{classItem.avg}% Avg</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               ) : (
                 <div className="text-center text-slate-400 text-xs py-8">No department data found.</div>
               )}
@@ -480,7 +565,7 @@ export default function AdminDashboard() {
 
             {/* 3. Class-by-Class Comparative Visual Chart */}
             <div className="space-y-4">
-              <h3 className="text-xs font-black uppercase text-slate-455 tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs font-black uppercase text-slate-500 dark:text-slate-350 tracking-wider flex items-center gap-1.5">
                 <Award className="h-4 w-4 text-emerald-500" /> Grade Performance Chart
               </h3>
 

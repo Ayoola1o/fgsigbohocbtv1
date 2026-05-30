@@ -397,20 +397,20 @@ export default function AdminStudents() {
 
       {/* High-Fidelity Stats Deck */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-500 delay-100">
-        {/* Total Enrollment Card */}
-        <Card className="border-none shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
-          <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-all duration-300">
-            <Users className="h-20 w-20 text-indigo-950 dark:text-white" />
+        {/* Total Enrollment Card - Light Blue */}
+        <Card className="border-none shadow-lg bg-sky-50/75 border border-sky-100 dark:bg-sky-950/20 dark:border-sky-900/30 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
+          <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+            <Users className="h-20 w-20 text-sky-850 dark:text-sky-400" />
           </div>
-          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-sky-500" />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black text-slate-400 dark:text-slate-500 flex items-center gap-2 tracking-widest uppercase">
-              <Users className="h-4 w-4 text-indigo-500" /> Total Enrollment
+            <CardTitle className="text-xs font-black text-sky-700 dark:text-sky-400 flex items-center gap-2 tracking-widest uppercase">
+              <Users className="h-4 w-4 text-sky-500" /> Total Enrollment
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-black text-slate-800 dark:text-white">{totalCount}</div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden flex">
+            <div className="text-4xl font-black text-sky-900 dark:text-sky-100">{totalCount}</div>
+            <div className="w-full bg-sky-200/50 dark:bg-sky-900/40 h-1.5 rounded-full mt-3 overflow-hidden flex">
               <div 
                 style={{ width: `${totalCount > 0 ? (maleCount / totalCount) * 100 : 0}%` }} 
                 className="bg-blue-500 h-full"
@@ -422,82 +422,83 @@ export default function AdminStudents() {
                 title={`Female: ${femaleCount}`} 
               />
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center gap-1.5">
+            <p className="text-[11px] text-sky-655 dark:text-sky-300 mt-2 font-bold flex items-center gap-1.5">
               <span className="text-blue-500">{maleCount} Boys</span> • <span className="text-pink-500">{femaleCount} Girls</span>
             </p>
           </CardContent>
         </Card>
 
-        {/* School Average performance */}
-        <Card className="border-none shadow-lg bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 text-white relative overflow-hidden group hover:shadow-indigo-500/20 hover:scale-[1.01] transition-all duration-300 rounded-2xl">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-25 transition-all duration-300">
-            <TrendingUp className="h-20 w-20 text-white" />
+        {/* School Average performance - Light Green */}
+        <Card className="border-none shadow-lg bg-emerald-50/75 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
+          <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+            <TrendingUp className="h-20 w-20 text-emerald-850 dark:text-emerald-400" />
           </div>
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500" />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black text-indigo-200 flex items-center gap-2 tracking-widest uppercase">
-              <TrendingUp className="h-4 w-4 text-indigo-200" /> Academics Average
+            <CardTitle className="text-xs font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-2 tracking-widest uppercase">
+              <TrendingUp className="h-4 w-4 text-emerald-550" /> Academics Average
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-black text-white">{averagePerformance}%</div>
+            <div className="text-4xl font-black text-emerald-900 dark:text-emerald-100">{averagePerformance}%</div>
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md font-extrabold text-white border border-white/10 uppercase tracking-wider">
+              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md font-extrabold text-emerald-800 dark:text-emerald-300 border border-emerald-250/50 uppercase tracking-wider">
                 {activeStanding.label}
               </span>
-              <span className="text-[10px] text-indigo-100 font-semibold">Standard Ratio</span>
+              <span className="text-[10px] text-emerald-655 dark:text-emerald-300 font-bold">Standard Ratio</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Senior High Distribution */}
-        <Card className="border-none shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
-          <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-all duration-300">
-            <GraduationCap className="h-20 w-20 text-slate-800 dark:text-white" />
+        {/* Senior High Distribution - Orange */}
+        <Card className="border-none shadow-lg bg-amber-50/75 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/30 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
+          <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+            <GraduationCap className="h-20 w-20 text-amber-850 dark:text-amber-400" />
           </div>
-          <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500" />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black text-slate-400 dark:text-slate-500 flex items-center gap-2 tracking-widest uppercase">
-              <GraduationCap className="h-4 w-4 text-emerald-500" /> Senior School (SSS)
+            <CardTitle className="text-xs font-black text-amber-700 dark:text-amber-400 flex items-center gap-2 tracking-widest uppercase">
+              <GraduationCap className="h-4 w-4 text-amber-500" /> Senior School (SSS)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-black text-slate-800 dark:text-white">
+            <div className="text-4xl font-black text-amber-900 dark:text-amber-100">
               {students.filter(s => s.classLevel?.startsWith("SS")).length}
             </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3">
+            <div className="w-full bg-amber-200/50 dark:bg-amber-900/40 h-1.5 rounded-full mt-3">
               <div 
                 style={{ width: `${totalCount > 0 ? (students.filter(s => s.classLevel?.startsWith("SS")).length / totalCount) * 100 : 0}%` }} 
-                className="bg-emerald-500 h-full rounded-full" 
+                className="bg-amber-500 h-full rounded-full" 
               />
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-bold">
+            <p className="text-[11px] text-amber-655 dark:text-amber-300 mt-2 font-bold">
               Enrolled in SS1 - SS3 Classrooms
             </p>
           </CardContent>
         </Card>
 
-        {/* Junior High Distribution */}
-        <Card className="border-none shadow-lg bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
-          <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-all duration-300">
-            <Sparkles className="h-20 w-20 text-slate-800 dark:text-white" />
+        {/* Junior High Distribution - Light Red */}
+        <Card className="border-none shadow-lg bg-rose-50/75 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 relative overflow-hidden group hover:shadow-xl hover:scale-[1.01] transition-all duration-300 rounded-2xl">
+          <div className="absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 group-hover:opacity-20 dark:group-hover:opacity-30 transition-all duration-300">
+            <Sparkles className="h-20 w-20 text-rose-850 dark:text-rose-400" />
           </div>
-          <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500" />
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black text-slate-400 dark:text-slate-500 flex items-center gap-2 tracking-widest uppercase">
-              <Sparkles className="h-4 w-4 text-amber-500" /> Junior School (JSS)
+            <CardTitle className="text-xs font-black text-rose-700 dark:text-rose-400 flex items-center gap-2 tracking-widest uppercase">
+              <Sparkles className="h-4 w-4 text-rose-550" /> Junior School (JSS)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-black text-slate-800 dark:text-white">
+            <div className="text-4xl font-black text-rose-900 dark:text-rose-100">
               {students.filter(s => s.classLevel?.startsWith("JS")).length}
             </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-3">
+            <div className="w-full bg-rose-200/50 dark:bg-rose-900/40 h-1.5 rounded-full mt-3">
               <div 
                 style={{ width: `${totalCount > 0 ? (students.filter(s => s.classLevel?.startsWith("JS")).length / totalCount) * 100 : 0}%` }} 
-                className="bg-amber-500 h-full rounded-full" 
+                className="bg-rose-500 h-full rounded-full" 
               />
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-bold">
+            <p className="text-[11px] text-rose-655 dark:text-rose-300 mt-2 font-bold">
               Enrolled in JSS1 - JSS3 Classrooms
             </p>
           </CardContent>
@@ -745,8 +746,25 @@ export default function AdminStudents() {
                 <div
                   key={s.id}
                   onClick={() => setLocation(`/admin/results/student/${s.studentId}`)}
-                  className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 hover-glow rounded-2xl p-5 cursor-pointer relative group flex flex-col justify-between"
+                  className={`relative overflow-hidden group border rounded-2xl p-5 cursor-pointer flex flex-col justify-between hover:shadow-lg transition-all duration-300 ${
+                    s.classLevel?.toUpperCase().includes("JSS1") || s.classLevel?.toUpperCase().includes("JSS2")
+                      ? "bg-emerald-50/60 border-emerald-100/80 dark:bg-emerald-950/10 dark:border-emerald-900/30"
+                      : s.classLevel?.toUpperCase().includes("JSS3") || s.classLevel?.toUpperCase().includes("SS1")
+                      ? "bg-sky-50/60 border-sky-100/80 dark:bg-sky-950/10 dark:border-sky-900/30"
+                      : s.classLevel?.toUpperCase().includes("SS2") || s.classLevel?.toUpperCase().includes("SS3")
+                      ? "bg-amber-50/60 border-amber-100/80 dark:bg-amber-950/10 dark:border-amber-900/30"
+                      : "bg-rose-50/60 border-rose-100/80 dark:bg-rose-950/10 dark:border-rose-900/30"
+                  }`}
                 >
+                  <div className={`absolute top-0 left-0 w-1 h-full ${
+                    s.classLevel?.toUpperCase().includes("JSS1") || s.classLevel?.toUpperCase().includes("JSS2")
+                      ? "bg-emerald-500"
+                      : s.classLevel?.toUpperCase().includes("JSS3") || s.classLevel?.toUpperCase().includes("SS1")
+                      ? "bg-sky-500"
+                      : s.classLevel?.toUpperCase().includes("SS2") || s.classLevel?.toUpperCase().includes("SS3")
+                      ? "bg-amber-550"
+                      : "bg-rose-500"
+                  }`} />
                   <div>
                     {/* Class & Dept header */}
                     <div className="flex items-center justify-between gap-2 border-b border-slate-50 dark:border-slate-800/40 pb-3 mb-4">

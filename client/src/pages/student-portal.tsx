@@ -191,15 +191,34 @@ export default function StudentPortal() {
                   return (
                     <Card
                       key={exam.id}
-                      className={`overflow-hidden border group transition-all duration-300 rounded-2.5xl flex flex-col justify-between ${
+                      className={`relative overflow-hidden border group transition-all duration-300 rounded-2.5xl flex flex-col justify-between hover:shadow-xl hover:scale-[1.01] ${
                         isBlocked
-                          ? "border-rose-100 bg-rose-50/5 dark:border-rose-955/20 dark:bg-rose-955/5 shadow-sm"
+                          ? "border-rose-100 bg-rose-50/75 dark:border-rose-955/20 dark:bg-rose-955/5 shadow-sm"
                           : hasTaken
-                          ? "border-emerald-100 bg-emerald-50/5 dark:border-emerald-955/20 dark:bg-emerald-955/5 shadow-sm"
-                          : "border-slate-150/70 bg-white dark:border-slate-805 dark:bg-slate-900 shadow-md hover:shadow-xl hover:scale-[1.01]"
+                          ? "border-emerald-100 bg-emerald-50/75 dark:border-emerald-955/20 dark:bg-emerald-955/5 shadow-sm"
+                          : exam.term === "First Term"
+                          ? "border-emerald-100 bg-emerald-50/40 dark:border-emerald-900/30 dark:bg-emerald-950/10 shadow-md"
+                          : exam.term === "Second Term"
+                          ? "border-sky-100 bg-sky-50/40 dark:border-sky-900/30 dark:bg-sky-950/10 shadow-md"
+                          : exam.term === "Third Term"
+                          ? "border-amber-100 bg-amber-50/40 dark:border-amber-900/30 dark:bg-amber-950/10 shadow-md"
+                          : "border-rose-100 bg-rose-50/40 dark:border-rose-900/30 dark:bg-rose-950/10 shadow-md"
                       }`}
                       data-testid={`card-exam-${exam.id}`}
                     >
+                      <div className={`absolute top-0 left-0 w-1.5 h-full ${
+                        isBlocked
+                          ? "bg-rose-500"
+                          : hasTaken
+                          ? "bg-emerald-500"
+                          : exam.term === "First Term"
+                          ? "bg-emerald-500"
+                          : exam.term === "Second Term"
+                          ? "bg-sky-500"
+                          : exam.term === "Third Term"
+                          ? "bg-amber-500"
+                          : "bg-rose-500"
+                      }`} />
                       <CardHeader className="pb-4">
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <Badge 

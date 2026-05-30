@@ -825,11 +825,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const selectedExamId = (req.query.examId as string) || "__all__";
 
-      const [allResults, allQuestions, allExams] = await Promise.all([
-        getFirestoreResults(),
-        getFirestoreQuestions(),
-        getFirestoreExams(),
-      ]);
+      let allResults: any[] = [];
+      let allQuestions: any[] = [];
+      let allExams: any[] = [];
+
+      try {
+        allResults = await getFirestoreResults();
+      } catch (e) {
+        console.warn("⚠️ [routes.ts] Firestore results fetch failed. Falling back to local storage:", e);
+        allResults = await storage.getResults();
+      }
+
+      try {
+        allQuestions = await getFirestoreQuestions();
+      } catch (e) {
+        console.warn("⚠️ [routes.ts] Firestore questions fetch failed. Falling back to local storage:", e);
+        allQuestions = await storage.getQuestions();
+      }
+
+      try {
+        allExams = await getFirestoreExams();
+      } catch (e) {
+        console.warn("⚠️ [routes.ts] Firestore exams fetch failed. Falling back to local storage:", e);
+        allExams = await storage.getExams();
+      }
 
       // 1. Filtered results
       const filteredResults = selectedExamId === "__all__"
