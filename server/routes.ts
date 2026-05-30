@@ -280,17 +280,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const prompt = `
-      Analyze the following messy text from a teacher's exam paper document. 
-      Extract all the questions, their options, and identify the correct answer.
+      You are an elite academic parser. Parse the following uploaded document which contains academic questions.
       
-      For fields like classLevel, term, examType, and subject, if they are not explicitly 
-      stated in the text for an individual question, fallback to these default values:
-      - classLevel: ${defaultMeta.classLevel}
-      - term: ${defaultMeta.term}
-      - examType: ${defaultMeta.examType}
-      - subject: ${defaultMeta.subject}
+      The input document can be a teacher's raw test paper (with numbered questions and options), a plain text list, or a raw CSV format (matching classLevel,term,examType,subject,questionText,questionType,difficulty,points,correctAnswer,options).
       
-      Document text to parse:
+      Instructions for parsing:
+      1. Carefully identify the questions, choices (options), correct answers, point values, and metadata.
+      2. If the document is in CSV format:
+         - Each non-header line should be treated as a question.
+         - Ensure the fields are parsed correctly, respecting columns.
+      3. Strict Schema Mapping:
+         - questionType: Must be strictly 'multiple_choice' or 'fill_in_the_blank'. (If it is Objectives, map it to 'multiple_choice').
+         - difficulty: Must be strictly 'Easy', 'Medium', or 'Hard' (capitalize the first letter).
+         - points: Must be a valid integer, e.g. 1, 2, 5. Default is 1 if not specified.
+         - options: An array of string options. E.g. ["(a) Option A", "(b) Option B", ...]. If the question is theory or fill-in-the-blank, return an empty array [].
+         - correctAnswer: The correct answer value or the exact letter option (e.g. "a" or "Option A" or "(a)").
+      4. Fallback defaults if a field is not explicitly specified in the text or empty in the CSV row:
+         - classLevel: "${defaultMeta.classLevel}"
+         - term: "${defaultMeta.term}"
+         - examType: "${defaultMeta.examType}"
+         - subject: "${defaultMeta.subject}"
+         - department: "${defaultMeta.department}"
+      
+      Document Content to Parse:
       ---
       ${rawText}
       ---

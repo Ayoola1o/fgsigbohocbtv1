@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { 
   FileText, 
   HelpCircle, 
@@ -171,22 +172,51 @@ export default function AdminDashboard() {
     ? [...results].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()).slice(0, 5)
     : [];
 
-  const subjectStats = exams?.reduce((acc, exam) => {
-    const subjectResults = results?.filter((r) => r.examId === exam.id) || [];
-    const avgScore = subjectResults.length > 0
-      ? Math.round(
-        subjectResults.reduce((sum, r) => sum + r.percentage, 0) /
-        subjectResults.length
-      )
-      : 0;
+  const subjectStats = useMemo(() => {
+    if (!results || results.length === 0) return [];
 
-    acc.push({
-      subject: exam.subject,
-      avgScore,
-      students: subjectResults.length,
+    // Map exam details by ID to get the correct subject name
+    const examMap = new Map<string, Exam>();
+    if (exams) {
+      exams.forEach(e => examMap.set(e.id, e));
+    }
+
+    const statsMap: Record<string, { sum: number; count: number; studentsSet: Set<string> }> = {};
+
+    results.forEach(r => {
+      // Find subject name from the exam mapping or fallback to result metadata
+      const examProfile = examMap.get(r.examId);
+      const subjectName = examProfile?.subject || r.examName || "General";
+
+      if (!statsMap[subjectName]) {
+        statsMap[subjectName] = {
+          sum: 0,
+          count: 0,
+          studentsSet: new Set<string>()
+        };
+      }
+
+      statsMap[subjectName].sum += r.percentage;
+      statsMap[subjectName].count++;
+      if (r.studentId) {
+        statsMap[subjectName].studentsSet.add(r.studentId.trim().toLowerCase());
+      }
     });
-    return acc;
-  }, [] as { subject: string; avgScore: number; students: number }[]);
+
+    return Object.entries(statsMap).map(([subject, stats]) => ({
+      subject,
+      avgScore: Math.round(stats.sum / stats.count),
+      students: stats.studentsSet.size,
+    }));
+  }, [results, exams]);
+
+  const classChartData = useMemo(() => {
+    return Object.entries(schoolAnalysis.classScores).map(([classLevel, data]) => ({
+      name: classLevel,
+      "Avg Score": data.avg,
+      "Candidates": data.total,
+    }));
+  }, [schoolAnalysis]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -325,114 +355,197 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Analysis Summary Indicators Dashboard */}
       {isLoading ? (
-        <Skeleton className="h-[200px] w-full rounded-2xl animate-pulse" />
+        <Skeleton className="h-[300px] w-full rounded-2xl animate-pulse" />
       ) : (
-        <div className="grid gap-6 md:grid-cols-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {/* Class-by-Class Analysis Card */}
-          <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
-            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                <GraduationCap className="h-4.5 w-4.5 text-indigo-500" /> Class Level Performance
-              </CardTitle>
-              <CardDescription className="text-[10px]">Real average grade index segmented by grade level.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-5 space-y-4">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-850 dark:text-white flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-indigo-500" /> Classroom & Departmental Performance Hub
+              </h2>
+              <p className="text-xs font-semibold text-slate-400 mt-0.5">Real average percentage scores, unique tested counts, and departmental divisions.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {/* 1. Classroom Performance Summaries Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase text-slate-455 tracking-wider flex items-center gap-1.5">
+                  <GraduationCap className="h-4 w-4 text-indigo-500" /> Grade Level Summaries
+                </h3>
+                <Badge className="bg-indigo-50 text-indigo-700 text-[9px] font-bold border-indigo-200">
+                  {Object.keys(schoolAnalysis.classScores).length} Classes Active
+                </Badge>
+              </div>
+
               {Object.keys(schoolAnalysis.classScores).length > 0 ? (
-                Object.entries(schoolAnalysis.classScores).map(([classLevel, scoreData]) => {
-                  const data = scoreData as { total: number; sum: number; avg: number };
-                  return (
-                  <div key={classLevel} className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
-                      <span>{classLevel} ({data.total} candidates)</span>
-                      <span className="font-extrabold text-slate-800 dark:text-white">{data.avg}% Avg</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          data.avg >= 70 ? "bg-emerald-500" :
-                          data.avg >= 50 ? "bg-indigo-500" : "bg-rose-500"
-                        }`}
-                        style={{ width: `${data.avg}%` }}
-                      />
-                    </div>
-                  </div>
-                );})
-              ) : (
-                <div className="text-center text-slate-400 text-xs py-8">No class data found yet</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Department Performance Card */}
-          <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
-            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                <TrendingUp className="h-4.5 w-4.5 text-indigo-500" /> Department Performance
-              </CardTitle>
-              <CardDescription className="text-[10px]">Comparative analytics across school segments.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-5 space-y-4">
-              {Object.keys(schoolAnalysis.deptScores).length > 0 ? (
-                Object.entries(schoolAnalysis.deptScores).map(([dept, scoreData]) => {
-                  const data = scoreData as { total: number; sum: number; avg: number };
-                  return (
-                  <div key={dept} className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
-                      <span>{dept} Department</span>
-                      <span className="font-extrabold text-slate-800 dark:text-white">{data.avg}% Avg</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          data.avg >= 70 ? "bg-emerald-500" :
-                          data.avg >= 50 ? "bg-violet-500" : "bg-amber-500"
-                        }`}
-                        style={{ width: `${data.avg}%` }}
-                      />
-                    </div>
-                  </div>
-                );})
-              ) : (
-                <div className="text-center text-slate-400 text-xs py-8">No department data found yet</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Top Performer Rankings Card */}
-          <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
-            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                <Award className="h-4.5 w-4.5 text-indigo-500" /> High-Performing Candidates
-              </CardTitle>
-              <CardDescription className="text-[10px]">Leaderboard of the school's top scoring active students.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4.5 space-y-3">
-              {schoolAnalysis.topStudents.length > 0 ? (
-                schoolAnalysis.topStudents.map((s, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100/40 dark:border-slate-800/40 hover:scale-[1.01] transition-transform duration-200">
-                    <div className="flex items-center gap-2">
-                      <div className={`h-6 w-6 rounded-lg font-black text-xs flex items-center justify-center shrink-0 ${
-                        idx === 0 ? "bg-amber-100 text-amber-700" :
-                        idx === 1 ? "bg-slate-200 text-slate-700" :
-                        idx === 2 ? "bg-orange-100 text-orange-700" : "bg-indigo-50 text-indigo-700"
-                      }`}>
-                        {idx === 0 ? "🏆" : idx + 1}
+                Object.entries(schoolAnalysis.classScores).map(([classLevel, data]) => (
+                  <Card key={classLevel} className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
+                    <CardHeader className="py-4 px-5 border-b border-slate-50 dark:border-slate-850/40">
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-sm font-extrabold text-slate-850 dark:text-slate-200">
+                          Class: {classLevel}
+                        </CardTitle>
+                        <Badge className={`text-[10px] font-black uppercase px-2 py-0.5 border ${
+                          data.avg >= 70 ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
+                          data.avg >= 50 ? "bg-indigo-50 text-indigo-700 border-indigo-250" : "bg-rose-50 text-rose-700 border-rose-250"
+                        }`}>
+                          {data.avg}% Average
+                        </Badge>
                       </div>
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">{s.name}</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{s.class} • {s.dept}</p>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex justify-between text-xs font-bold text-slate-455">
+                        <span>Tested Candidates</span>
+                        <span className="text-slate-800 dark:text-white font-extrabold">{data.total} students</span>
                       </div>
-                    </div>
-                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">{s.score}%</span>
-                  </div>
+                      
+                      {data.topScore >= 0 && (
+                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 p-2.5 rounded-xl flex items-center justify-between">
+                          <span className="flex items-center gap-1">👑 Top score</span>
+                          <span className="text-indigo-650 font-extrabold truncate max-w-[120px]">{data.topName} ({data.topScore}%)</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Department Breakout</span>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(data.depts).map(([dept, count]) => (
+                            <Badge key={dept} variant="outline" className="text-[8px] font-extrabold px-1.5 py-0 border-slate-250 text-slate-500">
+                              {dept}: {count}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))
               ) : (
-                <div className="text-center text-slate-400 text-xs py-8">No results loaded yet</div>
+                <div className="text-center text-slate-400 text-xs py-8">No class level metrics found.</div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* 2. Departmental-Class Breakdowns Column */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase text-slate-455 tracking-wider flex items-center gap-1.5">
+                  <TrendingUp className="h-4 w-4 text-violet-500" /> Department Summaries
+                </h3>
+                <Badge className="bg-violet-50 text-violet-700 text-[9px] font-bold border-violet-200">
+                  {Object.keys(schoolAnalysis.deptScores).length} Divisions Active
+                </Badge>
+              </div>
+
+              {Object.keys(schoolAnalysis.deptScores).length > 0 ? (
+                Object.entries(schoolAnalysis.deptScores).map(([dept, data]) => (
+                  <Card key={dept} className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-violet-500" />
+                    <CardHeader className="py-4 px-5 border-b border-slate-50 dark:border-slate-850/40">
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-sm font-extrabold text-slate-850 dark:text-slate-200">
+                          {dept} Dept
+                        </CardTitle>
+                        <Badge className="text-[10px] font-black uppercase px-2 py-0.5 bg-violet-50 text-violet-700 border-violet-200 border">
+                          {data.avg}% Overall Avg
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-3.5">
+                      <div className="flex justify-between text-xs font-bold text-slate-455">
+                        <span>Total Department Candidates</span>
+                        <span className="text-slate-800 dark:text-white font-extrabold">{data.total} attempts</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Class Averages Breakdowns</span>
+                        <div className="space-y-1.5">
+                          {Object.entries(data.classes).map(([classLevel, classItem]) => (
+                            <div key={classLevel} className="flex justify-between items-center text-[10px] font-bold text-slate-600 dark:text-slate-400 border-b border-slate-50 dark:border-slate-850/40 pb-1.5 last:border-0 last:pb-0">
+                              <span>{classLevel} ({classItem.total} candidates)</span>
+                              <span className="text-violet-650 font-extrabold">{classItem.avg}% Avg</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="text-center text-slate-400 text-xs py-8">No department data found.</div>
+              )}
+            </div>
+
+            {/* 3. Class-by-Class Comparative Visual Chart */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-black uppercase text-slate-455 tracking-wider flex items-center gap-1.5">
+                <Award className="h-4 w-4 text-emerald-500" /> Grade Performance Chart
+              </h3>
+
+              <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
+                <CardHeader className="py-4 px-5 border-b border-slate-50 dark:border-slate-850/40">
+                  <CardTitle className="text-sm font-extrabold text-slate-850 dark:text-slate-200">
+                    Class Averages vs Candidates
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 pt-6">
+                  {classChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={classChartData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-slate-100 dark:stroke-slate-800/40" />
+                        <XAxis dataKey="name" className="text-[9px] font-bold fill-slate-400 dark:fill-slate-500" />
+                        <YAxis className="text-[9px] font-bold fill-slate-400 dark:fill-slate-500" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "rgba(255, 255, 255, 0.95)",
+                            border: "1px solid rgba(0, 0, 0, 0.05)",
+                            borderRadius: "12px",
+                          }}
+                          labelClassName="font-extrabold text-xs text-slate-850"
+                        />
+                        <Legend className="text-[9px] font-black uppercase" wrapperStyle={{ fontSize: '9px', fontWeight: 'bold' }} />
+                        <Bar dataKey="Avg Score" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Avg Score (%)" />
+                        <Bar dataKey="Candidates" fill="#10b981" radius={[4, 4, 0, 0]} name="Tested Students" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-56 items-center justify-center text-slate-400 text-xs italic">
+                      No chart comparisons available yet.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* High Performing Rankings Leaderboard nested inside 3rd column for visual balance */}
+              <div className="space-y-3">
+                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Top Performers Leaderboard</span>
+                {schoolAnalysis.topStudents.length > 0 ? (
+                  schoolAnalysis.topStudents.slice(0, 2).map((s, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100/40 dark:border-slate-800/40 hover:scale-[1.01] transition-transform duration-200">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-6 w-6 rounded-lg font-black text-xs flex items-center justify-center shrink-0 ${
+                          idx === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700"
+                        }`}>
+                          {idx === 0 ? "🏆" : idx + 1}
+                        </div>
+                        <div>
+                          <p className="text-xs font-extrabold text-slate-850 dark:text-slate-200">{s.name}</p>
+                          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">{s.class} • {s.dept}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">{s.score}%</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-slate-400 text-xs py-4">No results loaded yet.</div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
         </div>
       )}
 
