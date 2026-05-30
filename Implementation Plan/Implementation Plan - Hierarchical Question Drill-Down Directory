@@ -1,0 +1,55 @@
+# Implementation Plan - Hierarchical Question Drill-Down Directory
+
+We will refactor the **Question Bank Repository** (`admin-questions.tsx`) in the Admin Dashboard to support a highly premium **hierarchical drill-down directory**. Instead of displaying a dense and crowded accordion listing containing all questions of all classes simultaneously, the interface will offer a clean, three-step structured workflow:
+
+1. **Step 1: Subjects Directory** — Shows a grid of all uploaded subjects with responsive fuzzy search filtering.
+2. **Step 2: Class Directory** — Clicking a subject reveals a list of classroom levels (e.g. JSS1, SS2) that actually have questions uploaded under that subject.
+3. **Step 3: Class Questions View** — Clicking a class redirects to a dedicated, high-fidelity view listing only the questions belonging to that specific Subject and Class. Includes term/type dropdowns, text searches, selection check boxes, bulk actions, and single/bulk editors.
+
+---
+
+## Proposed Changes
+
+### Client Frontend
+
+#### [MODIFY] [admin-questions.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-questions.tsx)
+- **Add State Variables**:
+  - `selectedSubject` (defaults to `null`): tracks the active subject selected in the directory.
+  - `selectedClass` (defaults to `null`): tracks the active class level selected.
+  - `subSearchText` (defaults to `""`): local keyword search for filtering questions inside the final questions view.
+  - `subTermFilter` (defaults to `"All"`): local term filter inside the final questions view.
+  - `subTypeFilter` (defaults to `"All"`): local question type filter inside the final questions view.
+- **Drill-Down Views**:
+  - **Subjects Directory Grid**:
+    - Show cards for all unique subjects uploaded.
+    - Each card displays:
+      - Subject Title (e.g., Mathematics)
+      - Count of total questions in the subject.
+      - Bulleted list of target class levels.
+      - Settings/More options dropdown (Edit Subject Name, Delete All in Subject).
+    - Clicking the card transitions to the Class level view for that subject.
+  - **Class levels Grid**:
+    - Displays breadcrumbs: `Question Bank > Mathematics` and a sleek `← Back to Subjects` button.
+    - Renders cards for each class uploaded for that subject.
+    - Each class card shows the class name (e.g., JSS1) and the number of questions.
+    - Clicking the class card sets the class filter and reveals the questions list.
+  - **Class Questions Listing**:
+    - Displays breadcrumbs: `Question Bank > Mathematics > JSS1` and a sleek `← Back to Class List` button.
+    - Renders a clean filter panel with term/type selectors, text searches, and bulk operations.
+    - Renders the responsive table listing questions matching the subject and class.
+    - Preserves all standard question operations (Create, Edit, Delete, Bulk Settings, Bulk Image matching).
+
+---
+
+## Verification Plan
+
+### Manual Verification
+- **Directory Drill-Down Flow**:
+  - Click on a subject card (e.g., "English Language") and check that it successfully transitions to show only the uploaded class cards (e.g. JSS1, JSS2).
+  - Click on a class card (e.g. "JSS1") and verify that only questions matching both English Language and JSS1 are rendered in the table.
+  - Click `← Back` buttons to navigate up the hierarchy seamlessly.
+- **Question Actions**:
+  - Ensure editing and deleting questions works perfectly within the class-specific table view.
+  - Ensure creating questions from this view correctly binds the default Subject and Class.
+- **Production Build Validation**:
+  - Run `npm run build` to confirm compilation is warning-free.

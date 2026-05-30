@@ -50,6 +50,15 @@ export default function AdminExams() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
+  // Top Filtering & Pagination States
+  const [filterTerm, setFilterTerm] = useState<string>("__all__");
+  const [filterDept, setFilterDept] = useState<string>("__all__");
+  const [filterClass, setFilterClass] = useState<string>("__all__");
+  const [filterSubject, setFilterSubject] = useState<string>("");
+  const [filterExamType, setFilterExamType] = useState<string>("__all__");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 10;
+
   const { data: exams = [], isLoading } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
@@ -97,6 +106,22 @@ export default function AdminExams() {
     return <Badge variant="secondary" className="font-bold">{subj}</Badge>;
   };
 
+  // Filter & Pagination Calculations
+  const filteredExams = exams.filter((exam) => {
+    const matchTerm = filterTerm === "__all__" || exam.term === filterTerm;
+    const matchDept = filterDept === "__all__" || (exam.department || "General") === filterDept;
+    const matchClass = filterClass === "__all__" || exam.classLevel === filterClass;
+    const matchSubject = !filterSubject || exam.subject.toLowerCase().includes(filterSubject.toLowerCase());
+    const matchType = filterExamType === "__all__" || (exam.examType || "Objectives") === filterExamType;
+    return matchTerm && matchDept && matchClass && matchSubject && matchType;
+  });
+
+  const totalItems = filteredExams.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const activePage = Math.min(currentPage, totalPages);
+  const startIndex = (activePage - 1) * itemsPerPage;
+  const paginatedExams = filteredExams.slice(startIndex, startIndex + itemsPerPage);
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header Panel */}
@@ -137,6 +162,90 @@ export default function AdminExams() {
         </Dialog>
       </div>
 
+      {/* Premium Multi-Variable Filter Panel */}
+      <Card className="border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-lg shadow-slate-100/10 dark:shadow-none animate-in fade-in duration-300">
+        <div className="flex items-center gap-2 mb-4">
+          <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-[10px] uppercase tracking-wider">
+            Active Query Filters
+          </Badge>
+          <div className="h-px bg-slate-100 dark:bg-slate-800/40 flex-1" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-5">
+          {/* Term Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">School Term</label>
+            <select
+              value={filterTerm}
+              onChange={e => { setFilterTerm(e.target.value); setCurrentPage(1); }}
+              className="border rounded-xl px-3 py-1.5 w-full bg-slate-50/50 dark:bg-slate-950/40 text-xs border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-9 font-bold text-slate-700 dark:text-slate-300"
+            >
+              <option value="__all__">All Terms</option>
+              <option value="First Term">First Term</option>
+              <option value="Second Term">Second Term</option>
+              <option value="Third Term">Third Term</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+
+          {/* Classroom Level Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Target Class</label>
+            <select
+              value={filterClass}
+              onChange={e => { setFilterClass(e.target.value); setCurrentPage(1); }}
+              className="border rounded-xl px-3 py-1.5 w-full bg-slate-50/50 dark:bg-slate-950/40 text-xs border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-9 font-bold text-slate-700 dark:text-slate-300"
+            >
+              <option value="__all__">All Classes</option>
+              {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].map(cls => (
+                <option key={cls} value={cls}>{cls}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Department Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Department</label>
+            <select
+              value={filterDept}
+              onChange={e => { setFilterDept(e.target.value); setCurrentPage(1); }}
+              className="border rounded-xl px-3 py-1.5 w-full bg-slate-50/50 dark:bg-slate-950/40 text-xs border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-9 font-bold text-slate-700 dark:text-slate-300"
+            >
+              <option value="__all__">All Departments</option>
+              <option value="General">General</option>
+              <option value="Science">Science</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Art">Art</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+
+          {/* Subject Filter (Searchable) */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Subject Search</label>
+            <Input
+              placeholder="Search subject..."
+              value={filterSubject}
+              onChange={e => { setFilterSubject(e.target.value); setCurrentPage(1); }}
+              className="h-9 px-3 text-xs border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 font-bold"
+            />
+          </div>
+
+          {/* Exam Type Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Exam Type</label>
+            <select
+              value={filterExamType}
+              onChange={e => { setFilterExamType(e.target.value); setCurrentPage(1); }}
+              className="border rounded-xl px-3 py-1.5 w-full bg-slate-50/50 dark:bg-slate-950/40 text-xs border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-9 font-bold text-slate-700 dark:text-slate-300"
+            >
+              <option value="__all__">All Types</option>
+              <option value="Objectives">Objectives (MCQ)</option>
+              <option value="Theory">Theory</option>
+            </select>
+          </div>
+        </div>
+      </Card>
+
       {/* Main Table view */}
       {isLoading ? (
         <div className="space-y-4">
@@ -161,117 +270,152 @@ export default function AdminExams() {
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-slate-50 dark:divide-slate-800/40">
-                {exams.map((exam) => (
-                  <TableRow 
-                    key={exam.id} 
-                    data-testid={`row-exam-${exam.id}`}
-                    className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors group"
-                  >
-                    {/* Exam Title */}
-                    <TableCell className="font-extrabold text-slate-800 dark:text-slate-205 text-sm py-4.5 px-6 leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                      {exam.title}
-                    </TableCell>
+                {paginatedExams.length > 0 ? (
+                  paginatedExams.map((exam) => (
+                    <TableRow 
+                      key={exam.id} 
+                      data-testid={`row-exam-${exam.id}`}
+                      className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors group"
+                    >
+                      {/* Exam Title */}
+                      <TableCell className="font-extrabold text-slate-800 dark:text-slate-205 text-sm py-4.5 px-6 leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        {exam.title}
+                      </TableCell>
 
-                    {/* Subject */}
-                    <TableCell className="py-4.5 px-4">
-                      {getSubjectBadge(exam.subject)}
-                    </TableCell>
+                      {/* Subject */}
+                      <TableCell className="py-4.5 px-4">
+                        {getSubjectBadge(exam.subject)}
+                      </TableCell>
 
-                    {/* Class & Dept */}
-                    <TableCell className="py-4.5 px-4 text-center">
-                      <div className="flex flex-col items-center gap-1 justify-center">
-                        <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/40 font-bold text-[10px]">
-                          {exam.classLevel}
-                        </Badge>
-                        {exam.department && (
-                          <Badge variant="outline" className="text-[9px] uppercase font-bold border-slate-200/60 dark:border-slate-800">
-                            {exam.department}
+                      {/* Class & Dept */}
+                      <TableCell className="py-4.5 px-4 text-center">
+                        <div className="flex flex-col items-center gap-1 justify-center">
+                          <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/40 font-bold text-[10px]">
+                            {exam.classLevel}
                           </Badge>
-                        )}
-                      </div>
-                    </TableCell>
+                          {exam.department && (
+                            <Badge variant="outline" className="text-[9px] uppercase font-bold border-slate-200/60 dark:border-slate-800">
+                              {exam.department}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
 
-                    {/* Duration */}
-                    <TableCell className="py-4.5 px-4 text-center">
-                      <div className="inline-flex items-center gap-1.5 bg-slate-100/50 dark:bg-slate-950/40 px-2 py-1 rounded-md text-xs font-bold text-slate-655 dark:text-slate-400 border border-slate-200/10">
-                        <Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                        <span>{exam.duration}m</span>
-                      </div>
-                    </TableCell>
+                      {/* Duration */}
+                      <TableCell className="py-4.5 px-4 text-center">
+                        <div className="inline-flex items-center gap-1.5 bg-slate-100/50 dark:bg-slate-950/40 px-2 py-1 rounded-md text-xs font-bold text-slate-655 dark:text-slate-400 border border-slate-200/10">
+                          <Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                          <span>{exam.duration}m</span>
+                        </div>
+                      </TableCell>
 
-                    {/* Exam Type */}
-                    <TableCell className="py-4.5 px-4 text-center">
-                      <Badge 
-                        variant="outline"
-                        className={`font-black text-[10px] uppercase border tracking-wider ${
-                          (exam.examType || "Objectives") === "Theory"
-                            ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40"
-                            : "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/20 dark:text-teal-400 dark:border-teal-900/40"
-                        }`}
-                      >
-                        {exam.examType || "Objectives"}
-                      </Badge>
-                    </TableCell>
+                      {/* Exam Type */}
+                      <TableCell className="py-4.5 px-4 text-center">
+                        <Badge 
+                          variant="outline"
+                          className={`font-black text-[10px] uppercase border tracking-wider ${
+                            (exam.examType || "Objectives") === "Theory"
+                              ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40"
+                              : "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/20 dark:text-teal-400 dark:border-teal-900/40"
+                          }`}
+                        >
+                          {exam.examType || "Objectives"}
+                        </Badge>
+                      </TableCell>
 
-                    {/* Questions */}
-                    <TableCell className="py-4.5 px-4 text-center">
-                      <div className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-350 font-bold text-sm">
-                        <BookOpen className="h-4 w-4 text-slate-400 shrink-0" />
-                        <span>{exam.questionIds?.length || 0}</span>
-                      </div>
-                    </TableCell>
+                      {/* Questions */}
+                      <TableCell className="py-4.5 px-4 text-center">
+                        <div className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-350 font-bold text-sm">
+                          <BookOpen className="h-4 w-4 text-slate-400 shrink-0" />
+                          <span>{exam.questionIds?.length || 0}</span>
+                        </div>
+                      </TableCell>
 
-                    {/* Status Toggle */}
-                    <TableCell className="py-4.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Switch
-                          checked={exam.isActive}
-                          onCheckedChange={(checked) =>
-                            toggleExamMutation.mutate({
-                              examId: exam.id,
-                              isActive: checked,
-                            })
-                          }
-                          data-testid={`switch-active-${exam.id}`}
-                          className="data-[state=checked]:bg-indigo-650"
-                        />
-                        <span className={`text-xs font-bold uppercase ${exam.isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400"}`}>
-                          {exam.isActive ? "Active" : "Draft"}
-                        </span>
-                      </div>
-                    </TableCell>
+                      {/* Status Toggle */}
+                      <TableCell className="py-4.5 px-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Switch
+                            checked={exam.isActive}
+                            onCheckedChange={(checked) =>
+                              toggleExamMutation.mutate({
+                                examId: exam.id,
+                                isActive: checked,
+                              })
+                            }
+                            data-testid={`switch-active-${exam.id}`}
+                            className="data-[state=checked]:bg-indigo-650"
+                          />
+                          <span className={`text-xs font-bold uppercase ${exam.isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400"}`}>
+                            {exam.isActive ? "Active" : "Draft"}
+                          </span>
+                        </div>
+                      </TableCell>
 
-                    {/* Actions */}
-                    <TableCell className="py-4.5 px-6 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Link href={`/admin/exams/${exam.id}`}>
+                      {/* Actions */}
+                      <TableCell className="py-4.5 px-6 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Link href={`/admin/exams/${exam.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              data-testid={`button-view-${exam.id}`}
+                              className="h-8.5 w-8.5 rounded-xl text-indigo-655 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 dark:text-indigo-400"
+                              title="Inspect Exam Paper"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
                           <Button
                             variant="ghost"
                             size="icon"
-                            data-testid={`button-view-${exam.id}`}
-                            className="h-8.5 w-8.5 rounded-xl text-indigo-650 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 dark:text-indigo-400"
-                            title="Inspect Exam Paper"
+                            onClick={() => deleteExamMutation.mutate(exam.id)}
+                            data-testid={`button-delete-${exam.id}`}
+                            className="h-8.5 w-8.5 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:text-rose-455"
+                            title="Trash Paper"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteExamMutation.mutate(exam.id)}
-                          data-testid={`button-delete-${exam.id}`}
-                          className="h-8.5 w-8.5 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:text-rose-450"
-                          title="Trash Paper"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <ChevronRight className="h-5 w-5 text-slate-300 dark:text-slate-700 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all duration-300 shrink-0" />
-                      </div>
+                          <ChevronRight className="h-5 w-5 text-slate-300 dark:text-slate-700 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all duration-300 shrink-0" />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-12 text-center text-xs text-slate-450 italic font-bold">
+                      No exams found matching the active query filters. Try adjusting your school term, target class, or search keywords!
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Paginated Footer */}
+          <div className="bg-slate-50/60 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/40 px-6 py-4 flex items-center justify-between gap-4">
+            <span className="text-xs font-bold text-slate-500">
+              Showing {totalItems === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems} exam{totalItems !== 1 ? 's' : ''}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={activePage === 1}
+                className="h-8 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={activePage === totalPages}
+                className="h-8 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+              >
+                Next
+              </Button>
+            </div>
           </div>
         </Card>
       ) : (

@@ -67,6 +67,13 @@ export default function AdminQuestions() {
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [filterSubject, setFilterSubject] = useState<string>("");
   const [filterDepartment, setFilterDepartment] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
+
+  // Local filters for detailed class questions view
+  const [subSearchQuery, setSubSearchQuery] = useState("");
+  const [subTermFilter, setSubTermFilter] = useState("All");
+  const [subTypeFilter, setSubTypeFilter] = useState("All");
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -804,15 +811,8 @@ export default function AdminQuestions() {
     ? Array.from(new Set(questions.map((q) => q.subject)))
     : [];
 
-  const filteredQuestions = questions?.filter((q) => {
-    const subjectMatch = filterSubject && filterSubject !== "__all__" ? q.subject === filterSubject : true;
-    const departmentMatch = filterDepartment && filterDepartment !== "__all__" ? q.department === filterDepartment : true;
-    return subjectMatch && departmentMatch;
-  });
-
-
-  const questionsBySubject: Record<string, { questions: Question[]; classLevels: Set<string> }> = filteredQuestions
-    ? filteredQuestions.reduce((acc, question) => {
+  const questionsBySubject: Record<string, { questions: Question[]; classLevels: Set<string> }> = questions
+    ? questions.reduce((acc, question) => {
       const subject = question.subject || "Uncategorized";
       if (!acc[subject]) {
         acc[subject] = {
@@ -1630,157 +1630,383 @@ export default function AdminQuestions() {
             <Skeleton key={i} className="h-32 w-full rounded-2xl" />
           ))}
         </div>
-      ) : filteredQuestions && filteredQuestions.length > 0 ? (
-        <Accordion type="multiple" className="w-full space-y-4">
-          {Object.entries(questionsBySubject).map(([subject, { questions: subjectQuestions, classLevels }]) => {
-            const currentFilters = subjectFilters[subject] || { classLevel: "All", term: "All", examType: "All" };
+      ) : (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* STEP 1: SUBJECTS GRID VIEW */}
+          {!selectedSubject && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-200">Subjects Directory</h2>
+                  <p className="text-xs font-semibold text-slate-400 mt-0.5">Select a subject to view target classes and questions.</p>
+                </div>
+                <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold px-3 py-1">
+                  {Object.keys(questionsBySubject).length} Subjects Active
+                </Badge>
+              </div>
 
-            const displayQuestions = subjectQuestions.filter(q => {
-              const matchClass = currentFilters.classLevel === "All" || q.classLevel === currentFilters.classLevel;
-              const matchTerm = currentFilters.term === "All" || (q.term || "First Term") === currentFilters.term;
-              const matchType = currentFilters.examType === "All" || (q.examType || "Objectives") === currentFilters.examType;
-              return matchClass && matchTerm && matchType;
-            });
+              {Object.keys(questionsBySubject).length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {Object.entries(questionsBySubject)
+                    .filter(([subject]) => {
+                      if (!filterSubject) return true;
+                      return subject.toLowerCase().includes(filterSubject.toLowerCase());
+                    })
+                    .map(([subject, { questions: subjectQuestions, classLevels }]) => (
+                      <Card 
+                        key={subject}
+                        onClick={() => {
+                          setSelectedSubject(subject);
+                          setSelectedClass(null);
+                          setSubTermFilter("All");
+                        }}
+                        className="group border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl hover:border-indigo-400 hover:shadow-xl transition-all duration-350 overflow-hidden cursor-pointer hover-glow"
+                      >
+                        {/* Subject Top Banner */}
+                        <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+                        
+                        <CardHeader className="py-5 px-6">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-650 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                                <BookOpen className="h-5 w-5" />
+                              </div>
+                              <CardTitle className="text-base font-extrabold text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-400 transition-colors">
+                                {subject}
+                              </CardTitle>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="rounded-xl border-slate-150">
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBulkEditDialog({ isOpen: true, subject, type: 'subjectName', value: subject });
+                                }}>
+                                  <Edit className="mr-2 h-4 w-4 text-indigo-500" />
+                                  Edit Subject Name
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBulkEditDialog({ isOpen: true, subject, type: 'settings' });
+                                }}>
+                                  <Settings className="mr-2 h-4 w-4 text-indigo-550" />
+                                  Bulk Settings
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteDialogState({
+                                      isOpen: true,
+                                      type: 'all',
+                                      count: subjectQuestions.length,
+                                      id: subject
+                                    });
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete All in Subject
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </CardHeader>
 
-            return (
-              <AccordionItem 
-                value={subject} 
-                key={subject} 
-                className="border border-slate-100 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl shadow-md shadow-slate-100/5 dark:shadow-none overflow-hidden transition-all duration-300"
-              >
-                <AccordionTrigger className="p-6 text-left hover:no-underline group hover:bg-slate-50/40 dark:hover:bg-slate-950/20">
-                  <div className="flex w-full flex-col items-start gap-1">
-                    <div className="flex w-full items-center justify-between pr-6">
-                      <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-400 transition-colors">{subject}</h3>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8.5 w-8.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-455">
-                            <MoreVertical className="h-4.5 w-4.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-xl border-slate-150">
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            setBulkEditDialog({ isOpen: true, subject, type: 'subjectName', value: subject });
-                          }}>
-                            <Edit className="mr-2 h-4 w-4 text-indigo-500" />
-                            Edit Subject Name
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            setBulkEditDialog({ isOpen: true, subject, type: 'settings' });
-                          }}>
-                            <Settings className="mr-2 h-4 w-4 text-indigo-550" />
-                            Bulk Settings
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteDialogState({
-                                isOpen: true,
-                                type: 'all',
-                                count: subjectQuestions.length,
-                                id: subject
-                              });
-                            }}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete All in Subject
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                      <span>{subjectQuestions.length} Questions</span>
-                      <span className="text-slate-200 dark:text-slate-800">•</span>
-                      <span>Class Levels: {Array.from(classLevels).join(', ')}</span>
+                        <CardContent className="px-6 pb-6 pt-0 space-y-4">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wide">
+                            <span>Questions Pool</span>
+                            <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200">{subjectQuestions.length} Questions</Badge>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Available Classes</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {classLevels.size > 0 ? (
+                                Array.from(classLevels).map(cls => (
+                                  <Badge key={cls} variant="outline" className="text-[9px] font-bold px-2 py-0.5 border-slate-200 bg-slate-50/50">
+                                    {cls}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">No classes linked yet</span>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+              ) : (
+                <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-2xl">
+                  <CardContent className="flex flex-col items-center py-16 text-center">
+                    <BookOpen className="mb-4 h-12 w-12 text-slate-350 dark:text-slate-800" />
+                    <h3 className="mb-2 text-lg font-black text-slate-700 dark:text-slate-350">No Subjects Found</h3>
+                    <p className="mb-5 text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+                      Try adding a question or uploading a CSV worksheet to seed the repository database.
                     </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* STEP 2: CLASS DIRECTORY VIEW */}
+          {selectedSubject && !selectedClass && (
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+              
+              {/* Navigation Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="hover:text-indigo-600 cursor-pointer" onClick={() => setSelectedSubject(null)}>Question Bank</span>
+                    <span>/</span>
+                    <span className="text-slate-600">{selectedSubject}</span>
                   </div>
-                </AccordionTrigger>
-                <AccordionContent className="p-6 pt-0">
-                  {/* Filters Header inside Accordion */}
-                  <div className="mb-6 flex flex-wrap gap-4 border-t border-b border-slate-100 dark:border-slate-800/80 py-4.5">
-                    <div className="w-40">
-                      <Label className="text-[10px] font-black uppercase text-slate-455 tracking-wider mb-1.5 block">Class</Label>
-                      <Select
-                        value={currentFilters.classLevel}
-                        onValueChange={(val) => updateSubjectFilter(subject, 'classLevel', val)}
-                      >
-                        <SelectTrigger className="h-8.5 text-xs rounded-xl bg-slate-50/50 border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="All">All Classes</SelectItem>
-                          <SelectItem value="JSS1">JSS1</SelectItem>
-                          <SelectItem value="JSS2">JSS2</SelectItem>
-                          <SelectItem value="JSS3">JSS3</SelectItem>
-                          <SelectItem value="SS1">SS1</SelectItem>
-                          <SelectItem value="SS2">SS2</SelectItem>
-                          <SelectItem value="SS3">SS3</SelectItem>
-                          <SelectItem value="WAEC">WAEC</SelectItem>
-                          <SelectItem value="NECO">NECO</SelectItem>
-                          <SelectItem value="GCE WAEC">GCE WAEC</SelectItem>
-                          <SelectItem value="GCE NECO">GCE NECO</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="w-40">
-                      <Label className="text-[10px] font-black uppercase text-slate-455 tracking-wider mb-1.5 block">Term</Label>
-                      <Select
-                        value={currentFilters.term}
-                        onValueChange={(val) => updateSubjectFilter(subject, 'term', val)}
-                      >
-                        <SelectTrigger className="h-8.5 text-xs rounded-xl bg-slate-50/50 border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="All">All Terms</SelectItem>
-                          <SelectItem value="First Term">1st Term</SelectItem>
-                          <SelectItem value="Second Term">2nd Term</SelectItem>
-                          <SelectItem value="Third Term">3rd Term</SelectItem>
-                          <SelectItem value="Others">Others</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="w-40">
-                      <Label className="text-[10px] font-black uppercase text-slate-455 tracking-wider mb-1.5 block">Type</Label>
-                      <Select
-                        value={currentFilters.examType}
-                        onValueChange={(val) => updateSubjectFilter(subject, 'examType', val)}
-                      >
-                        <SelectTrigger className="h-8.5 text-xs rounded-xl bg-slate-50/50 border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="All">All Types</SelectItem>
-                          <SelectItem value="Objectives">Objectives (Obj)</SelectItem>
-                          <SelectItem value="Theory">Theory</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <h2 className="text-xl font-extrabold text-slate-850 dark:text-slate-200">
+                    Select Target Classroom Level
+                  </h2>
+                  <p className="text-xs font-semibold text-slate-400 mt-0.5">Select a target level to view, edit, or reset questions.</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Term filter at class list page */}
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider pl-1.5">Term:</span>
+                    <select
+                      value={subTermFilter}
+                      onChange={(e) => setSubTermFilter(e.target.value)}
+                      className="border-none rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-xs font-extrabold text-slate-700 focus:outline-none h-7 shadow-sm cursor-pointer"
+                    >
+                      <option value="All">All Terms</option>
+                      <option value="First Term">1st Term</option>
+                      <option value="Second Term">2nd Term</option>
+                      <option value="Third Term">3rd Term</option>
+                      <option value="Others">Others</option>
+                    </select>
                   </div>
 
-                  {displayQuestions.length > 0 ? (
-                    <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800/80">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSelectedSubject(null)}
+                    className="rounded-xl border-slate-200 font-extrabold text-xs h-9.5"
+                  >
+                    ← Back to Subjects
+                  </Button>
+                </div>
+              </div>
+
+              {/* Class Cards Grid */}
+              {(() => {
+                const classList = Array.from(questionsBySubject[selectedSubject]?.classLevels || []);
+                const matchingClasses = classList.filter(cls => {
+                  if (subTermFilter === "All") return true;
+                  return questionsBySubject[selectedSubject]?.questions.some(
+                    q => q.classLevel === cls && (q.term || "First Term") === subTermFilter
+                  );
+                });
+
+                if (matchingClasses.length > 0) {
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                      {matchingClasses.map(cls => {
+                        const classQuestions = questionsBySubject[selectedSubject]?.questions.filter(
+                          q => q.classLevel === cls && (subTermFilter === "All" || (q.term || "First Term") === subTermFilter)
+                        ) || [];
+                        const objectivesCount = classQuestions.filter(q => q.examType === "Objectives" || q.questionType !== "theory").length;
+                        const theoryCount = classQuestions.filter(q => q.examType === "Theory" || q.questionType === "theory").length;
+
+                        return (
+                          <Card 
+                            key={cls}
+                            onClick={() => {
+                              setSelectedClass(cls);
+                              setSubSearchQuery("");
+                              setSubTermFilter("All");
+                            }}
+                            className="group border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl hover:border-indigo-400 hover:shadow-lg transition-all duration-350 overflow-hidden cursor-pointer"
+                          >
+                            <CardHeader className="py-4 px-5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/40">
+                              <CardTitle className="text-base font-black text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-400 transition-colors">
+                                {cls}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-5 space-y-3">
+                              <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                                <span>Total Questions</span>
+                                <Badge variant="secondary" className="font-extrabold text-[10px] bg-indigo-50 text-indigo-700">{classQuestions.length} Questions</Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wide bg-slate-50/30 dark:bg-slate-950/10 p-2.5 rounded-xl border border-slate-100/50 dark:border-slate-850">
+                                <div>
+                                  <span className="block text-slate-400 text-[8px] uppercase">Objectives</span>
+                                  <span className="text-xs text-slate-700 dark:text-slate-300 font-extrabold">{objectivesCount} Obj</span>
+                                </div>
+                                <div className="border-l border-slate-150 pl-3">
+                                  <span className="block text-slate-400 text-[8px] uppercase">Theory</span>
+                                  <span className="text-xs text-slate-700 dark:text-slate-300 font-extrabold">{theoryCount} slots</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                return (
+                  <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-2xl">
+                    <CardContent className="flex flex-col items-center py-16 text-center">
+                      <BookOpen className="mb-4 h-12 w-12 text-slate-350 dark:text-slate-800" />
+                      <h3 className="mb-2 text-lg font-black text-slate-700 dark:text-slate-350">No Classes Found</h3>
+                      <p className="mb-5 text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+                        No uploaded classes match your selected school term ({subTermFilter}). Try another term filter!
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* STEP 3: CLASS QUESTIONS TABLE LIST */}
+          {selectedSubject && selectedClass && (
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+              
+              {/* Navigation Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="hover:text-indigo-650 cursor-pointer" onClick={() => { setSelectedSubject(null); setSelectedClass(null); }}>Question Bank</span>
+                    <span>/</span>
+                    <span className="hover:text-indigo-655 cursor-pointer" onClick={() => setSelectedClass(null)}>{selectedSubject}</span>
+                    <span>/</span>
+                    <span className="text-slate-600">{selectedClass}</span>
+                  </div>
+                  <h2 className="text-xl font-extrabold text-slate-850 dark:text-slate-200">
+                    Questions Directory for {selectedClass}
+                  </h2>
+                  <p className="text-xs font-semibold text-slate-400 mt-0.5">Manage details, delete questions, or upload additional assets.</p>
+                </div>
+
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedClass(null)}
+                  className="rounded-xl border-slate-200 font-extrabold text-xs h-9.5 self-start sm:self-center"
+                >
+                  ← Back to Classes
+                </Button>
+              </div>
+
+              {/* Local Filter panel */}
+              <div className="bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-100 dark:border-slate-850 grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">School Term</label>
+                  <select
+                    value={subTermFilter}
+                    onChange={(e) => setSubTermFilter(e.target.value)}
+                    className="border rounded-lg px-2.5 py-1.5 w-full bg-white dark:bg-slate-900 text-xs border-slate-200 focus:outline-none h-8 font-bold text-slate-700"
+                  >
+                    <option value="All">All Terms</option>
+                    <option value="First Term">1st Term</option>
+                    <option value="Second Term">2nd Term</option>
+                    <option value="Third Term">3rd Term</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Question Type</label>
+                  <select
+                    value={subTypeFilter}
+                    onChange={(e) => setSubTypeFilter(e.target.value)}
+                    className="border rounded-lg px-2.5 py-1.5 w-full bg-white dark:bg-slate-900 text-xs border-slate-200 focus:outline-none h-8 font-bold text-slate-700"
+                  >
+                    <option value="All">All Types</option>
+                    <option value="Objectives">Objectives (MCQ)</option>
+                    <option value="Theory">Theory</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Search Text</label>
+                  <Input
+                    placeholder="Search keywords..."
+                    value={subSearchQuery}
+                    onChange={(e) => setSubSearchQuery(e.target.value)}
+                    className="h-8 text-xs font-bold rounded-lg border-slate-200 bg-white dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Bulk Actions Toolbar inside final Table view */}
+              <div className="flex justify-between items-center bg-slate-50/20 px-3 py-2 rounded-lg border border-slate-100/50">
+                <div className="flex items-center gap-2">
+                  {selectedIds.size > 0 && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDeleteDialogState({ isOpen: true, type: 'selected', count: selectedIds.size })}
+                      className="h-8 rounded-lg font-bold text-xs"
+                    >
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Selected ({selectedIds.size})
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      const allIdsInClass = (questionsBySubject[selectedSubject]?.questions.filter(
+                        q => q.classLevel === selectedClass
+                      ) || []).map(q => q.id);
+                      setDeleteDialogState({ isOpen: true, type: 'selected', count: allIdsInClass.length, id: undefined });
+                      setSelectedIds(new Set(allIdsInClass));
+                    }}
+                    className="h-8 rounded-lg font-bold text-xs"
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Reset Class Pool
+                  </Button>
+                </div>
+              </div>
+
+              {/* Data Table */}
+              {(() => {
+                const classQuestionsList = questionsBySubject[selectedSubject]?.questions.filter(q => {
+                  const matchClass = q.classLevel === selectedClass;
+                  const matchTerm = subTermFilter === "All" || (q.term || "First Term") === subTermFilter;
+                  const matchType = subTypeFilter === "All" || (
+                    subTypeFilter === "Theory" 
+                      ? (q.examType === "Theory" || q.questionType === "theory")
+                      : (q.examType === "Objectives" || q.questionType !== "theory")
+                  );
+                  const matchSearch = !subSearchQuery || q.questionText?.toLowerCase().includes(subSearchQuery.toLowerCase());
+                  
+                  return matchClass && matchTerm && matchType && matchSearch;
+                }) || [];
+
+                if (classQuestionsList.length > 0) {
+                  return (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200/60 dark:border-slate-805 bg-white dark:bg-slate-900">
                       <Table>
                         <TableHeader className="bg-slate-50/50 dark:bg-slate-950/40">
                           <TableRow>
                             <TableHead className="w-12 py-3">
                               <input
                                 type="checkbox"
-                                aria-label={`select-all-${subject}`}
-                                checked={displayQuestions.length > 0 && displayQuestions.every(q => selectedIds.has(q.id))}
+                                checked={classQuestionsList.every(q => selectedIds.has(q.id))}
                                 onChange={(e) => {
-                                  const newSelectedIds = new Set(selectedIds);
-                                  const subjectQuestionIds = displayQuestions.map(q => q.id);
+                                  const next = new Set(selectedIds);
                                   if (e.currentTarget.checked) {
-                                    subjectQuestionIds.forEach(id => newSelectedIds.add(id));
+                                    classQuestionsList.forEach(q => next.add(q.id));
                                   } else {
-                                    subjectQuestionIds.forEach(id => newSelectedIds.delete(id));
+                                    classQuestionsList.forEach(q => next.delete(q.id));
                                   }
-                                  setSelectedIds(newSelectedIds);
+                                  setSelectedIds(next);
                                 }}
                                 className="rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 h-4 w-4"
                               />
@@ -1793,13 +2019,12 @@ export default function AdminQuestions() {
                             <TableHead className="text-right py-3 font-bold text-xs text-slate-400 uppercase tracking-wider">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
-                        <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-800/40">
-                          {displayQuestions.map((question) => (
+                        <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-805">
+                          {classQuestionsList.map((question) => (
                             <TableRow key={question.id} data-testid={`row-question-${question.id}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
                               <TableCell className="py-3">
                                 <input
                                   type="checkbox"
-                                  aria-label={`select-question-${question.id}`}
                                   checked={selectedIds.has(question.id)}
                                   onChange={(e) => {
                                     const next = new Set(selectedIds);
@@ -1830,7 +2055,7 @@ export default function AdminQuestions() {
                                       {question.department}
                                     </Badge>
                                   )}
-                                  <Badge variant="secondary" className="text-[9px] py-0.2 px-1.5 font-bold bg-slate-100 text-slate-600">{(question.term === "First Term" ? "1st Term" : question.term === "Second Term" ? "2nd Term" : question.term === "Third Term" ? "3rd Term" : "Oth")}</Badge>
+                                  <Badge variant="secondary" className="text-[9px] py-0.2 px-1.5 font-bold bg-slate-100 text-slate-600 font-extrabold">{(question.term === "First Term" ? "1st Term" : question.term === "Second Term" ? "2nd Term" : question.term === "Third Term" ? "3rd Term" : "Oth")}</Badge>
                                   <Badge variant="outline" className="text-[9px] py-0.2 px-1.5 font-bold border-slate-250 text-slate-500">{(question.examType === "Objectives" ? "Objectives" : "Theory")}</Badge>
                                 </div>
                               </TableCell>
@@ -1844,7 +2069,7 @@ export default function AdminQuestions() {
                                       ? "bg-emerald-50 text-emerald-700 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400"
                                       : question.difficulty === "medium"
                                         ? "bg-indigo-50 text-indigo-700 border-indigo-250 dark:bg-indigo-950/20 dark:text-indigo-400"
-                                        : "bg-rose-50 text-rose-700 border-rose-250 dark:bg-rose-950/20 dark:text-rose-450"
+                                        : "bg-rose-50 text-rose-700 border-rose-250 dark:bg-rose-950/20 dark:text-rose-455"
                                   }`}
                                 >
                                   {question.difficulty}
@@ -1858,7 +2083,6 @@ export default function AdminQuestions() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setEditingQuestion(question)}
-                                    data-testid={`button-edit-${question.id}`}
                                     className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-550"
                                   >
                                     <Edit className="h-4 w-4" />
@@ -1867,8 +2091,7 @@ export default function AdminQuestions() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setDeleteDialogState({ isOpen: true, type: 'single', id: question.id })}
-                                    data-testid={`button-delete-${question.id}`}
-                                    className="h-8 w-8 rounded-lg hover:bg-rose-50 text-rose-600"
+                                    className="h-8 w-8 rounded-lg hover:bg-rose-50 text-rose-650"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -1879,39 +2102,19 @@ export default function AdminQuestions() {
                         </TableBody>
                       </Table>
                     </div>
-                  ) : (
-                    <div className="text-center py-10 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-400 text-xs italic font-medium">
-                      No questions match the selected filters.
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
-      ) : (
-        <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-2xl">
-          <CardContent className="flex flex-col items-center py-16 text-center">
-            <BookOpen className="mb-4 h-12 w-12 text-slate-350 dark:text-slate-800" />
-            <h3 className="mb-2 text-lg font-black text-slate-700 dark:text-slate-350">
-              {filterSubject ? "No Questions Found" : "No Questions Yet"}
-            </h3>
-            <p className="mb-5 text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-              {filterSubject
-                ? `No questions found for ${filterSubject}`
-                : "Get started by adding your first question to the master repository."}
-            </p>
-            {!filterSubject && (
-              <Button 
-                onClick={() => setIsCreateOpen(true)} 
-                data-testid="button-create-first-question"
-                className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold px-5 h-10 rounded-xl flex items-center gap-2"
-              >
-                <Plus className="h-4.5 w-4.5" /> Add First Question
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+                  );
+                }
+
+                return (
+                  <div className="text-center py-16 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-400 text-xs italic font-medium bg-white dark:bg-slate-900">
+                    No questions in {selectedClass} match these active keyword/term filters.
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+        </div>
       )}
 
       {/* Delete Dialog kept as is */}

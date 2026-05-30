@@ -41,13 +41,13 @@ export default function AdminDashboard() {
     if (!results || results.length === 0) {
       return {
         schoolAvg: 0,
-        classScores: {} as Record<string, { total: number; sum: number; avg: number }>,
-        deptScores: {} as Record<string, { total: number; sum: number; avg: number }>,
+        classScores: {} as Record<string, { total: number; sum: number; avg: number; topName: string; topScore: number; depts: Record<string, number> }>,
+        deptScores: {} as Record<string, { total: number; sum: number; avg: number; classes: Record<string, { total: number; sum: number; avg: number }> }>,
         topStudents: [] as { name: string; score: number; class: string; dept: string }[],
       };
     }
 
-    // Map student details by ID and passcode for instant O(1) lookup
+    // Map student details by ID and passcode for O(1) lookup
     const studentMap = new Map<string, Student>();
     if (students) {
       students.forEach(s => {
@@ -63,8 +63,8 @@ export default function AdminDashboard() {
     }
 
     let totalScoreSum = 0;
-    const classScores: Record<string, { total: number; sum: number; avg: number }> = {};
-    const deptScores: Record<string, { total: number; sum: number; avg: number }> = {};
+    const classScores: Record<string, { total: number; sum: number; avg: number; topName: string; topScore: number; depts: Record<string, number> }> = {};
+    const deptScores: Record<string, { total: number; sum: number; avg: number; classes: Record<string, { total: number; sum: number; avg: number }> }> = {};
     const studentRankings: Record<string, { name: string; sum: number; count: number; class: string; dept: string }> = {};
 
     results.forEach(r => {
@@ -82,17 +82,31 @@ export default function AdminDashboard() {
 
       // Class-specific calculations
       if (!classScores[classLevel]) {
-        classScores[classLevel] = { total: 0, sum: 0, avg: 0 };
+        classScores[classLevel] = { total: 0, sum: 0, avg: 0, topName: "", topScore: -1, depts: {} };
       }
       classScores[classLevel].total++;
       classScores[classLevel].sum += r.percentage;
+      if (r.percentage > classScores[classLevel].topScore) {
+        classScores[classLevel].topScore = r.percentage;
+        classScores[classLevel].topName = r.studentName || "Candidate";
+      }
+      if (!classScores[classLevel].depts[department]) {
+        classScores[classLevel].depts[department] = 0;
+      }
+      classScores[classLevel].depts[department]++;
 
       // Department-specific calculations
       if (!deptScores[department]) {
-        deptScores[department] = { total: 0, sum: 0, avg: 0 };
+        deptScores[department] = { total: 0, sum: 0, avg: 0, classes: {} };
       }
       deptScores[department].total++;
       deptScores[department].sum += r.percentage;
+
+      if (!deptScores[department].classes[classLevel]) {
+        deptScores[department].classes[classLevel] = { total: 0, sum: 0, avg: 0 };
+      }
+      deptScores[department].classes[classLevel].total++;
+      deptScores[department].classes[classLevel].sum += r.percentage;
 
       // Student performance calculations
       const sKey = r.studentName || "Candidate";
@@ -114,6 +128,11 @@ export default function AdminDashboard() {
     Object.keys(deptScores).forEach(d => {
       const item = deptScores[d];
       item.avg = Math.round(item.sum / item.total);
+
+      Object.keys(item.classes).forEach(c => {
+        const classItem = item.classes[c];
+        classItem.avg = Math.round(classItem.sum / classItem.total);
+      });
     });
 
     // Sort student rankings to find top performers

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,12 @@ export default function AdminExamDetails() {
 
   const [formData, setFormData] = useState<any>(null);
 
+  // Advanced Question Bank search and filtering states
+  const [qSearchText, setQSearchText] = useState("");
+  const [qSubjectFilter, setQSubjectFilter] = useState("");
+  const [qClassFilter, setQClassFilter] = useState("");
+  const [qTermFilter, setQTermFilter] = useState("");
+
   // Set initial form data when exam loads
   React.useEffect(() => {
     if (exam) {
@@ -48,8 +54,49 @@ export default function AdminExamDetails() {
           structure: [],
         }
       });
+      // Dynamically initialize filters to match the exam defaults
+      setQSubjectFilter(exam.subject || "");
+      setQClassFilter(exam.classLevel || "");
+      setQTermFilter(exam.term || "");
     }
   }, [exam]);
+
+  // Question Linker Filtering logic
+  const filteredQuestionsForLinker = (questions || []).filter(q => {
+    const matchClass = !qClassFilter || q.classLevel === qClassFilter;
+    const matchTerm = !qTermFilter || q.term === qTermFilter;
+    const matchSubject = !qSubjectFilter || q.subject.toLowerCase().includes(qSubjectFilter.toLowerCase());
+    const matchType = (formData?.examType || "Objectives") === "Theory" 
+      ? (q.examType === "Theory" || q.questionType === "theory")
+      : (q.examType === "Objectives" || q.questionType === "objectives" || !q.examType);
+    const matchText = !qSearchText || q.questionText.toLowerCase().includes(qSearchText.toLowerCase());
+    return matchClass && matchTerm && matchSubject && matchType && matchText;
+  });
+
+  const toggleQuestionInLinker = (questionId: string) => {
+    if (!formData) return;
+    const currentIds = formData.questionIds || [];
+    const newIds = currentIds.includes(questionId)
+      ? currentIds.filter((id: string) => id !== questionId)
+      : [...currentIds, questionId];
+    setFormData({ ...formData, questionIds: newIds });
+  };
+
+  const selectAllFilteredQuestions = () => {
+    if (!formData) return;
+    const currentIds = formData.questionIds || [];
+    const filteredIds = filteredQuestionsForLinker.map(q => q.id);
+    const combinedIds = Array.from(new Set([...currentIds, ...filteredIds]));
+    setFormData({ ...formData, questionIds: combinedIds });
+  };
+
+  const clearAllFilteredQuestions = () => {
+    if (!formData) return;
+    const currentIds = formData.questionIds || [];
+    const filteredIds = filteredQuestionsForLinker.map(q => q.id);
+    const newIds = currentIds.filter((id: string) => !filteredIds.includes(id));
+    setFormData({ ...formData, questionIds: newIds });
+  };
 
   const updateExamMutation = useMutation({
     mutationFn: (data: any) => apiRequest("PATCH", `/api/exams/${id}`, data),
@@ -358,18 +405,146 @@ export default function AdminExamDetails() {
               </div>
             )}
 
-            <Card className="bg-muted/30">
-              <CardHeader className="py-4">
-                <CardTitle className="text-base">Selected Questions</CardTitle>
-              </CardHeader>
-              <CardContent className="py-2">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="text-sm px-3">
+            {/* Direct Question Bank Linker Card */}
+            <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-md">
+              <CardHeader className="bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/40 py-4 px-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base font-extrabold text-slate-800 dark:text-slate-200">
+                      Link Questions from Question Bank
+                    </CardTitle>
+                    <CardDescription className="text-xs font-semibold text-slate-400 mt-0.5">
+                      Select objective or theory questions to compose this exam paper pool.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-sm py-1 px-3 self-start sm:self-center">
                     {formData.questionIds?.length || 0} Questions Linked
                   </Badge>
-                  <p className="text-xs text-muted-foreground italic self-center">
-                    Questions are managed in the main exam list or theory config editor.
-                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                
+                {/* Search & Filtering for Linker */}
+                <div className="grid gap-3 sm:grid-cols-4 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-100 dark:border-slate-850">
+                  {/* Subject filter */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Subject</label>
+                    <Input
+                      placeholder="e.g., Mathematics"
+                      value={qSubjectFilter}
+                      onChange={e => setQSubjectFilter(e.target.value)}
+                      className="h-8 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  {/* Class level filter */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Class Classroom Level</label>
+                    <select
+                      value={qClassFilter}
+                      onChange={e => setQClassFilter(e.target.value)}
+                      className="border rounded-lg px-2 py-1 w-full bg-white dark:bg-slate-900 text-xs border-slate-200 dark:border-slate-800 focus:outline-none h-8 font-bold text-slate-700 dark:text-slate-350"
+                    >
+                      <option value="">All Classes</option>
+                      {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].map(cls => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Term filter */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">School Term</label>
+                    <select
+                      value={qTermFilter}
+                      onChange={e => setQTermFilter(e.target.value)}
+                      className="border rounded-lg px-2 py-1 w-full bg-white dark:bg-slate-900 text-xs border-slate-200 dark:border-slate-800 focus:outline-none h-8 font-bold text-slate-700 dark:text-slate-350"
+                    >
+                      <option value="">All Terms</option>
+                      <option value="First Term">First Term</option>
+                      <option value="Second Term">Second Term</option>
+                      <option value="Third Term">Third Term</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+
+                  {/* Text search query */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Keyword Search</label>
+                    <Input
+                      placeholder="Search text..."
+                      value={qSearchText}
+                      onChange={e => setQSearchText(e.target.value)}
+                      className="h-8 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                </div>
+
+                {/* Bulk operations toolbar */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850/60 pb-2 mb-2">
+                  <span className="text-xs font-bold text-slate-400 block">
+                    {filteredQuestionsForLinker.length} Question(s) Found
+                  </span>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={selectAllFilteredQuestions} 
+                      className="text-xs text-indigo-650 hover:bg-indigo-50 dark:text-indigo-400 font-extrabold h-7 rounded-lg"
+                    >
+                      Select All
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={clearAllFilteredQuestions} 
+                      className="text-xs text-rose-650 hover:bg-rose-50 dark:text-rose-450 font-extrabold h-7 rounded-lg"
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Question List container */}
+                <div className="max-h-80 space-y-2.5 overflow-y-auto rounded-xl border border-slate-205 dark:border-slate-800 p-4 bg-slate-50/20 dark:bg-slate-950/20">
+                  {filteredQuestionsForLinker.length > 0 ? (
+                    filteredQuestionsForLinker.map((question) => {
+                      const isSelected = formData.questionIds?.includes(question.id);
+                      return (
+                        <div 
+                          key={question.id} 
+                          onClick={() => toggleQuestionInLinker(question.id)}
+                          className={`flex items-start gap-3 rounded-xl border p-3 bg-white dark:bg-slate-900 hover:border-indigo-400 hover-glow transition-all duration-350 cursor-pointer ${
+                            isSelected 
+                              ? "border-indigo-500/80 bg-indigo-50/5 dark:border-indigo-950/80" 
+                              : "border-slate-100 dark:border-slate-850/60"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}} // toggling is handled by div click
+                            className="mt-1 rounded border-slate-350 dark:border-slate-800 text-indigo-650 focus:ring-indigo-500 h-4 w-4 shrink-0 pointer-events-none"
+                          />
+                          <div className="flex-1 text-xs">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                              <Badge variant="secondary" className="text-[9px] font-bold py-0">{question.subject}</Badge>
+                              <Badge variant="outline" className="text-[9px] font-bold py-0">{question.examType || "Objectives"}</Badge>
+                              <Badge variant="outline" className="text-[9px] font-bold py-0 bg-slate-50">{question.difficulty}</Badge>
+                              <Badge variant="outline" className="text-[9px] font-bold py-0 bg-slate-50">{question.classLevel}</Badge>
+                            </div>
+                            <p className="font-bold text-slate-700 dark:text-slate-300 leading-normal">{question.questionText}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-center text-xs text-slate-400 py-10 italic font-bold">
+                      No questions in the bank match your search criteria. Try modifying your search filters or Subject field!
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
