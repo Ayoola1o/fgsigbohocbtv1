@@ -1,23 +1,31 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, Timestamp } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore, collection, getDocs, Timestamp, Firestore } from "firebase/firestore";
 import "dotenv/config";
 
 const firebaseConfig = {
-    apiKey: process.env.VITE_FIREBASE_API_KEY,
-    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.VITE_FIREBASE_APP_ID
+    apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID
 };
 
-// Validate environment parameters
-if (!firebaseConfig.projectId) {
-    console.error("⚠️ [firebase.ts] VITE_FIREBASE_PROJECT_ID is not defined in the backend environment!");
-}
+let db: Firestore | null = null;
+let firebaseInitialized = false;
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+try {
+    if (!firebaseConfig.projectId) {
+        console.error("⚠️ [firebase.ts] Firebase Project ID is not defined in the backend environment variables!");
+    } else {
+        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+        db = getFirestore(app);
+        firebaseInitialized = true;
+        console.log("🔥 [firebase.ts] Server-side Firebase Firestore initialized successfully!");
+    }
+} catch (error) {
+    console.error("❌ [firebase.ts] Failed to initialize Firebase on the backend:", error);
+}
 
 // Helper to convert Firestore doc to standard JS data
 const docToData = (doc: any): any => {
@@ -33,18 +41,32 @@ const docToData = (doc: any): any => {
     return { id: doc.id, ...data };
 };
 
+const ensureDb = (): Firestore => {
+    if (!db) {
+        throw new Error(
+            "Firebase environment variables are missing on the backend. Please add VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, and VITE_FIREBASE_APP_ID to your Vercel project environment settings."
+        );
+    }
+    return db;
+};
+
 // Fetchers for Firestore collections
 export const getFirestoreResults = async (): Promise<any[]> => {
-    const snapshot = await getDocs(collection(db, "results"));
+    const database = ensureDb();
+    const snapshot = await getDocs(collection(database, "results"));
     return snapshot.docs.map(docToData);
 };
 
 export const getFirestoreQuestions = async (): Promise<any[]> => {
-    const snapshot = await getDocs(collection(db, "questions"));
+    const database = ensureDb();
+    const snapshot = await getDocs(collection(database, "questions"));
     return snapshot.docs.map(docToData);
 };
 
 export const getFirestoreExams = async (): Promise<any[]> => {
-    const snapshot = await getDocs(collection(db, "exams"));
+    const database = ensureDb();
+    const snapshot = await getDocs(collection(database, "exams"));
     return snapshot.docs.map(docToData);
 };
+
+export { db, firebaseInitialized };

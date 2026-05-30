@@ -988,7 +988,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Analytics computation error:", error);
-      res.status(500).json({ error: "Failed to compute analytics" });
+      res.status(500).json({ 
+        error: "Failed to compute analytics",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
