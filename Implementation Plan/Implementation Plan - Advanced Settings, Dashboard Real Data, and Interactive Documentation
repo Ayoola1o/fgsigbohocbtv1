@@ -1,0 +1,65 @@
+# Implementation Plan - Advanced Settings, Dashboard Real Data, and Interactive Documentation
+
+This implementation plan details the proposed updates to ensure real-time robust data loading on the admin dashboard, implement advanced app settings, and introduce a comprehensive admin documentation page.
+
+## Proposed Changes
+
+### 1. Robust Data Fetching & Dashboard Real Data
+To fix potential timestamp mismatches and query caching, we will make the client-side Firebase timestamp parsing more resilient and adjust the cache settings.
+
+#### [MODIFY] [firebase-api.ts](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/lib/firebase-api.ts)
+- Update `docToData` to convert date fields and Firestore Timestamps robustly. If `data[key]` has a `.toDate()` function, call it; if it is an object with `seconds` and `nanoseconds`, construct a `Date` object from `seconds * 1000`.
+
+#### [MODIFY] [queryClient.ts](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/lib/queryClient.ts)
+- Modify the default query client options. Replace `staleTime: Infinity` with a shorter stale time of 10 seconds (`staleTime: 10000`) and set `refetchOnWindowFocus: true`. This ensures the Admin Dashboard fetches real, fresh data from Firestore when the administrator loads the tab or focuses the browser window.
+
+---
+
+### 2. Advanced Settings Features & App Version
+We will introduce more administration and app configurations inside the Settings panel.
+
+#### [MODIFY] [admin-settings.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-settings.tsx)
+- Add new settings options:
+  - **Cheat Protection Warning:** Toggle switch to enforce window/tab switch alerts. (Local storage key: `fia_cbt_settings_cheat_protection`, default `true`).
+  - **Global Passing Score Fallback:** Number input to configure fallback passing percentage (default `50`). (Local storage key: `fia_cbt_settings_passing_threshold`).
+  - **Timer Warning Threshold:** Number input (in minutes) when the timer highlights in alert colors (default `5`). (Local storage key: `fia_cbt_settings_timer_warning`).
+- Display a prominent section highlighting the **App Version (`V 5.7.4`)** with a clean, branded card layout.
+
+#### [MODIFY] [exam-session.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/exam-session.tsx)
+- Integrate the saved settings inside the active exam session:
+  - Check `localStorage.getItem("fia_cbt_settings_cheat_protection")` inside the visibility change listener to optionally suppress or trigger malpractice alerts.
+  - Dynamically check the `fia_cbt_settings_timer_warning` threshold value to highlight the timer countdown in red when remaining time falls below the specified minutes.
+
+---
+
+### 3. Comprehensive Documentation Page
+We will build a high-fidelity documentation hub accessible from the admin sidebar.
+
+#### [NEW] [admin-documentation.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-documentation.tsx)
+- Build an interactive documentation layout containing sidebar anchors for smooth scrolling.
+- Draft in-depth manuals for:
+  - **Introduction:** Offline-first architecture, Firestore sync, and client-server telemetry logic.
+  - **Examination:** Exam creation, editing, merging multiple subject exams into a consolidated exam, and toggling visibility.
+  - **Question Bank:** Creating questions manually, bulk upload formats, downloadable templates, and filtering card lists.
+  - **Results:** Filtering, sorting, printing scorecard reports, and resetting sessions.
+  - **Student Portal:** Registered student profiles, batch importing, and exam-level blocking.
+  - **Analytics:** Explaining Item Difficulty Index (P-Index), Discrimination Index (D-Index), Speed Guessing anomalies, and Topic Mastery.
+
+#### [MODIFY] [App.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/App.tsx)
+- Add a new route `/admin/documentation` mapping to `AdminDocumentation` wrapped in `<AdminLayout>`.
+
+#### [MODIFY] [app-sidebar.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/components/app-sidebar.tsx)
+- Import `BookOpen` from `lucide-react`.
+- Append a **Documentation** link item (`/admin/documentation`) in the navigation menu array.
+
+---
+
+## Verification Plan
+
+### Automated Checks
+- Run `npm run check` to verify TypeScript builds successfully.
+
+### Manual Verification
+- **Dashboard:** Confirm stats and performance charts fetch real-time Firestore results on mount.
+- **Settings:** Adjust cheat protection, timer warning threshold, and check that `V 5.7.4` displays. Confirm that switching tabs during an exam respects the configuration.
+- **Documentation:** Click the sidebar link to navigate to the new documentation page, select anchor sections, and verify detailed guidelines render cleanly.

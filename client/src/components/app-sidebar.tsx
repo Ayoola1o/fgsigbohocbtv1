@@ -6,6 +6,7 @@ import {
   GraduationCap,
   TrendingUp,
   Settings,
+  BookOpen,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -63,6 +64,12 @@ const menuItems = [
     url: "/admin/settings",
     icon: Settings,
     testId: "link-settings",
+  },
+  {
+    title: "Documentation",
+    url: "/admin/documentation",
+    icon: BookOpen,
+    testId: "link-documentation",
   },
 ];
 

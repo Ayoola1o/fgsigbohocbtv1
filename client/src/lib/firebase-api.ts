@@ -33,8 +33,14 @@ const docToData = <T>(doc: any): T => {
     const data = doc.data();
     // Convert Firestore Timestamps to JS Dates
     Object.keys(data).forEach(key => {
-        if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate();
+        if (data[key]) {
+            if (typeof data[key].toDate === 'function') {
+                data[key] = data[key].toDate();
+            } else if (data[key] instanceof Timestamp) {
+                data[key] = data[key].toDate();
+            } else if (typeof data[key] === 'object' && 'seconds' in data[key]) {
+                data[key] = new Date(data[key].seconds * 1000);
+            }
         }
     });
     return { id: doc.id, ...data } as T;

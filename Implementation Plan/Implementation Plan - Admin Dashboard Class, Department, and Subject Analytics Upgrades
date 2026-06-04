@@ -1,0 +1,31 @@
+# Implementation Plan - Admin Dashboard Class, Department, and Subject Analytics Upgrades
+
+We will upgrade the **Admin Panel Dashboard** (`admin-dashboard.tsx`) to introduce comprehensive, real-time analytics for classroom levels and departmental splits using gorgeous premium cards and a dedicated chart. Additionally, we will refactor the subject performance bar chart to correctly aggregate and group real-time candidates and percentage scores from all test results in the database.
+
+---
+
+## Proposed Changes
+
+### Client Frontend
+
+#### [MODIFY] [admin-dashboard.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-dashboard.tsx)
+- **Upgrade `schoolAnalysis` useMemo**:
+  - Calculate extended attributes for `classScores` including total candidate count, overall average percentage, top student in that class, and candidate department split distributions.
+  - Calculate detailed nested attributes for `deptScores` including the overall department average and class-by-class average breakdowns inside each department.
+- **Refactor `subjectStats` useMemo**:
+  - Group and consolidate results by unique Subject name instead of repeating separate bars for each individual exam.
+  - Correctly count unique candidates per subject using a `Set` to prevent duplicate counts and ensure accurate data metrics.
+- **Add Classroom & Department Analytics cards**:
+  - Renders a grid of cards for Classroom Level summaries.
+  - Renders a grid of cards for Departmental Summaries featuring a list of nested classroom performance breakdowns.
+- **Add Class-by-Class Recharts Performance Chart**:
+  - Add a beautiful Recharts `ComposedChart` (or double `BarChart`) comparing overall average percentage scores and candidate counts side-by-side across active classrooms (e.g. SS3, SS2, JSS1).
+
+---
+
+## Verification Plan
+
+### Automated & Manual Verification
+- **Subject Chart Accuracy**: Verify that "Performance by Subject" groups multiple exams belonging to the same subject name into a single consolidated bar.
+- **Classroom summaries**: Review classroom cards to confirm accurate top student tags, candidate counts, and department distributions.
+- **Vite Build Verification**: Run `npm run build` to confirm compilation completes with zero issues.

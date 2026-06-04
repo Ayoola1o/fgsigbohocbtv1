@@ -209,7 +209,8 @@ export default function ExamSessionPage() {
   useEffect(() => {
     if (!session || session.isCompleted) return;
     const handleVisibility = () => {
-      if (document.hidden) {
+      const isCheatProtectionEnabled = localStorage.getItem("fia_cbt_settings_cheat_protection") !== "false";
+      if (document.hidden && isCheatProtectionEnabled) {
         tabSwitchesRef.current += 1;
         toast({
           title: "Warning: Malpractice Flagged",
@@ -425,6 +426,9 @@ export default function ExamSessionPage() {
     );
   }
 
+  const warningMinutes = Number(localStorage.getItem("fia_cbt_settings_timer_warning") || "5");
+  const isTimerWarning = timeRemaining < (warningMinutes * 60);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16 font-sans">
       {/* Premium Top Sticky Progress Navbar */}
@@ -441,10 +445,10 @@ export default function ExamSessionPage() {
 
           <div className="flex items-center gap-5 w-full sm:w-auto justify-end">
             <div className="flex items-center gap-2.5 bg-slate-100/70 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-805/40 py-1.5 px-4.5 rounded-2xl">
-              <Clock className={`h-4.5 w-4.5 shrink-0 ${timeRemaining < 300 ? "text-rose-500 animate-pulse" : "text-indigo-500"}`} />
+              <Clock className={`h-4.5 w-4.5 shrink-0 ${isTimerWarning ? "text-rose-500 animate-pulse" : "text-indigo-500"}`} />
               <span
                 className={`text-base font-extrabold tabular-nums ${
-                  timeRemaining < 300 ? "text-rose-500 font-black" : "text-slate-700 dark:text-slate-350"
+                  isTimerWarning ? "text-rose-500 font-black" : "text-slate-700 dark:text-slate-350"
                 }`}
                 data-testid="text-timer"
               >
