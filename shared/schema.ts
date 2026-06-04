@@ -159,6 +159,14 @@ export const students = pgTable("students", {
   sex: text("sex"),
   department: text("department"),
   blockedExams: jsonb("blocked_exams").$type<string[]>(),
+  averageScore: integer("average_score"),
+  academicStanding: text("academic_standing"),
+  strengths: jsonb("strengths").$type<string[]>(),
+  weaknesses: jsonb("weaknesses").$type<string[]>(),
+  academicTrajectory: text("academic_trajectory"),
+  diagnosis: text("diagnosis"),
+  actionPlan: jsonb("action_plan").$type<string[]>(),
+  lastAnalyzed: text("last_analyzed"),
 });
 
 
@@ -169,6 +177,14 @@ export const insertStudentSchema = createInsertSchema(students).omit({
   sex: z.enum(["M", "F"]).optional(),
   department: z.enum(departments).optional(),
   blockedExams: z.array(z.string()).optional(),
+  averageScore: z.number().optional(),
+  academicStanding: z.string().optional(),
+  strengths: z.array(z.string()).optional(),
+  weaknesses: z.array(z.string()).optional(),
+  academicTrajectory: z.string().optional(),
+  diagnosis: z.string().optional(),
+  actionPlan: z.array(z.string()).optional(),
+  lastAnalyzed: z.string().optional(),
 });
 
 

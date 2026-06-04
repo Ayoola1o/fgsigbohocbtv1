@@ -47,12 +47,19 @@ export default function ExamStart() {
   const { data: students = [] } = useQuery<Student[]>({
     queryKey: ["/api/students"],
   });
-  const currentStudent = students.find(s => s.studentId === studentId);
+  const currentStudent = students.find(s => 
+    s.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
+    s.id?.trim().toLowerCase() === studentId?.trim().toLowerCase()
+  );
 
   const { data: results = [] } = useQuery<Result[]>({
     queryKey: ["/api/results"],
   });
-  const hasTaken = results.some(r => r.examId === examId && r.studentId === studentId);
+  const hasTaken = results.some(r => 
+    r.examId === examId && 
+    (r.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
+     (currentStudent && r.studentId?.trim().toLowerCase() === currentStudent.id?.trim().toLowerCase()))
+  );
   const isBlocked = currentStudent?.blockedExams?.includes(examId!) || false;
 
   const startExamMutation = useMutation({

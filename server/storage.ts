@@ -341,6 +341,14 @@ export class MemStorage implements IStorage {
       sex: insertStudent.sex || null,
       department: insertStudent.department || null,
       blockedExams: (insertStudent as any).blockedExams || null,
+      averageScore: (insertStudent as any).averageScore || null,
+      academicStanding: (insertStudent as any).academicStanding || null,
+      strengths: (insertStudent as any).strengths || null,
+      weaknesses: (insertStudent as any).weaknesses || null,
+      academicTrajectory: (insertStudent as any).academicTrajectory || null,
+      diagnosis: (insertStudent as any).diagnosis || null,
+      actionPlan: (insertStudent as any).actionPlan || null,
+      lastAnalyzed: (insertStudent as any).lastAnalyzed || null,
     };
     this.students.set(id, student);
     this.saveStudentsToDisk();

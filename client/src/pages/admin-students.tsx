@@ -214,9 +214,23 @@ export default function AdminStudents() {
     setDeleteConfirm({ open: false, id: null, name: "" });
   };
 
-  // Helper selectors
   const getStudentAverage = (studentId: string) => {
-    const studentResults = results.filter((r) => r.studentId === studentId);
+    const student = students.find((s) => 
+      s.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
+      s.id?.trim().toLowerCase() === studentId?.trim().toLowerCase()
+    );
+    if (!student) {
+      const studentResults = results.filter((r) => 
+        r.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase()
+      );
+      if (studentResults.length === 0) return null;
+      const avg = studentResults.reduce((acc, r) => acc + r.percentage, 0) / studentResults.length;
+      return Math.round(avg);
+    }
+    const studentResults = results.filter((r) => 
+      r.studentId?.trim().toLowerCase() === student.studentId?.trim().toLowerCase() ||
+      r.studentId?.trim().toLowerCase() === student.id?.trim().toLowerCase()
+    );
     if (studentResults.length === 0) return null;
     const avg = studentResults.reduce((acc, r) => acc + r.percentage, 0) / studentResults.length;
     return Math.round(avg);

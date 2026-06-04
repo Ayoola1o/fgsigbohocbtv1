@@ -48,7 +48,7 @@ import { createRoot } from "react-dom/client";
 import { ResultTemplate } from "@/components/ResultTemplate";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -246,8 +246,8 @@ export default function AdminStudentProfile() {
             const title = exam?.title || "Exam";
             
             const rawTelemetry = (r as any).telemetry;
-            const tabSwitches = rawTelemetry?.tabSwitches ?? (r.passed ? 0 : Math.floor(Math.random() * 2));
-            const revisions = rawTelemetry?.revisions ?? Math.floor(Math.random() * 3 + 1);
+            const tabSwitches = rawTelemetry?.tabSwitches ?? 0;
+            const revisions = rawTelemetry?.revisions ?? 0;
             
             let avgSecondsPerQuestion = 45;
             if (rawTelemetry?.timeSpentPerQuestion) {
@@ -259,7 +259,7 @@ export default function AdminStudentProfile() {
                 const duration = exam?.duration || 60;
                 const qCount = exam?.questionIds?.length || 40;
                 const baseLatency = Math.round((duration * 60) / qCount);
-                avgSecondsPerQuestion = Math.max(10, Math.round(baseLatency * (r.passed ? 0.8 : 1.2) + (Math.random() * 10 - 5)));
+                avgSecondsPerQuestion = Math.max(10, Math.round(baseLatency * (r.passed ? 0.9 : 1.1)));
             }
 
             return {
@@ -316,8 +316,8 @@ export default function AdminStudentProfile() {
             const examTitle = exam?.title || "Exam";
             const rawTelemetry = (r as any).telemetry;
 
-            const tabSwitches = rawTelemetry?.tabSwitches ?? (r.passed ? 0 : Math.floor(Math.random() * 2));
-            const revisions = rawTelemetry?.revisions ?? Math.floor(Math.random() * 3 + 1);
+            const tabSwitches = rawTelemetry?.tabSwitches ?? 0;
+            const revisions = rawTelemetry?.revisions ?? 0;
 
             if (tabSwitches > 0) {
                 incidents.push({
@@ -445,9 +445,17 @@ export default function AdminStudentProfile() {
             }
         }
 
+        // Concept details
+        if (strengths.length > 0) {
+            diagnosis += `Conceptual strengths are noted in ${strengths.join(", ")}, highlighting strong aptitude. `;
+        }
+        if (weaknesses.length > 0) {
+            diagnosis += `Key syllabus gaps exist in ${weaknesses.join(", ")}, indicating critical study focus is required. `;
+        }
+
         // Integrity factor
-        if (totalIncidents > 2) {
-            diagnosis += `Crucially, proctoring telemetry has flagged ${totalIncidents} suspicious incidents, indicating attention deviation, rapid pacing velocity (guesswork), or tab switches. This compromises result validity. `;
+        if (totalIncidents > 0) {
+            diagnosis += `Proctoring logs noted ${totalIncidents} telemetry event(s) (window focus loss or pacing warnings) during testing. `;
         }
 
         // Action Plan recommendations
@@ -470,6 +478,50 @@ export default function AdminStudentProfile() {
 
         return { diagnosis, planSteps };
     }, [studentResults, subjectDiagnostics, academicTrajectory, averageScore, forensicIncidents]);
+
+    // Mutation to sync analysis updates back to Firestore
+    const syncAnalysisMutation = useMutation({
+        mutationFn: async (updates: any) => {
+            if (!student) throw new Error("Student not found");
+            return apiRequest("PATCH", `/api/students/${student.id}`, updates);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+        }
+    });
+
+    const analyticsToSave = useMemo(() => {
+        if (!student) return null;
+        return {
+            averageScore,
+            academicStanding: averageScore >= 75 ? "Excellent" : averageScore >= 50 ? "Satisfactory" : "Needs Help",
+            strengths: subjectDiagnostics.strengths,
+            weaknesses: subjectDiagnostics.weaknesses,
+            academicTrajectory: academicTrajectory.text,
+            diagnosis: pedagogicalAnalysis.diagnosis,
+            actionPlan: pedagogicalAnalysis.planSteps,
+            lastAnalyzed: new Date().toISOString()
+        };
+    }, [student, averageScore, subjectDiagnostics, academicTrajectory, pedagogicalAnalysis]);
+
+    useEffect(() => {
+        if (!student || !analyticsToSave) return;
+        
+        // Only update if there is a real change in values to avoid infinite loops
+        const hasChange = 
+            student.averageScore !== analyticsToSave.averageScore ||
+            student.academicStanding !== analyticsToSave.academicStanding ||
+            JSON.stringify(student.strengths) !== JSON.stringify(analyticsToSave.strengths) ||
+            JSON.stringify(student.weaknesses) !== JSON.stringify(analyticsToSave.weaknesses) ||
+            student.academicTrajectory !== analyticsToSave.academicTrajectory ||
+            student.diagnosis !== analyticsToSave.diagnosis ||
+            JSON.stringify(student.actionPlan) !== JSON.stringify(analyticsToSave.actionPlan);
+
+        if (hasChange && !syncAnalysisMutation.isPending) {
+            console.log("Syncing updated student analysis data back to Firestore profile...", analyticsToSave);
+            syncAnalysisMutation.mutate(analyticsToSave);
+        }
+    }, [student, analyticsToSave, syncAnalysisMutation.isPending]);
 
     const getGradeRemark = (percentage: number) => {
         if (percentage >= 75) return { label: "Excellent", color: "text-emerald-700 bg-emerald-50 border-emerald-100" };

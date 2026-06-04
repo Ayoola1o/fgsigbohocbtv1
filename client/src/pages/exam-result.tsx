@@ -69,7 +69,10 @@ export default function ExamResult() {
     queryFn: getStudents,
   });
 
-  const student = students?.find(s => s.studentId === result?.studentId);
+  const student = students?.find(s => 
+    s.studentId?.trim().toLowerCase() === result?.studentId?.trim().toLowerCase() ||
+    s.id?.trim().toLowerCase() === result?.studentId?.trim().toLowerCase()
+  );
 
   // Calculate subject breakdown for diagnostics and printing
   const subjectBreakdown = useMemo(() => {

@@ -134,7 +134,10 @@ export default function AdminResults() {
       const searchMatch = result.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         result.studentId.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const student = students?.find(s => s.studentId === result.studentId);
+      const student = students?.find(s => 
+        s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
+        s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
+      );
       const classLevelMatch = filterClassLevel === "ALL" || student?.classLevel === filterClassLevel;
       const departmentMatch = filterDepartment === "ALL" || student?.department === filterDepartment;
 
@@ -166,7 +169,10 @@ export default function AdminResults() {
 
   const handlePrint = async (result: Result) => {
     const exam = exams?.find(e => e.id === result.examId);
-    const student = students?.find(s => s.studentId === result.studentId);
+    const student = students?.find(s => 
+      s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
+      s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
+    );
 
     // Calculate breakdown
     const breakdown: any[] = [];
@@ -284,7 +290,10 @@ export default function AdminResults() {
 
     const sorted = [...filteredResults].sort((a, b) => a.studentName.localeCompare(b.studentName));
     const studentResults = sorted.map(r => {
-      const student = students?.find(s => s.studentId === r.studentId);
+      const student = students?.find(s => 
+        s.studentId?.trim().toLowerCase() === r.studentId?.trim().toLowerCase() ||
+        s.id?.trim().toLowerCase() === r.studentId?.trim().toLowerCase()
+      );
       return {
         id: r.studentId,
         name: r.studentName,
@@ -355,7 +364,10 @@ export default function AdminResults() {
     // Generate data for each result
     const printPayloads = selected.map(result => {
       const exam = exams?.find(e => e.id === result.examId);
-      const student = students?.find(s => s.studentId === result.studentId);
+      const student = students?.find(s => 
+        s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
+        s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
+      );
 
       // Calculate breakdown (reuse logic effectively or simplify for now)
       const breakdown: any[] = [];
@@ -528,7 +540,10 @@ export default function AdminResults() {
       // Map grouped portfolios
       const portfolios = Object.keys(studentGroups).map(studentId => {
         const group = studentGroups[studentId];
-        const studentObj = students?.find(s => s.studentId === studentId);
+        const studentObj = students?.find(s => 
+          s.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
+          s.id?.trim().toLowerCase() === studentId?.trim().toLowerCase()
+        );
         
         return {
           studentName: group.studentName,
@@ -864,7 +879,10 @@ export default function AdminResults() {
                 <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-805/40">
                   {displayedResults
                     .map((result) => {
-                      const student = students?.find(s => s.studentId === result.studentId);
+                      const student = students?.find(s => 
+                        s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
+                        s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
+                      );
                       return (
                         <TableRow 
                           key={result.id} 
