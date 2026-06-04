@@ -48,21 +48,29 @@ if (!firebaseConfig.projectId) {
 
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with offline persistence
+// Initialize Firestore with offline persistence and long-polling to prevent QUIC protocol errors
 let db: Firestore;
 
 try {
     db = initializeFirestore(app, {
         localCache: persistentLocalCache({
             tabManager: persistentMultipleTabManager()
-        })
+        }),
+        experimentalForceLongPolling: true
     });
-    console.log("Firestore initialized with offline persistence enabled.");
+    console.log("Firestore initialized with offline persistence and long-polling enabled.");
 } catch (error) {
     console.error("Failed to initialize Firestore with offline persistence:", error);
-    // Fallback to default initialization if persistence fails
-    db = getFirestore(app);
+    // Fallback to default initialization with long-polling if persistence fails
+    try {
+        db = initializeFirestore(app, {
+            experimentalForceLongPolling: true
+        });
+    } catch (fallbackError) {
+        db = getFirestore(app);
+    }
 }
+
 
 let auth: any;
 

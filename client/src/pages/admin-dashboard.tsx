@@ -264,7 +264,7 @@ export default function AdminDashboard() {
     results.forEach(r => {
       // Find subject name from the exam mapping or fallback to result metadata
       const examProfile = examMap.get(r.examId);
-      const subjectName = examProfile?.subject || r.examName || "General";
+      const subjectName = examProfile?.subject || (r as any).examName || "General";
 
       if (!statsMap[subjectName]) {
         statsMap[subjectName] = {

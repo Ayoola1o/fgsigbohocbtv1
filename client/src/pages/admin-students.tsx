@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -74,7 +74,7 @@ export default function AdminStudents() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClass, setFilterClass] = useState("All");
   const [filterDept, setFilterDept] = useState("All");
-  const [sortBy, setSortBy] = useState("name-asc");
+  const [sortBy, setSortBy] = useState("performance-desc");
   const [isAddManualOpen, setIsAddManualOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -266,6 +266,42 @@ export default function AdminStudents() {
 
     return 0;
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 30;
+  const totalPages = Math.ceil(sortedStudents.length / pageSize);
+  const activePage = Math.min(currentPage, Math.max(1, totalPages));
+  const paginatedStudents = sortedStudents.slice((activePage - 1) * pageSize, activePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterClass, filterDept]);
+
+  // Compute top three students in each class
+  const allClasses = Array.from(new Set(students.map(s => s.classLevel).filter(Boolean))) as string[];
+  allClasses.sort((a, b) => {
+    const order = ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
+    const idxA = order.indexOf(a);
+    const idxB = order.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  const topThreeByClass = allClasses.reduce((acc, cls) => {
+    const classStudents = students.filter(s => s.classLevel === cls);
+    const ranked = classStudents
+      .map(s => ({
+        student: s,
+        avg: getStudentAverage(s.studentId)
+      }))
+      .filter(item => item.avg !== null)
+      .sort((a, b) => (b.avg as number) - (a.avg as number))
+      .slice(0, 3);
+    acc[cls] = ranked as Array<{ student: Student; avg: number }>;
+    return acc;
+  }, {} as Record<string, Array<{ student: Student; avg: number }>>);
 
   // Badge Style Functions
   const getSexBadge = (sex: string | null | undefined) => {
@@ -505,6 +541,47 @@ export default function AdminStudents() {
         </Card>
       </div>
 
+      {/* Classroom Top Performers Podium */}
+      {Object.values(topThreeByClass).some(ranked => ranked.length > 0) && (
+        <Card className="border-none shadow-xl bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white rounded-2xl overflow-hidden animate-in fade-in duration-500 delay-150">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Award className="h-5 w-5 text-amber-400" />
+              <h2 className="text-lg font-black tracking-tight">Classroom Leaders (Top 3)</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {allClasses.map(cls => {
+                const topStudents = topThreeByClass[cls] || [];
+                if (topStudents.length === 0) return null;
+                return (
+                  <div key={cls} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                      <span className="text-xs font-black text-indigo-300 uppercase tracking-widest">{cls}</span>
+                      <Badge className="bg-indigo-600/50 text-indigo-200 border-indigo-500/30 text-[9px] font-bold uppercase tracking-wider h-5">Top Students</Badge>
+                    </div>
+                    <div className="space-y-1.5">
+                      {topStudents.map((item, idx) => {
+                        const medalColor = idx === 0 ? "text-amber-400" : idx === 1 ? "text-slate-350" : "text-amber-600";
+                        const rankText = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
+                        return (
+                          <div key={item.student.id} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className={`font-black ${medalColor}`}>{rankText}</span>
+                              <span className="text-slate-200 font-bold truncate" title={item.student.name}>{item.student.name}</span>
+                            </div>
+                            <span className="text-indigo-300 font-black shrink-0">{item.avg}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Dynamic Filter and Display Options Hub */}
       <Card className="border-none shadow-md bg-white dark:bg-slate-900 rounded-2xl">
         <CardContent className="p-5">
@@ -624,8 +701,8 @@ export default function AdminStudents() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
-                {sortedStudents.length > 0 ? (
-                  sortedStudents.map((s) => {
+                {paginatedStudents.length > 0 ? (
+                  paginatedStudents.map((s) => {
                     const avg = getStudentAverage(s.studentId);
                     const standing = getStudentAcademicStanding(avg);
                     return (
@@ -738,8 +815,8 @@ export default function AdminStudents() {
       ) : (
         /* Premium Visual Card Grid View */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in duration-300">
-          {sortedStudents.length > 0 ? (
-            sortedStudents.map((s) => {
+          {paginatedStudents.length > 0 ? (
+            paginatedStudents.map((s) => {
               const avg = getStudentAverage(s.studentId);
               const standing = getStudentAcademicStanding(avg);
               return (
@@ -856,6 +933,68 @@ export default function AdminStudents() {
               <p className="text-xs text-slate-400 mt-1">Try expanding search parameters or enroll manually.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Pagination Controller */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-4 px-2 mt-6">
+          <p className="text-xs text-slate-500 font-bold">
+            Showing <span className="text-indigo-650 dark:text-indigo-400">{((activePage - 1) * pageSize) + 1}</span> to{" "}
+            <span className="text-indigo-650 dark:text-indigo-400">{Math.min(activePage * pageSize, sortedStudents.length)}</span> of{" "}
+            <span className="text-indigo-650 dark:text-indigo-400">{sortedStudents.length}</span> students
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={activePage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold px-3"
+            >
+              Previous
+            </Button>
+            {(() => {
+              const pages: (number | string)[] = [];
+              const range = 1;
+              for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= activePage - range && i <= activePage + range)) {
+                  pages.push(i);
+                } else if (pages[pages.length - 1] !== "...") {
+                  pages.push("...");
+                }
+              }
+              return pages.map((p, idx) => {
+                if (p === "...") {
+                  return <span key={`dot-${idx}`} className="text-slate-400 text-xs px-1">...</span>;
+                }
+                return (
+                  <Button
+                    key={p}
+                    variant={p === activePage ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(p as number)}
+                    className={`rounded-xl h-8 w-8 text-xs font-bold p-0 ${
+                      p === activePage
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                        : "border-slate-200 dark:border-slate-800"
+                    }`}
+                  >
+                    {p}
+                  </Button>
+                );
+              });
+            })()}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={activePage === totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold px-3"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
 

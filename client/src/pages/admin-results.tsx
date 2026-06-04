@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,18 @@ export default function AdminResults() {
       return examMatch && searchMatch && classLevelMatch && departmentMatch && dateMatch;
     }
   );
+  const sortedResults = [...(filteredResults || [])].sort(
+    (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 30;
+  const totalPages = Math.ceil(sortedResults.length / pageSize);
+  const activePage = Math.min(currentPage, Math.max(1, totalPages));
+  const displayedResults = sortedResults.slice((activePage - 1) * pageSize, activePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterExamId, filterClassLevel, filterDepartment, dateRange]);
 
 
   const getExamTitle = (examId: string) => {
@@ -319,8 +331,8 @@ export default function AdminResults() {
   const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
 
   const handleSelectAll = (checked: boolean) => {
-    if (checked && filteredResults) {
-      setSelectedResultIds(new Set(filteredResults.map(r => r.id)));
+    if (checked && displayedResults) {
+      setSelectedResultIds(new Set(displayedResults.map(r => r.id)));
     } else {
       setSelectedResultIds(new Set());
     }
@@ -807,13 +819,22 @@ export default function AdminResults() {
           </CardContent>
         </Card>
 
+        {!resultsLoading && displayedResults && displayedResults.length > 0 && (
+          <div className="mb-4 flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 print:hidden px-1">
+            <span className="flex items-center gap-1.5 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-1.5 rounded-lg border border-indigo-100/40 dark:border-indigo-900/30">
+              <Clock className="w-3.5 h-3.5 text-indigo-500" />
+              Showing results <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">{((activePage - 1) * pageSize) + 1}-{Math.min(activePage * pageSize, sortedResults.length)}</strong> of <strong className="text-indigo-650 dark:text-indigo-400 font-extrabold">{sortedResults.length}</strong>
+            </span>
+          </div>
+        )}
+
         {resultsLoading ? (
           <div className="space-y-4 print:hidden">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-20 w-full rounded-2xl" />
             ))}
           </div>
-        ) : filteredResults && filteredResults.length > 0 ? (
+        ) : displayedResults && displayedResults.length > 0 ? (
           <Card className="overflow-hidden border border-slate-100 dark:border-slate-800/80 shadow-lg print:shadow-none rounded-2xl bg-white dark:bg-slate-900">
             <div className="overflow-x-auto">
               <Table>
@@ -822,7 +843,7 @@ export default function AdminResults() {
                     <TableHead className="font-bold print:hidden w-12 py-3.5">
                       <input
                         type="checkbox"
-                        checked={filteredResults.length > 0 && Array.from(selectedResultIds).length === filteredResults.length}
+                        checked={displayedResults.length > 0 && Array.from(selectedResultIds).length === displayedResults.length}
                         onChange={(e) => handleSelectAll(e.target.checked)}
                         className="h-4.5 w-4.5 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
                       />
@@ -841,12 +862,7 @@ export default function AdminResults() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-805/40">
-                  {filteredResults
-                    .sort(
-                      (a, b) =>
-                        new Date(b.completedAt).getTime() -
-                        new Date(a.completedAt).getTime()
-                    )
+                  {displayedResults
                     .map((result) => {
                       const student = students?.find(s => s.studentId === result.studentId);
                       return (
@@ -985,7 +1001,67 @@ export default function AdminResults() {
                 </TableBody >
               </Table >
             </div>
-          </Card >
+            {totalPages > 1 && (
+              <div className="print:hidden flex items-center justify-between border-t border-slate-100 dark:border-slate-850 p-4 bg-slate-50/30 dark:bg-slate-950/20">
+                <p className="text-xs text-slate-500 font-bold">
+                  Showing <span className="text-indigo-650 dark:text-indigo-400">{((activePage - 1) * pageSize) + 1}</span> to{" "}
+                  <span className="text-indigo-650 dark:text-indigo-400">{Math.min(activePage * pageSize, sortedResults.length)}</span> of{" "}
+                  <span className="text-indigo-650 dark:text-indigo-400">{sortedResults.length}</span> results
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={activePage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold px-3 h-8"
+                  >
+                    Previous
+                  </Button>
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    const range = 1;
+                    for (let i = 1; i <= totalPages; i++) {
+                      if (i === 1 || i === totalPages || (i >= activePage - range && i <= activePage + range)) {
+                        pages.push(i);
+                      } else if (pages[pages.length - 1] !== "...") {
+                        pages.push("...");
+                      }
+                    }
+                    return pages.map((p, idx) => {
+                      if (p === "...") {
+                        return <span key={`dot-${idx}`} className="text-slate-400 text-xs px-1">...</span>;
+                      }
+                      return (
+                        <Button
+                          key={p}
+                          variant={p === activePage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(p as number)}
+                          className={`rounded-xl h-8 w-8 text-xs font-bold p-0 ${
+                            p === activePage
+                              ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                              : "border-slate-200 dark:border-slate-800"
+                          }`}
+                        >
+                          {p}
+                        </Button>
+                      );
+                    });
+                  })()}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={activePage === totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold px-3 h-8"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
         ) : (
           <Card className="print:hidden border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xl">
             <CardContent className="flex flex-col items-center py-20 text-center">
