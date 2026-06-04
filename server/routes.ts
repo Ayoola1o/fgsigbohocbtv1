@@ -219,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const defaultMeta = {
         classLevel: req.query.classLevel || req.body.classLevel || "SS3",
         term: req.query.term || req.body.term || "First Term",
-        examType: req.query.examType || req.body.examType || "Examination",
+        examType: req.query.examType || req.body.examType || "Objectives",
         subject: req.query.subject || req.body.subject || "Biology",
         department: req.query.department || req.body.department || "General",
       };
@@ -236,7 +236,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
-      console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
 
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -245,15 +244,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(parsed);
       }
 
-      console.log("AI Importer: Sending raw text to Gemini AI...");
+      const examTypeStr = String(defaultMeta.examType || "").toLowerCase();
+      const isObjectives = examTypeStr.includes("objective") || examTypeStr.includes("obj");
+
+      console.log(`AI Importer: Sending raw text to Gemini AI using ${isObjectives ? 'Objectives' : 'Theory'} schema...`);
       const ai = new GoogleGenAI({ apiKey });
-      
-      const examBatchSchema = {
+
+      const objectivesSchema = {
         type: "OBJECT",
         properties: {
           questions: {
             type: "ARRAY",
-            description: "A list of exam questions extracted from the document.",
+            description: "A list of multiple-choice objective questions.",
             items: {
               type: "OBJECT",
               properties: {
@@ -262,14 +264,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 examType: { type: "STRING" },
                 subject: { type: "STRING" },
                 questionText: { type: "STRING" },
-                questionType: { type: "STRING", description: "Must be 'multiple_choice' or 'fill_in_the_blank'" },
+                questionType: { type: "STRING", description: "Must be 'multiple_choice'" },
                 difficulty: { type: "STRING", description: "Must be 'Easy', 'Medium', or 'Hard'" },
                 points: { type: "INTEGER" },
-                correctAnswer: { type: "STRING", description: "The exact text of the correct option or key" },
+                correctAnswer: { type: "STRING", description: "The designated correct option letter (e.g. A, B, C, D)" },
                 options: {
                   type: "ARRAY",
                   items: { type: "STRING" },
-                  description: "An array of all available choices (empty if fill_in_the_blank)"
+                  description: "Designated options/choices, e.g. ['A) Option One', 'B) Option Two', ...]"
                 }
               },
               required: ["classLevel", "term", "examType", "subject", "questionText", "questionType", "difficulty", "points", "correctAnswer", "options"]
@@ -279,41 +281,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         required: ["questions"]
       };
 
-      const prompt = `
-      You are an elite academic parser. Parse the following uploaded document which contains academic questions.
-      
-      The input document can be a teacher's raw test paper (with numbered questions and options), a plain text list, or a raw CSV format (matching classLevel,term,examType,subject,questionText,questionType,difficulty,points,correctAnswer,options).
-      
-      Instructions for parsing:
-      1. Carefully identify the questions, choices (options), correct answers, point values, and metadata.
-      2. If the document is in CSV format:
-         - Each non-header line should be treated as a question.
-         - Ensure the fields are parsed correctly, respecting columns.
-      3. Strict Schema Mapping:
-         - questionType: Must be strictly 'multiple_choice' or 'fill_in_the_blank'. (If it is Objectives, map it to 'multiple_choice').
-         - difficulty: Must be strictly 'Easy', 'Medium', or 'Hard' (capitalize the first letter).
-         - points: Must be a valid integer, e.g. 1, 2, 5. Default is 1 if not specified.
-         - options: An array of string options. E.g. ["(a) Option A", "(b) Option B", ...]. If the question is theory or fill-in-the-blank, return an empty array [].
-         - correctAnswer: The correct answer value or the exact letter option (e.g. "a" or "Option A" or "(a)").
-      4. Fallback defaults if a field is not explicitly specified in the text or empty in the CSV row:
-         - classLevel: "${defaultMeta.classLevel}"
-         - term: "${defaultMeta.term}"
-         - examType: "${defaultMeta.examType}"
-         - subject: "${defaultMeta.subject}"
-         - department: "${defaultMeta.department}"
-      
-      Document Content to Parse:
-      ---
-      ${rawText}
-      ---
-      `;
+      const theorySchema = {
+        type: "OBJECT",
+        properties: {
+          questions: {
+            type: "ARRAY",
+            description: "A list of theory/essay questions.",
+            items: {
+              type: "OBJECT",
+              properties: {
+                classLevel: { type: "STRING" },
+                term: { type: "STRING" },
+                examType: { type: "STRING" },
+                subject: { type: "STRING" },
+                questionText: { type: "STRING" },
+                questionType: { type: "STRING", description: "Must be 'fill_in_the_blank' or 'theory' or 'essay'" },
+                difficulty: { type: "STRING", description: "Must be 'Easy', 'Medium', or 'Hard'" },
+                points: { type: "INTEGER" }
+              },
+              required: ["classLevel", "term", "examType", "subject", "questionText", "questionType", "difficulty", "points"]
+            }
+          }
+        },
+        required: ["questions"]
+      };
+
+      const prompt = isObjectives ? `
+You are "Exam GEN", a professional educational data extraction agent.
+Your goal is to parse the raw exam questions paper text provided and translate it into a perfectly structured JSON object matching the Objectives schema.
+Each question represents a multiple choice question (Objectives).
+
+Instructions:
+1. Extract ALL multiple choice questions.
+2. Extract or infer the academic term (e.g., 'First Term', 'Second Term') for each question from the document or context headers. If the term is not discernible from the document, fallback to "${defaultMeta.term}". If classLevel/subject metadata is missing, use classLevel="${defaultMeta.classLevel}" and subject="${defaultMeta.subject}".
+3. Parse the options carefully. Group each option into an array of strings formatted like: ["A) Option Text", "B) Option Text", ...]. E.g. ["A) Apple", "B) Banana", "C) Orange"].
+4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, or by reasoning through the question if not explicitly marked.
+5. questionType: Must be strictly 'multiple_choice'.
+6. examType: Must be strictly 'Objectives'.
+7. difficulty: Must be strictly 'Easy', 'Medium', or 'Hard'. Capitalize first letter. Default to 'Medium'.
+8. points: Must be a valid integer, defaulting to 1 if unknown.
+
+Strictly adhere to the provided JSON schema. Ensure 100% of questions are extracted without summaries or omissions.
+` : `
+You are "Exam GEN", a professional educational data extraction agent.
+Your goal is to parse the paper text and translate all structured theoretical, essay, short-answer, and theory questions matching the Theory schema.
+
+Instructions:
+1. Extract ALL theory or essay questions.
+2. Extract or infer the academic term (e.g., 'First Term', 'Second Term') for each question from the document or context headers. If the term is not discernible from the document, fallback to "${defaultMeta.term}". If classLevel/subject metadata is missing, use classLevel="${defaultMeta.classLevel}" and subject="${defaultMeta.subject}".
+3. questionType must be strictly 'fill_in_the_blank' or 'theory' or 'essay'. (If the question requires a descriptive answer, use 'theory').
+4. examType: Must be strictly 'Theory'.
+5. difficulty: Must be strictly 'Easy', 'Medium', or 'Hard'. Capitalize first letter. Default to 'Medium'.
+6. points: Must be a valid integer, defaulting to 5 if unknown or map as specified.
+7. Do NOT include options or correctAnswer properties.
+
+Strictly adhere to the provided JSON schema. Ensure 100% of questions are extracted without summaries or omissions.
+`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: prompt,
+        model: "gemini-2.5-flash",
+        contents: `${prompt}\n\nDocument Content to Parse:\n---\n${rawText}\n---`,
         config: {
           responseMimeType: "application/json",
-          responseSchema: examBatchSchema,
+          responseSchema: isObjectives ? objectivesSchema : theorySchema,
           temperature: 0.1
         }
       });

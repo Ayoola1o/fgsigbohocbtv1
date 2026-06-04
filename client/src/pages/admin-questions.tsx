@@ -256,11 +256,11 @@ export default function AdminQuestions() {
         throw new Error("Invalid response format from parser.");
       }
 
-      // Clean up options inside parsed questions (convert multiple_choice to multiple-choice, fill_in_the_blank to theory)
+      // Clean up options inside parsed questions (convert multiple_choice to multiple-choice, fill_in_the_blank/essay to theory)
       const normalized = parsed.map((q: any) => {
         let type = q.questionType;
         if (type === "multiple_choice") type = "multiple-choice";
-        if (type === "fill_in_the_blank") type = "theory";
+        if (type === "fill_in_the_blank" || type === "essay") type = "theory";
         
         let opts = q.options;
         if (type === "theory") opts = undefined;
@@ -268,7 +268,7 @@ export default function AdminQuestions() {
         return {
           questionText: q.questionText,
           questionType: type,
-          correctAnswer: q.correctAnswer,
+          correctAnswer: q.correctAnswer || (type === "theory" ? "Theory Question" : "Answer"),
           options: opts,
           difficulty: q.difficulty || "medium",
           points: q.points || 1
@@ -290,6 +290,10 @@ export default function AdminQuestions() {
     } finally {
       setIsParsingAI(false);
     }
+  };
+
+  const removeParsedQuestion = (indexToRemove: number) => {
+    setParsedQuestions(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   useEffect(() => {
@@ -938,7 +942,22 @@ export default function AdminQuestions() {
                 </div>
               </DialogHeader>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-4 relative">
+                {isParsingAI && (
+                  <div className="absolute inset-0 bg-slate-900/60 dark:bg-slate-950/75 backdrop-blur-[2px] z-50 rounded-2xl flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-200">
+                    <div className="relative flex items-center justify-center">
+                      <div className="h-14 w-14 rounded-full border-4 border-indigo-500/30 border-t-indigo-600 animate-spin" />
+                      <Sparkles className="absolute h-5 w-5 text-indigo-500 animate-pulse" />
+                    </div>
+                    <div className="text-center">
+                      <h4 className="text-sm font-black text-white tracking-wide uppercase">AI Extraction in Progress</h4>
+                      <p className="text-[11px] text-slate-200 max-w-[280px] mt-1 font-semibold leading-relaxed">
+                        Gemini AI is analyzing, formatting, and structuring your exam document...
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Left Column - Configuration & Inputs */}
                 <div className="lg:col-span-5 space-y-6">
                   <div className="space-y-4">
@@ -1079,16 +1098,74 @@ export default function AdminQuestions() {
                       </div>
                     </div>
 
+                    {/* Parser engine selection toggle */}
+                    <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Extraction Engine</span>
+                        <span className="text-[9px] text-slate-400 dark:text-slate-500">Local Regex parser vs Google Gemini AI</span>
+                      </div>
+                      <div className="flex gap-1 bg-slate-150 dark:bg-slate-800 p-0.5 rounded-lg">
+                        <button
+                          type="button"
+                          onClick={() => setParsingEngine('regex')}
+                          className={`px-2.5 py-1 text-[10px] rounded-md transition-all font-bold ${
+                            parsingEngine === 'regex'
+                              ? 'bg-white dark:bg-slate-700 text-indigo-650 dark:text-indigo-405 shadow-sm'
+                              : 'text-slate-550 hover:text-slate-700 dark:text-slate-400'
+                          }`}
+                        >
+                          Local Regex
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setParsingEngine('gemini')}
+                          className={`px-2.5 py-1 text-[10px] rounded-md transition-all font-bold ${
+                            parsingEngine === 'gemini'
+                              ? 'bg-white dark:bg-slate-700 text-indigo-650 dark:text-indigo-405 shadow-sm'
+                              : 'text-slate-550 hover:text-slate-700 dark:text-slate-400'
+                          }`}
+                        >
+                          Gemini AI ✨
+                        </button>
+                      </div>
+                    </div>
+
                     {importerTab === 'paste' ? (
                       <div className="space-y-2 animate-in fade-in duration-300">
                         <Textarea
                           placeholder={`Paste exam document here. Example format:\n\n1. What is the CPU?\nA. Core Processing Unit\nB. Central Processing Unit\nC. Centralised Processor\nD. Computer Power Unit\nAnswer: B`}
                           value={pastedText}
                           onChange={(e) => setPastedText(e.target.value)}
+                          disabled={isParsingAI}
                           className="min-h-[220px] max-h-[300px] font-mono text-xs bg-slate-50/50 dark:bg-slate-950/40 rounded-xl resize-y border-slate-200 dark:border-slate-800 focus:ring-indigo-550"
                         />
+                        
+                        {parsingEngine === 'gemini' && (
+                          <Button
+                            type="button"
+                            onClick={handleAIParsing}
+                            disabled={isParsingAI || !pastedText.trim()}
+                            className="w-full bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-700 hover:via-indigo-700 hover:to-blue-700 text-white font-black text-xs py-2 px-4 rounded-xl shadow-md shadow-indigo-500/10 flex items-center justify-center gap-2 group transition-all duration-300 h-9.5"
+                          >
+                            {isParsingAI ? (
+                              <>
+                                <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                                Gemini is Extracting questions...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 text-amber-300 group-hover:scale-110 transition-transform" />
+                                Extract Questions with Gemini AI ✨
+                              </>
+                            )}
+                          </Button>
+                        )}
+
                         <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium italic leading-normal">
-                          * Supports standard multiple choice option blocks (A, B, C, D) and answer tags. Unlabeled questions default to Theory.
+                          {parsingEngine === 'gemini' 
+                            ? "* Gemini AI parses unstructured papers using advanced language intelligence. Make sure class & subject metadata are correct before processing."
+                            : "* Supports standard multiple choice option blocks (A, B, C, D) and answer tags. Unlabeled questions default to Theory."
+                          }
                         </p>
                       </div>
                     ) : null}
@@ -1174,7 +1251,17 @@ export default function AdminQuestions() {
                                   {q.questionType}
                                 </Badge>
                               </div>
-                              <span className="text-[10px] font-bold text-slate-455">{q.difficulty} | {q.points} pt</span>
+                              <div className="flex items-center gap-2.5 text-[10px] font-bold text-slate-455">
+                                <span>{q.difficulty} | {q.points} pt</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeParsedQuestion(idx)}
+                                  className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 rounded"
+                                  title="Prune this question"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
                             
                             <p className="text-xs font-semibold leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">

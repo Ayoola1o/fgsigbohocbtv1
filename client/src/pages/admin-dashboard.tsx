@@ -239,7 +239,7 @@ export default function AdminDashboard() {
     totalExams: exams?.length || 0,
     activeExams: exams?.filter((e) => e.isActive).length || 0,
     totalQuestions: questions?.length || 0,
-    totalStudents: new Set(results?.map((r) => r.studentId)).size || 0,
+    totalStudents: students?.length || 0,
   };
 
   const passRate = results && results.length > 0
@@ -390,7 +390,7 @@ export default function AdminDashboard() {
               <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500" />
               <CardHeader className="pb-2">
                 <CardTitle className="text-xs font-black text-amber-700 dark:text-amber-400 flex items-center gap-2 tracking-widest uppercase">
-                  <Users className="h-4 w-4 text-amber-500" /> Tested Candidates
+                  <Users className="h-4 w-4 text-amber-500" /> Registered Students
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -399,7 +399,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="w-full bg-amber-200/50 dark:bg-amber-900/40 h-1.5 rounded-full mt-3" />
                 <p className="text-[10px] text-amber-655 dark:text-amber-300 mt-2 font-bold uppercase tracking-wider">
-                  Unique student test attempts
+                  Total registered student profiles
                 </p>
               </CardContent>
             </Card>
