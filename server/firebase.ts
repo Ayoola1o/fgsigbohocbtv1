@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, collection, getDocs, Timestamp, Firestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, collection, getDocs, Timestamp, Firestore } from "firebase/firestore";
 import "dotenv/config";
 
 const firebaseConfig = {
@@ -19,9 +19,11 @@ try {
         console.error("⚠️ [firebase.ts] Firebase Project ID is not defined in the backend environment variables!");
     } else {
         const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-        db = getFirestore(app);
+        db = initializeFirestore(app, {
+            experimentalForceLongPolling: true
+        });
         firebaseInitialized = true;
-        console.log("🔥 [firebase.ts] Server-side Firebase Firestore initialized successfully!");
+        console.log("🔥 [firebase.ts] Server-side Firebase Firestore initialized successfully with long-polling!");
     }
 } catch (error) {
     console.error("❌ [firebase.ts] Failed to initialize Firebase on the backend:", error);
