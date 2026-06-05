@@ -1,6 +1,7 @@
 node_modules
 old_node_modules
 dist
+api/[...route].js
 .DS_Store
 server/public
 server/data/
@@ -15,6 +16,10 @@ Implementation/
 Task/
 examextractor/
 .agents/
+.cursor/
+.vscode/
+.gemini/
+mcporter.json
 
 # Local Data & Uploads
 uploads/

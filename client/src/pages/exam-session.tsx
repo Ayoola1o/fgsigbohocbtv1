@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Clock, Flag, CheckCircle, AlertTriangle, Sparkles, ChevronLeft, ChevronRight, Send, HelpCircle, ShieldAlert, Award } from "lucide-react";
+import { Clock, Flag, CheckCircle, AlertTriangle, Sparkles, BookOpen, ChevronLeft, ChevronRight, Send, HelpCircle, ShieldAlert, Award } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ExamSession, Question, Exam, Result } from "@shared/schema";
@@ -191,6 +191,39 @@ export default function ExamSessionPage() {
     },
     enabled: !!session?.sessionQuestionIds && session.sessionQuestionIds.length > 0,
   });
+
+  // Extract unique subjects from the loaded questions list
+  const subjects = useMemo(() => {
+    if (!questions || questions.length === 0) return [];
+    const list: string[] = [];
+    questions.forEach((q) => {
+      const sub = q.subject || "General";
+      if (!list.includes(sub)) {
+        list.push(sub);
+      }
+    });
+    return list;
+  }, [questions]);
+
+  // Determine active subject based on active question
+  const currentQuestionObj = questions?.[currentQuestionIndex];
+  const activeSubject = currentQuestionObj?.subject || "General";
+
+  // Filter navigator question list by active subject
+  const activeSubjectQuestions = useMemo(() => {
+    if (!questions) return [];
+    return questions
+      .map((q, idx) => ({ q, idx }))
+      .filter((item) => (item.q.subject || "General") === activeSubject);
+  }, [questions, activeSubject]);
+
+  // Helper to calculate answered count per subject
+  const getSubjectStats = useCallback((subjName: string) => {
+    if (!questions) return { answered: 0, total: 0 };
+    const subjectQ = questions.filter((q) => (q.subject || "General") === subjName);
+    const answered = subjectQ.filter((q) => !!answers[q.id]).length;
+    return { answered, total: subjectQ.length };
+  }, [questions, answers]);
 
   // Track pacing and duration per question
   useEffect(() => {
@@ -480,28 +513,68 @@ export default function ExamSessionPage() {
 
       {/* Main Content Area */}
       <div className="container mx-auto px-4 py-10">
-        <div className="mx-auto max-w-4xl">
-          
-          {/* Active Question Display Card */}
-          <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-slate-100/50 dark:shadow-none overflow-hidden relative">
-            <CardContent className="p-6 sm:p-10">
-              {exam.examType === "Theory" ? (
-                currentQuestion ? (
-                  <TheoryQuestionView
-                    slot={currentQuestion as TheorySlot}
-                    questions={questions}
-                    answers={answers}
-                    onAnswerChange={handleAnswerChange}
-                    mainLabel={(currentQuestionIndex + 1).toString()}
-                  />
-                ) : (
-                  <div className="py-12 text-center text-slate-400">
-                    <ShieldAlert className="h-8 w-8 mx-auto mb-2 text-indigo-500" />
-                    <span>Question configuration not resolved.</span>
-                  </div>
-                )
-              ) : (
-                <>
+        {exam.examType === "Objectives" && subjects.length > 1 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Subject Sidebar */}
+            <div className="lg:col-span-3 space-y-4 animate-in fade-in slide-in-from-left-4 duration-300">
+              <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-100/30 dark:shadow-none overflow-hidden">
+                <div className="bg-slate-50/50 dark:bg-slate-950/40 px-5 py-4 border-b border-slate-100 dark:border-slate-850">
+                  <h3 className="text-xs font-black text-slate-800 dark:text-slate-205 uppercase tracking-wider flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-indigo-500" />
+                    Subject Sections
+                  </h3>
+                </div>
+                <CardContent className="p-3 space-y-1.5">
+                  {subjects.map((subj) => {
+                    const isActive = subj === activeSubject;
+                    const stats = getSubjectStats(subj);
+                    const isDone = stats.answered === stats.total;
+
+                    return (
+                      <button
+                        key={subj}
+                        onClick={() => {
+                          const firstIdx = questions.findIndex((q) => (q.subject || "General") === subj);
+                          if (firstIdx !== -1) {
+                            handleNavigate(firstIdx);
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between p-3 rounded-2xl text-left transition-all ${
+                          isActive
+                            ? "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-extrabold shadow-md shadow-indigo-650/10"
+                            : "text-slate-650 dark:text-slate-350 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 font-semibold"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          {isDone ? (
+                            <CheckCircle className={`h-4.5 w-4.5 shrink-0 ${isActive ? "text-white" : "text-emerald-500"}`} />
+                          ) : (
+                            <div className={`h-2 w-2 rounded-full shrink-0 ${isActive ? "bg-white" : "bg-indigo-500"}`} />
+                          )}
+                          <span className="truncate text-sm">{subj}</span>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            isActive
+                              ? "bg-white/10 text-white border-white/20"
+                              : "bg-slate-100 dark:bg-slate-950 border-slate-250 dark:border-slate-800 text-slate-500"
+                          }`}
+                        >
+                          {stats.answered}/{stats.total}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Area */}
+            <div className="lg:col-span-9 space-y-8 animate-in fade-in duration-300">
+              {/* Active Question Display Card */}
+              <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-slate-100/50 dark:shadow-none overflow-hidden relative">
+                <CardContent className="p-6 sm:p-10">
                   <div className="mb-8 flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="mb-3.5 flex items-center gap-2">
@@ -635,96 +708,339 @@ export default function ExamSessionPage() {
                       />
                     )}
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          {/* Core Controls Navigation */}
-          <div className="flex items-center justify-between gap-4">
-            <Button
-              variant="outline"
-              onClick={() => handleNavigate(currentQuestionIndex - 1)}
-              disabled={currentQuestionIndex === 0}
-              className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-100 font-bold h-11 px-6 transition-all"
-              data-testid="button-previous"
-            >
-              <ChevronLeft className="mr-1.5 h-5 w-5" />
-              Previous
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={() => handleNavigate(currentQuestionIndex + 1)}
-              disabled={currentQuestionIndex === totalSteps - 1}
-              className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 font-extrabold h-11 px-6 max-w-xs transition-all flex items-center justify-center gap-1.5"
-              data-testid="button-next"
-            >
-              Next
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
+              {/* Core Controls Navigation */}
+              <div className="flex items-center justify-between gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => handleNavigate(currentQuestionIndex - 1)}
+                  disabled={currentQuestionIndex === 0}
+                  className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-100 font-bold h-11 px-6 transition-all"
+                  data-testid="button-previous"
+                >
+                  <ChevronLeft className="mr-1.5 h-5 w-5" />
+                  Previous
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  onClick={() => handleNavigate(currentQuestionIndex + 1)}
+                  disabled={currentQuestionIndex === totalSteps - 1}
+                  className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 font-extrabold h-11 px-6 max-w-xs transition-all flex items-center justify-center gap-1.5"
+                  data-testid="button-next"
+                >
+                  Next
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+              </div>
 
-          {/* Matrix Grid Navigator Panel */}
-          <Card className="mt-10 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
-            <CardContent className="p-6">
-              <h3 className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-                <HelpCircle className="h-3.5 w-3.5 text-indigo-500" /> CBT Index Map Navigator
-              </h3>
-              
-              <div className="grid grid-cols-6 sm:grid-cols-10 gap-2.5">
-                {(exam.examType === "Theory" ? (exam.theoryConfig?.structure || []) : questions).map((q: any, idx: number) => {
-                  const isCurrent = idx === currentQuestionIndex;
-                  const isAnswered = exam.examType === "Theory"
-                    ? (exam.theoryConfig?.structure?.[idx]?.questionId && answers[exam.theoryConfig.structure[idx].questionId!])
-                    : answers[q.id];
+              {/* Matrix Grid Navigator Panel (Filtered by active subject) */}
+              <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <h3 className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                    <HelpCircle className="h-3.5 w-3.5 text-indigo-500" /> {activeSubject} Index Map Navigator
+                  </h3>
                   
-                  return (
-                    <Button
-                      key={idx}
-                      variant={isCurrent ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleNavigate(idx)}
-                      className={`relative h-10 w-10 p-0 font-extrabold rounded-xl transition-all ${
-                        isCurrent
-                          ? "bg-indigo-650 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/10 scale-105"
-                          : isAnswered
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400"
-                          : "border-slate-150/70 dark:border-slate-805 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350"
-                      }`}
-                      data-testid={`button-nav-${idx}`}
-                    >
-                      {idx + 1}
-                      {flaggedQuestions.has(idx) && (
-                        <div className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center border border-white dark:border-slate-900">
-                          <Flag className="h-2 w-2 fill-white" />
-                        </div>
-                      )}
-                    </Button>
-                  );
-                })}
-              </div>
-
-              {/* Navigator Legend */}
-              <div className="mt-5.5 pt-4.5 border-t border-slate-100 dark:border-slate-805/45 flex flex-wrap gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3.5 w-3.5 rounded-md bg-emerald-50 border border-emerald-250 dark:bg-emerald-950/30 dark:border-emerald-900/30" />
-                  <span>Answered Logs</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3.5 w-3.5 rounded-md border border-slate-200 dark:border-slate-800" />
-                  <span>Remaining</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3.5 w-3.5 rounded-md bg-rose-500 flex items-center justify-center text-white">
-                    <Flag className="h-2 w-2 fill-white" />
+                  <div className="grid grid-cols-6 sm:grid-cols-10 gap-2.5">
+                    {activeSubjectQuestions.map(({ q, idx }) => {
+                      const isCurrent = idx === currentQuestionIndex;
+                      const isAnswered = !!answers[q.id];
+                      
+                      return (
+                        <Button
+                          key={idx}
+                          variant={isCurrent ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleNavigate(idx)}
+                          className={`relative h-10 w-10 p-0 font-extrabold rounded-xl transition-all ${
+                            isCurrent
+                              ? "bg-indigo-650 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/10 scale-105"
+                              : isAnswered
+                              ? "bg-emerald-50 border-emerald-250 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400"
+                              : "border-slate-150/70 dark:border-slate-805 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350"
+                          }`}
+                          data-testid={`button-nav-${idx}`}
+                        >
+                          {idx + 1}
+                          {flaggedQuestions.has(idx) && (
+                            <div className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center border border-white dark:border-slate-900">
+                              <Flag className="h-2 w-2 fill-white" />
+                            </div>
+                          )}
+                        </Button>
+                      );
+                    })}
                   </div>
-                  <span>Flagged items</span>
+
+                  {/* Navigator Legend */}
+                  <div className="mt-5.5 pt-4.5 border-t border-slate-100 dark:border-slate-805/45 flex flex-wrap gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3.5 w-3.5 rounded-md bg-emerald-50 border border-emerald-250 dark:bg-emerald-950/30 dark:border-emerald-900/30" />
+                      <span>Answered Logs</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3.5 w-3.5 rounded-md border border-slate-200 dark:border-slate-800" />
+                      <span>Remaining</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3.5 w-3.5 rounded-md bg-rose-500 flex items-center justify-center text-white">
+                        <Flag className="h-2 w-2 fill-white" />
+                      </div>
+                      <span>Flagged items</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-4xl">
+            {/* Active Question Display Card */}
+            <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-slate-100/50 dark:shadow-none overflow-hidden relative">
+              <CardContent className="p-6 sm:p-10">
+                {exam.examType === "Theory" ? (
+                  currentQuestion ? (
+                    <TheoryQuestionView
+                      slot={currentQuestion as TheorySlot}
+                      questions={questions}
+                      answers={answers}
+                      onAnswerChange={handleAnswerChange}
+                      mainLabel={(currentQuestionIndex + 1).toString()}
+                    />
+                  ) : (
+                    <div className="py-12 text-center text-slate-400">
+                      <ShieldAlert className="h-8 w-8 mx-auto mb-2 text-indigo-500" />
+                      <span>Question configuration not resolved.</span>
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <div className="mb-8 flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="mb-3.5 flex items-center gap-2">
+                          <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold uppercase py-0.5 px-2.5 rounded-lg border border-indigo-100/20 dark:border-indigo-900/20 text-[10px]">
+                            Item No. {currentQuestionIndex + 1}
+                          </Badge>
+                          {currentQuestion && (
+                            <Badge variant="outline" className="border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-455 py-0.5 px-2.5 rounded-lg">
+                              {(currentQuestion as Question).points} Point{(currentQuestion as Question).points !== 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <h2
+                          className="text-lg sm:text-2xl font-black text-slate-800 dark:text-slate-150 leading-relaxed max-w-3xl"
+                          data-testid={`text-question-${currentQuestionIndex}`}
+                        >
+                          {(currentQuestion as Question)?.questionText}
+                        </h2>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleFlag(currentQuestionIndex)}
+                        className={`rounded-xl h-10 w-10 shrink-0 border transition-all ${
+                          flaggedQuestions.has(currentQuestionIndex) 
+                            ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-955/20 dark:border-rose-900/30" 
+                            : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900 text-slate-400"
+                        }`}
+                        data-testid="button-flag-question"
+                      >
+                        <Flag className={`h-4.5 w-4.5 ${flaggedQuestions.has(currentQuestionIndex) ? "fill-rose-500 text-rose-500" : ""}`} />
+                      </Button>
+                    </div>
+
+                    {/* Optional Image Diagram */}
+                    {(currentQuestion as Question)?.imageUrl && (
+                      <div className="mb-8 flex justify-center bg-slate-50 dark:bg-slate-950/40 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-805/40">
+                        <img
+                          src={(currentQuestion as Question).imageUrl!}
+                          alt="Question Diagram"
+                          className="max-h-[350px] w-auto max-w-full rounded-xl object-contain shadow-sm border border-slate-200/50"
+                        />
+                      </div>
+                    )}
+
+                    {/* Input Select Options */}
+                    <div className="space-y-4.5">
+                      {(currentQuestion as Question)?.questionType === "multiple-choice" && (currentQuestion as Question).options && (
+                        <RadioGroup
+                          value={answers[(currentQuestion as Question).id] || ""}
+                          onValueChange={(value) => handleAnswerChange((currentQuestion as Question).id, value)}
+                          className="grid gap-3.5"
+                        >
+                          {(currentQuestion as Question).options!.map((option, idx) => {
+                            const isSelected = answers[(currentQuestion as Question).id] === option;
+                            return (
+                              <div
+                                key={idx}
+                                onClick={() => handleAnswerChange((currentQuestion as Question).id, option)}
+                                className={`flex items-center space-x-3.5 rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 ${
+                                  isSelected 
+                                    ? "border-indigo-650 bg-indigo-50/15 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm" 
+                                    : "border-slate-150/70 hover:border-slate-300 hover:bg-slate-50/50 dark:border-slate-805 dark:hover:bg-slate-850/50"
+                                }`}
+                              >
+                                <RadioGroupItem
+                                  value={option}
+                                  id={`option-${idx}`}
+                                  className="border-slate-350 dark:border-slate-700 text-indigo-600 dark:text-indigo-500 shrink-0"
+                                  data-testid={`radio-option-${idx}`}
+                                  checked={isSelected}
+                                />
+                                <Label
+                                  htmlFor={`option-${idx}`}
+                                  className="flex-1 cursor-pointer text-[15px] font-semibold text-slate-750 dark:text-slate-250 leading-snug"
+                                >
+                                  {option}
+                                </Label>
+                              </div>
+                            );
+                          })}
+                        </RadioGroup>
+                      )}
+
+                      {(currentQuestion as Question)?.questionType === "true-false" && (
+                        <RadioGroup
+                          value={answers[(currentQuestion as Question).id] || ""}
+                          onValueChange={(value) => handleAnswerChange((currentQuestion as Question).id, value)}
+                          className="grid gap-3.5 sm:grid-cols-2"
+                        >
+                          {["True", "False"].map((option) => {
+                            const isSelected = answers[(currentQuestion as Question).id] === option;
+                            return (
+                              <div
+                                key={option}
+                                onClick={() => handleAnswerChange((currentQuestion as Question).id, option)}
+                                className={`flex items-center space-x-3.5 rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 ${
+                                  isSelected 
+                                    ? "border-indigo-650 bg-indigo-50/15 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm" 
+                                    : "border-slate-150/70 hover:border-slate-300 hover:bg-slate-50/50 dark:border-slate-805 dark:hover:bg-slate-850/50"
+                                }`}
+                              >
+                                <RadioGroupItem
+                                  value={option}
+                                  id={`option-${option}`}
+                                  className="border-slate-350 dark:border-slate-700 text-indigo-600 dark:text-indigo-500 shrink-0"
+                                  data-testid={`radio-${option.toLowerCase()}`}
+                                  checked={isSelected}
+                                />
+                                <Label
+                                  htmlFor={`option-${option}`}
+                                  className="flex-1 cursor-pointer text-base font-extrabold text-slate-750 dark:text-slate-250"
+                                >
+                                  {option}
+                                </Label>
+                              </div>
+                            );
+                          })}
+                        </RadioGroup>
+                      )}
+
+                      {(currentQuestion as Question)?.questionType === "short-answer" && (
+                        <Textarea
+                          placeholder="Type your structured descriptive response here..."
+                          value={answers[(currentQuestion as Question).id] || ""}
+                          onChange={(e) => handleAnswerChange((currentQuestion as Question).id, e.target.value)}
+                          className="min-h-32 text-base rounded-2xl border-slate-150/70 dark:border-slate-805 bg-slate-50/20 dark:bg-slate-900/20 focus:border-indigo-500 font-semibold p-4"
+                          data-testid="textarea-answer"
+                        />
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Core Controls Navigation */}
+            <div className="flex items-center justify-between gap-4">
+              <Button
+                variant="outline"
+                onClick={() => handleNavigate(currentQuestionIndex - 1)}
+                disabled={currentQuestionIndex === 0}
+                className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-100 font-bold h-11 px-6 transition-all"
+                data-testid="button-previous"
+              >
+                <ChevronLeft className="mr-1.5 h-5 w-5" />
+                Previous
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => handleNavigate(currentQuestionIndex + 1)}
+                disabled={currentQuestionIndex === totalSteps - 1}
+                className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 font-extrabold h-11 px-6 max-w-xs transition-all flex items-center justify-center gap-1.5"
+                data-testid="button-next"
+              >
+                Next
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Matrix Grid Navigator Panel */}
+            <Card className="mt-10 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
+              <CardContent className="p-6">
+                <h3 className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                  <HelpCircle className="h-3.5 w-3.5 text-indigo-500" /> CBT Index Map Navigator
+                </h3>
+                
+                <div className="grid grid-cols-6 sm:grid-cols-10 gap-2.5">
+                  {(exam.examType === "Theory" ? (exam.theoryConfig?.structure || []) : questions).map((q: any, idx: number) => {
+                    const isCurrent = idx === currentQuestionIndex;
+                    const isAnswered = exam.examType === "Theory"
+                      ? (exam.theoryConfig?.structure?.[idx]?.questionId && answers[exam.theoryConfig.structure[idx].questionId!])
+                      : answers[q.id];
+                    
+                    return (
+                      <Button
+                        key={idx}
+                        variant={isCurrent ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleNavigate(idx)}
+                        className={`relative h-10 w-10 p-0 font-extrabold rounded-xl transition-all ${
+                          isCurrent
+                            ? "bg-indigo-650 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/10 scale-105"
+                            : isAnswered
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400"
+                            : "border-slate-150/70 dark:border-slate-805 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350"
+                        }`}
+                        data-testid={`button-nav-${idx}`}
+                      >
+                        {idx + 1}
+                        {flaggedQuestions.has(idx) && (
+                          <div className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center border border-white dark:border-slate-900">
+                            <Flag className="h-2 w-2 fill-white" />
+                          </div>
+                        )}
+                      </Button>
+                    );
+                  })}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
+                {/* Navigator Legend */}
+                <div className="mt-5.5 pt-4.5 border-t border-slate-100 dark:border-slate-805/45 flex flex-wrap gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-3.5 w-3.5 rounded-md bg-emerald-50 border border-emerald-250 dark:bg-emerald-950/30 dark:border-emerald-900/30" />
+                    <span>Answered Logs</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-3.5 w-3.5 rounded-md border border-slate-200 dark:border-slate-800" />
+                    <span>Remaining</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-3.5 w-3.5 rounded-md bg-rose-500 flex items-center justify-center text-white">
+                      <Flag className="h-2 w-2 fill-white" />
+                    </div>
+                    <span>Flagged items</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Confirmation Submit Dialog */}
