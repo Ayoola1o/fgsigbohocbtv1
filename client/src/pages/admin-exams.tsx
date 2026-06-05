@@ -56,6 +56,7 @@ export default function AdminExams() {
   const [filterClass, setFilterClass] = useState<string>("__all__");
   const [filterSubject, setFilterSubject] = useState<string>("");
   const [filterExamType, setFilterExamType] = useState<string>("__all__");
+  const [filterStatus, setFilterStatus] = useState<string>("__all__");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
@@ -113,7 +114,9 @@ export default function AdminExams() {
     const matchClass = filterClass === "__all__" || exam.classLevel === filterClass;
     const matchSubject = !filterSubject || exam.subject.toLowerCase().includes(filterSubject.toLowerCase());
     const matchType = filterExamType === "__all__" || (exam.examType || "Objectives") === filterExamType;
-    return matchTerm && matchDept && matchClass && matchSubject && matchType;
+    const matchStatus = filterStatus === "__all__" || 
+      (filterStatus === "active" ? exam.isActive : !exam.isActive);
+    return matchTerm && matchDept && matchClass && matchSubject && matchType && matchStatus;
   });
 
   const totalItems = filteredExams.length;
@@ -170,7 +173,7 @@ export default function AdminExams() {
           </Badge>
           <div className="h-px bg-slate-100 dark:bg-slate-800/40 flex-1" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {/* Term Filter */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">School Term</label>
@@ -241,6 +244,20 @@ export default function AdminExams() {
               <option value="__all__">All Types</option>
               <option value="Objectives">Objectives (MCQ)</option>
               <option value="Theory">Theory</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Status</label>
+            <select
+              value={filterStatus}
+              onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+              className="border rounded-xl px-3 py-1.5 w-full bg-slate-50/50 dark:bg-slate-950/40 text-xs border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-9 font-bold text-slate-700 dark:text-slate-300"
+            >
+              <option value="__all__">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive / Draft</option>
             </select>
           </div>
         </div>
