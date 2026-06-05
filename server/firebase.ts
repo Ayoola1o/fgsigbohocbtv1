@@ -52,22 +52,32 @@ const ensureDb = (): Firestore => {
     return db;
 };
 
-// Fetchers for Firestore collections
+// Timeout utility to prevent Firebase queries from hanging when offline/slow
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    return Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Firebase request timed out")), timeoutMs)
+        )
+    ]);
+};
+
+// Fetchers for Firestore collections with safety timeout thresholds
 export const getFirestoreResults = async (): Promise<any[]> => {
     const database = ensureDb();
-    const snapshot = await getDocs(collection(database, "results"));
+    const snapshot = await withTimeout(getDocs(collection(database, "results")), 3000);
     return snapshot.docs.map(docToData);
 };
 
 export const getFirestoreQuestions = async (): Promise<any[]> => {
     const database = ensureDb();
-    const snapshot = await getDocs(collection(database, "questions"));
+    const snapshot = await withTimeout(getDocs(collection(database, "questions")), 3000);
     return snapshot.docs.map(docToData);
 };
 
 export const getFirestoreExams = async (): Promise<any[]> => {
     const database = ensureDb();
-    const snapshot = await getDocs(collection(database, "exams"));
+    const snapshot = await withTimeout(getDocs(collection(database, "exams")), 3000);
     return snapshot.docs.map(docToData);
 };
 

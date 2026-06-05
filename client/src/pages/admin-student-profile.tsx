@@ -39,9 +39,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
     Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, 
-    ResponsiveContainer 
+    ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import type { Result, Exam, Student } from "@shared/schema";
+import { PrintStudyGuideTemplate } from "@/components/PrintStudyGuideTemplate";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { createRoot } from "react-dom/client";
@@ -479,6 +480,91 @@ export default function AdminStudentProfile() {
         return { diagnosis, planSteps };
     }, [studentResults, subjectDiagnostics, academicTrajectory, averageScore, forensicIncidents]);
 
+    const historicalTimeline = useMemo(() => {
+        const sorted = [...studentResults].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+        return sorted.map((r, idx) => {
+            const exam = exams.find(e => e.id === r.examId);
+            return {
+                name: exam?.title || `Exam #${idx + 1}`,
+                score: r.percentage,
+                date: format(new Date(r.completedAt), "MMM dd")
+            };
+        });
+    }, [studentResults, exams]);
+
+    const classStudents = useMemo(() => {
+        if (!student) return [];
+        return students.filter(s => s.classLevel === student.classLevel);
+    }, [students, student]);
+
+    const classResults = useMemo(() => {
+        const classStudentIds = new Set(classStudents.map(s => s.studentId?.trim().toLowerCase()));
+        const classDbIds = new Set(classStudents.map(s => s.id?.trim().toLowerCase()));
+        return results.filter(r => 
+            r.studentId && (classStudentIds.has(r.studentId.trim().toLowerCase()) || classDbIds.has(r.studentId.trim().toLowerCase()))
+        );
+    }, [results, classStudents]);
+
+    const radarChartData = useMemo(() => {
+        const studentSubjectScores: Record<string, { sum: number; count: number }> = {};
+        studentResults.forEach(r => {
+            const exam = exams.find(e => e.id === r.examId);
+            if (!exam) return;
+            const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+            examQuestions.forEach(q => {
+                const subject = q.subject || "General";
+                const isCorrect = r.correctAnswers && r.correctAnswers[q.id] === true;
+                if (!studentSubjectScores[subject]) {
+                    studentSubjectScores[subject] = { sum: 0, count: 0 };
+                }
+                studentSubjectScores[subject].count++;
+                if (isCorrect) studentSubjectScores[subject].sum++;
+            });
+        });
+
+        const classSubjectScores: Record<string, { sum: number; count: number }> = {};
+        classResults.forEach(r => {
+            const exam = exams.find(e => e.id === r.examId);
+            if (!exam) return;
+            const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+            examQuestions.forEach(q => {
+                const subject = q.subject || "General";
+                const isCorrect = r.correctAnswers && r.correctAnswers[q.id] === true;
+                if (!classSubjectScores[subject]) {
+                    classSubjectScores[subject] = { sum: 0, count: 0 };
+                }
+                classSubjectScores[subject].count++;
+                if (isCorrect) classSubjectScores[subject].sum++;
+            });
+        });
+
+        const subjects = Array.from(new Set([
+            ...Object.keys(studentSubjectScores),
+            ...Object.keys(classSubjectScores)
+        ]));
+
+        return subjects.map(sub => {
+            const studData = studentSubjectScores[sub];
+            const studentPct = studData && studData.count > 0 
+                ? Math.round((studData.sum / studData.count) * 100)
+                : 0;
+
+            const classData = classSubjectScores[sub];
+            const classPct = classData && classData.count > 0
+                ? Math.round((classData.sum / classData.count) * 100)
+                : 0;
+
+            return {
+                subject: sub,
+                "Candidate": studentPct,
+                "Class Average": classPct
+            };
+        });
+    }, [studentResults, classResults, exams, questions]);
+
+
+
+
     // Mutation to sync analysis updates back to Firestore
     const syncAnalysisMutation = useMutation({
         mutationFn: async (updates: any) => {
@@ -617,12 +703,59 @@ export default function AdminStudentProfile() {
                                  score: b.percentage
                              }))}
                              onPrint={() => printWindow.print()}
-                         />);
-                     }
-                 }, 500);
-             };
-         }
-     };
+                          />);
+                      }
+                  }, 500);
+              };
+          }
+      };
+
+      const handlePrintStudyGuide = () => {
+          if (!student) return;
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+              printWindow.document.write('<html><head><title>Print Study Guide</title>');
+              const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+              styles.forEach(style => {
+                  printWindow.document.head.appendChild(style.cloneNode(true));
+              });
+              printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
+              printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
+              printWindow.document.close();
+
+              printWindow.onload = () => {
+                  setTimeout(() => {
+                      const container = printWindow.document.getElementById('print-root');
+                      if (container) {
+                          const root = createRoot(container);
+                          root.render(<PrintStudyGuideTemplate
+                              student={student}
+                              averageScore={averageScore}
+                              strengths={subjectDiagnostics.strengths}
+                              weaknesses={subjectDiagnostics.weaknesses}
+                              diagnosis={pedagogicalAnalysis.diagnosis}
+                              actionPlan={pedagogicalAnalysis.planSteps}
+                              onPrint={() => printWindow.print()}
+                              showPrintButton={true}
+                          />);
+                      }
+                  }, 500);
+              };
+          }
+      };
+
+
+
+
+
+
+
+                         
+                     
+                 
+             
+         
+     
 
      // Filter exams matching class and department
      const eligibleExams = exams.filter(e => {
@@ -692,7 +825,11 @@ export default function AdminStudentProfile() {
                  </div>
 
                  <div className="flex items-center gap-2">
-                     <Button onClick={() => window.print()} variant="outline" className="shadow-sm border-slate-200 hover:bg-slate-50 gap-2">
+                     <Button onClick={() => {}} className="hidden" />
+                      <Button onClick={handlePrintStudyGuide} className="shadow-md bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+                          <Brain className="h-4 w-4" /> Generate Study Guide
+                      </Button>
+                      <Button onClick={() => window.print()} variant="outline" className="shadow-sm border-slate-200 hover:bg-slate-50 gap-2">
                          <Printer className="h-4 w-4 text-slate-600" /> Print Summary
                      </Button>
                  </div>
@@ -815,7 +952,86 @@ export default function AdminStudentProfile() {
              </div>
 
 
-                          {/* Premium Pedagogical Diagnostic & Behavioral Analysis */}
+                          {/* Interactive Psychometrics & Telemetry Diagnostics */}
+                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                               {/* Radar Chart: Peer Comparison */}
+                               <Card className="border-none shadow-xl bg-white overflow-hidden">
+                                   <div className="bg-gradient-to-r from-slate-900 to-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                                       <div className="flex items-center gap-2">
+                                           <Brain className="h-5 w-5 text-indigo-400" />
+                                           <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                                               Subject Mastery vs. Class Cohort
+                                           </h3>
+                                       </div>
+                                       <Badge className="bg-indigo-500/20 text-indigo-300 font-bold border-indigo-500/30 text-[10px] uppercase">
+                                           Cohort Comparison
+                                       </Badge>
+                                   </div>
+                                   <CardContent className="p-6 flex flex-col items-center justify-center">
+                                       {radarChartData.length === 0 ? (
+                                           <div className="py-12 text-center text-slate-400 text-sm">
+                                               No subject assessment records available.
+                                           </div>
+                                       ) : (
+                                           <div className="w-full h-80">
+                                               <ResponsiveContainer width="100%" height="100%">
+                                                   <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarChartData}>
+                                                       <PolarGrid stroke="#e2e8f0" />
+                                                       <PolarAngleAxis dataKey="subject" tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }} />
+                                                       <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                       <Radar name="Candidate" dataKey="Candidate" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.4} />
+                                                       <Radar name="Class Average" dataKey="Class Average" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
+                                                       <ChartTooltip />
+                                                       <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                                   </RadarChart>
+                                               </ResponsiveContainer>
+                                           </div>
+                                       )}
+                                   </CardContent>
+                               </Card>
+
+                               {/* Area Chart: Progress Timeline */}
+                               <Card className="border-none shadow-xl bg-white overflow-hidden">
+                                   <div className="bg-gradient-to-r from-slate-900 to-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                                       <div className="flex items-center gap-2">
+                                           <TrendingUp className="h-5 w-5 text-indigo-400" />
+                                           <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                                               Academic Trajectory & Growth
+                                           </h3>
+                                       </div>
+                                       <Badge className="bg-indigo-500/20 text-indigo-300 font-bold border-indigo-500/30 text-[10px] uppercase">
+                                           Timeline
+                                       </Badge>
+                                   </div>
+                                   <CardContent className="p-6">
+                                       {historicalTimeline.length === 0 ? (
+                                           <div className="py-12 text-center text-slate-400 text-sm">
+                                               No historical results matching candidate profile.
+                                           </div>
+                                       ) : (
+                                           <div className="w-full h-80">
+                                               <ResponsiveContainer width="100%" height="100%">
+                                                   <AreaChart data={historicalTimeline} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                       <defs>
+                                                           <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
+                                                               <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4}/>
+                                                               <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0}/>
+                                                           </linearGradient>
+                                                       </defs>
+                                                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                                       <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} />
+                                                       <YAxis domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 10 }} />
+                                                       <ChartTooltip />
+                                                       <Area type="monotone" dataKey="score" name="Percentage Score" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#scoreColor)" />
+                                                   </AreaChart>
+                                               </ResponsiveContainer>
+                                           </div>
+                                       )}
+                                   </CardContent>
+                               </Card>
+                           </div>
+
+                           {/* Premium Pedagogical Diagnostic & Behavioral Analysis */}
                           <Card className="border-none shadow-xl bg-white overflow-hidden bg-gradient-to-r from-white via-indigo-50/5 to-white dark:from-slate-900 dark:to-slate-900 mb-8">
                               <div className="bg-gradient-to-r from-indigo-900 to-indigo-950 px-6 py-4 border-b border-indigo-950 flex items-center justify-between">
                                   <div className="flex items-center gap-2">
