@@ -20,7 +20,8 @@ This project now uses Firebase with offline persistence instead of a backend ser
 ### 3. Configure Environment Variables
 
 1. Copy `.env.example` to `.env`
-2. Fill in your Firebase configuration values from step 2
+2. Fill in your Firebase configuration values from step 2.
+3. Add your `GEMINI_API_KEY` from Google AI Studio to enable the AI-powered Smart Importer.
 
 ```bash
 cp .env.example .env

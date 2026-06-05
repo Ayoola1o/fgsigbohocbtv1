@@ -38,6 +38,7 @@
    VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
    VITE_FIREBASE_MESSAGING_SENDER_ID=123456789012
    VITE_FIREBASE_APP_ID=1:123456789012:web:abcdef123456
+   GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere
    ```
 
 ### Step 5: Initialize Admin User

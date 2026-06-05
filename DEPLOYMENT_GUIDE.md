@@ -204,6 +204,41 @@ You can view and manage your data directly in Supabase:
 
 ---
 
+## Step 7: Deploying to Vercel (Recommended Serverless Hosting)
+
+Vercel is the ideal hosting platform for this application due to its fast serverless functions and ease of use. The project is pre-configured with a custom backend bundler using `esbuild` to handle imports properly.
+
+### 7.1 Import to Vercel
+
+1. Push your repository to **GitHub**.
+2. Go to [vercel.com](https://vercel.com) and sign in.
+3. Click **"Add New"** → **"Project"**.
+4. Import your `fia-cbt-system` repository.
+
+### 7.2 Environment Variables
+
+Before deploying, configure your Environment Variables under the project settings in Vercel:
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `VITE_FIREBASE_API_KEY` | `your-api-key` | Firebase client API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `your-project.firebaseapp.com` | Firebase auth domain |
+| `VITE_FIREBASE_PROJECT_ID` | `your-project-id` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | `your-project.appspot.com` | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `your-sender-id` | Firebase messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | `your-app-id` | Firebase app ID |
+| `GEMINI_API_KEY` | `your-gemini-key` | Gemini API key (for AI document parsing) |
+
+### 7.3 Build Settings
+
+The default build command configured in `package.json` (`npm run build`) will:
+1. Compile the frontend to `/dist` using Vite (`vite build`).
+2. Run `build-backend.js` to bundle the typescript routes using esbuild.
+
+Vercel handles the output routing automatically via `vercel.json` rewrites.
+
+---
+
 ## Updating Your Application
 
 Whenever you make changes to your code:

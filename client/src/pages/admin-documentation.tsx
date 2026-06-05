@@ -67,7 +67,7 @@ export default function AdminDocumentation() {
           <div className="mt-3 flex items-center justify-between">
             <span className="text-[10px] text-indigo-300 font-bold">Active Build</span>
             <Badge className="bg-indigo-500/30 text-indigo-300 hover:bg-indigo-500/30 font-black border border-indigo-500/20 text-[10px] py-0.5 px-2">
-              V 5.7.4
+              V 5.7.7
             </Badge>
           </div>
         </div>
@@ -108,7 +108,99 @@ export default function AdminDocumentation() {
             <p>
               This ensures that student exam progress is continuously saved to the client browser's local state, protecting against sudden electrical grid interruptions, local area network disruptions, or internet connectivity issues. If a student loses their connection mid-exam, the CBT client shifts seamlessly into offline operation, storing answers and tracking timing locally until connection returns.
             </p>
-            
+
+            {/* System Workflow Visual Diagram */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 my-6 shadow-inner">
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-4 text-center">System Integration & Data Flow Diagram</span>
+              
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
+                {/* Step 1: Input Sources */}
+                <div className="bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-900 shadow-sm flex flex-col items-center text-center">
+                  <div className="h-9 w-9 rounded-full bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-500 mb-2">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <span className="font-extrabold text-[11px] text-slate-800 dark:text-slate-200">1. Ingestion Sources</span>
+                  <p className="text-[10px] text-slate-500 mt-1">Manual input or unstructured .docx/.txt uploads</p>
+                </div>
+
+                {/* Arrow / Line */}
+                <div className="hidden md:flex justify-center text-slate-300 dark:text-slate-700">
+                  <svg className="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </div>
+
+                {/* Step 2: Processing AI */}
+                <div className="bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-900 shadow-sm flex flex-col items-center text-center">
+                  <div className="h-9 w-9 rounded-full bg-pink-50 dark:bg-pink-950/60 flex items-center justify-center text-pink-500 mb-2">
+                    <Sparkles className="h-5 w-5 animate-pulse" />
+                  </div>
+                  <span className="font-extrabold text-[11px] text-slate-800 dark:text-slate-200">2. Smart Importer</span>
+                  <p className="text-[10px] text-slate-500 mt-1">Gemini AI parses text using structured JSON schema</p>
+                </div>
+
+                {/* Arrow / Line */}
+                <div className="hidden md:flex justify-center text-slate-300 dark:text-slate-700">
+                  <svg className="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </div>
+
+                {/* Step 3: Local Caching & Sync */}
+                <div className="bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-900 shadow-sm flex flex-col items-center text-center">
+                  <div className="h-9 w-9 rounded-full bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-500 mb-2">
+                    <CheckCircle className="h-5 w-5" />
+                  </div>
+                  <span className="font-extrabold text-[11px] text-slate-800 dark:text-slate-200">3. Local Sync & Db</span>
+                  <p className="text-[10px] text-slate-500 mt-1">Saves to IndexedDB local cache & syncs to Firestore</p>
+                </div>
+              </div>
+
+              <div className="flex justify-center my-4 text-slate-300 dark:text-slate-700">
+                <svg className="w-6 h-6 hidden md:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-900 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-6 w-6 rounded-md bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-500">
+                      <BookOpen className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200">A. Multi-Subject CBT Session</span>
+                  </div>
+                  <p className="text-[11px] text-slate-550 leading-relaxed">
+                    Splits session workspace into layout sections. Real-time question navigation sidebar tracks completions and indicators per subject.
+                  </p>
+                </div>
+
+                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-900 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-6 w-6 rounded-md bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-500">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200">B. O(N) Cognitive Analytics</span>
+                  </div>
+                  <p className="text-[11px] text-slate-550 leading-relaxed">
+                    Processes raw test submissions into psychometric averages, Item Difficulty (P-Index), Discrimination (D-Index), and telemetry speed guessing flags.
+                  </p>
+                </div>
+
+                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-900 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-6 w-6 rounded-md bg-pink-50 dark:bg-pink-950/50 flex items-center justify-center text-pink-500">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200">C. Diagnostic Study Guides</span>
+                  </div>
+                  <p className="text-[11px] text-slate-550 leading-relaxed">
+                    Compares student strengths against cohort mastery indices (radar charts) and compiles print-ready A4 Diagnostic study plans.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2 mt-4">
               <Card className="border border-slate-100 dark:border-slate-800/50 bg-white dark:bg-slate-900 shadow-sm rounded-xl">
                 <CardHeader className="p-4 pb-2">
@@ -148,18 +240,33 @@ export default function AdminDocumentation() {
               To create an exam, navigate to the **Exams** tab in the administrator console and click **"Create Exam Card"**. Give the exam an accurate name (e.g., *SS3 Physics - Term 3*), specify the duration in minutes, select the target class level, and set the target term.
             </p>
             <p>
-              Exams can be set as **Objectives** (Multiple Choice/True-False) or **Theory** (structured essay/descriptive slot layouts). Use the subject filters to search for ready-made questions, and select checkboxes to link questions directly to the exam profile.
+              Exams can be set as **Objectives** (Multiple Choice/True-False) or **Theory** (structured essay/descriptive slot layouts).
             </p>
+            <div className="p-3 bg-indigo-50/50 dark:bg-slate-900 rounded-xl border border-indigo-100/30 dark:border-slate-800 flex gap-3 text-xs">
+              <Info className="h-5 w-5 text-indigo-500 shrink-0" />
+              <div>
+                <span className="font-extrabold text-indigo-800 dark:text-indigo-400 block">Interactive Question Bank Linker:</span>
+                Instead of simple manual input, you can browse questions inline directly within the exam view using the embedded **Question Bank Linker**. It queries questions matching the class, term, and subject automatically. Admins can search keywords, filter, and link/unlink questions singly or in bulk using the "Select All" / "Clear All" shortcuts.
+              </div>
+            </div>
 
-            <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">B. Combining Multiple Exams (Consolidated Exams)</h3>
+            <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">B. Combining Multiple Exams (Consolidated / Multi-Subject Exams)</h3>
             <p>
-              If a student must take multiple subjects back-to-back under a single testing session (e.g. *General Science* containing Biology, Chemistry, and Physics subsections), administrators can:
+              If a student must take multiple subjects back-to-back under a single testing session (e.g. *Science Block* containing Biology, Chemistry, and Physics subsections), administrators can select questions belonging to different subjects.
             </p>
-            <ul className="list-disc pl-5 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-              <li>Create a master Exam Card named with the consolidated subject title.</li>
-              <li>Filter the question bank and check boxes for questions belonging to each sub-discipline.</li>
-              <li>The CBT engine will merge all selected question IDs into a single linear test map or structured outline for the candidate.</li>
-            </ul>
+            <div className="p-3 bg-emerald-50/50 dark:bg-slate-900 rounded-xl border border-emerald-100/30 dark:border-slate-800 flex gap-3 text-xs">
+              <Sparkles className="h-5 w-5 text-emerald-500 shrink-0" />
+              <div>
+                <span className="font-extrabold text-emerald-800 dark:text-emerald-400 block">Smart Multi-Subject Sidebar UI (Student Workspace):</span>
+                If the exam contains multiple subjects, the student workspace automatically adapts to a responsive 12-column split-grid layout:
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li><strong>Sidebar Subject Selector:</strong> Renders on the left side, allowing students to select which subject section to take first.</li>
+                  <li><strong>Progress Counters:</strong> Shows live tracking of answered questions per subject (e.g., <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">15/20 Completed</code>).</li>
+                  <li><strong>Completion Indicators:</strong> Displays visual green checkmark tags for completed sections.</li>
+                  <li><strong>Filtered Navigation:</strong> The numeric question index map displays only the active subject's questions, reducing clutter.</li>
+                </ul>
+              </div>
+            </div>
 
             <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">C. Activating & Deactivating Exams (Switching On/Off)</h3>
             <p>
@@ -195,20 +302,20 @@ export default function AdminDocumentation() {
 
             <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">B. AI-Powered Smart Question Importer</h3>
             <p>
-              To bypass manual input, click **"Import Questions"** on the questions catalog toolbar:
+              To bypass tedious manual inputs, administrators can leverage the advanced **Smart Question Importer**:
             </p>
             <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800/40 space-y-2">
               <span className="font-extrabold text-indigo-650 dark:text-indigo-400 text-xs block flex items-center gap-1">
-                <Sparkles className="h-4 w-4 animate-pulse" /> Gemini AI Integration Engine
+                <Sparkles className="h-4 w-4 animate-pulse" /> Gemini AI Document Ingestion Engine
               </span>
               <p className="text-xs text-slate-505">
-                You can toggle between the <strong>Local Regex Engine</strong> (quick parses of basic markdown lists) and <strong>Gemini AI Smart Importer</strong>. The Gemini AI engine uses Google's advanced LLM to scan, extract, and clean text documents (PDFs, Word clippings, unstructured logs) into typed questions.
+                The smart importer supports **direct file uploads** as well as raw text copy-pasting. Teachers can upload Microsoft Word (`.docx`) exam papers or text files (`.txt`).
               </p>
               <ul className="list-decimal pl-4.5 text-xs text-slate-505 dark:text-slate-405 space-y-1">
-                <li>Paste your question text block into the importer window.</li>
-                <li>Set the metadata tags: Class, Term, Subject, Exam Type.</li>
-                <li>Click <strong>"Extract Questions with Gemini AI ✨"</strong>.</li>
-                <li>Preview cards list in the dialog, click the <strong>Trash</strong> icon to prune bad entries, and click <strong>"Commit Questions"</strong>.</li>
+                <li><strong>Raw Extraction:</strong> If a `.docx` file is selected, the server uses <code>mammoth.js</code> to extract clean text.</li>
+                <li><strong>Structured AI Parsing:</strong> The text is submitted to Google Gemini API using structured JSON schemas, which extract question texts, options, difficulty indices, correct answers, and marks.</li>
+                <li><strong>Validation Grid Editor:</strong> Before items are written to Firestore, they are rendered in an interactive dialog list. Here, instructors can view parsed values, click inputs to edit text or adjust fields, use the trash button to prune items, and confirm validation.</li>
+                <li><strong>Database Batch Write:</strong> Clicking <strong>"Commit Questions"</strong> performs a clean batch write to update the catalog.</li>
               </ul>
             </div>
 
@@ -237,13 +344,28 @@ export default function AdminDocumentation() {
               <li><strong>Status:</strong> Isolate Passed vs Failed student attempts.</li>
             </ul>
 
-            <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">B. Resetting Student Sessions</h3>
+            <h3 className="text-sm font-extrabold text-slate-850 dark:text-slate-200 mt-4">B. Resetting Student Sessions</h3>
             <p>
               If a candidate experiences an authorized reset (e.g., student had a documented medical issue during the exam), administrators can delete or reset the exam result.
             </p>
             <p className="text-xs">
               Click the **Trash/Reset** icon next to the student's result record. This removes the final score and deletes the active exam session locks in Firestore, allowing the student to use their passcode to start the exam fresh.
             </p>
+
+            <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">C. Score Sheets & Printable AI-Driven Study Guides</h3>
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800/40 space-y-2 text-xs">
+              <span className="font-extrabold text-indigo-650 dark:text-indigo-400 block flex items-center gap-1">
+                <Download className="h-4 w-4" /> Score sheets & Consolidated Broadsheets
+              </span>
+              <p>
+                From the Results dashboard, admins can search, filter, and batch print scores.
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>Result View Toggles:</strong> Go to settings to toggle whether scores render as raw points (e.g., <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">42</code>) or percentages (e.g., <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">84%</code>) on final exports. Admins can also toggle the visibility of the examination titles.</li>
+                <li><strong>Consolidated PDF Broadsheet:</strong> Generate batch downloads for an entire class or department filtered by exam.</li>
+                <li><strong>A4 Printable Diagnostic Study Guide:</strong> Inside any student result view, clicking <strong>"Print Study Guide"</strong> compiles a customized A4-formatted PDF. It includes cognitive timelines, strength highlights, focus area items, and a structured study timeline mapped by the system's psychometrics.</li>
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -327,6 +449,24 @@ export default function AdminDocumentation() {
                 <span className="font-extrabold text-indigo-650 dark:text-indigo-400 text-xs block uppercase">D. Topic Mastery & Grade Curves</span>
                 <p className="text-xs leading-relaxed text-slate-505">
                   Aggregates student response metrics to trace overall mastery vectors by subject and plots a standardized bell curve of all examination results.
+                </p>
+              </div>
+
+              <div className="p-4 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-2xl border border-indigo-100/25 dark:border-indigo-900/20 space-y-1">
+                <span className="font-extrabold text-indigo-650 dark:text-indigo-400 text-xs block uppercase">E. Cohort Benchmarks & Academic Trajectories</span>
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Student Profiles integrate Recharts visualizers to detail cohort status:
+                </p>
+                <ul className="list-disc pl-5 text-[11px] text-slate-500 space-y-0.5">
+                  <li><strong>Cohort Mastery Radar Chart:</strong> Direct comparison mapping student scores against the class/department average across subjects to highlight learning gaps.</li>
+                  <li><strong>Historical Trajectory Area Graph:</strong> A chronologically plotted area graph tracking score variance and learning growth curves over terms.</li>
+                </ul>
+              </div>
+
+              <div className="p-4 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-2xl border border-indigo-100/25 dark:border-indigo-900/20 space-y-1">
+                <span className="font-extrabold text-indigo-650 dark:text-indigo-400 text-xs block uppercase">F. High-Performance Calculations</span>
+                <p className="text-xs leading-relaxed text-slate-550">
+                  Dashboard charts run on highly-optimized <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">O(N)</code> Map-based calculations. By replacing nested linear iteration loops with hash maps, analytical charts render instantly even with large sets of school data.
                 </p>
               </div>
             </div>
