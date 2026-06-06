@@ -345,7 +345,7 @@ export default function AdminAnalytics() {
               <TrendingUp className="h-5 w-5" />
             </div>
             <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1">
-              <Brain className="h-3.5 w-3.5" /> Fia CBT Backend worker thread engine v5.7.9
+              <Brain className="h-3.5 w-3.5" /> Fia CBT Backend worker thread engine v8.0.0
             </span>
             {analysisMode === "manual" ? (
               <Badge variant="outline" className="border-amber-250 text-amber-600 bg-amber-50/50 dark:bg-amber-955/40 font-black text-[9px] tracking-wide uppercase px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0">

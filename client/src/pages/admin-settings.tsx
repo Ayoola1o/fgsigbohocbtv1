@@ -221,7 +221,7 @@ export default function AdminSettings() {
               <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/40">
                 <span className="font-extrabold text-slate-600 dark:text-slate-400">Build Version:</span>
                 <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-black text-[11px] border border-indigo-100/30">
-                  v5.7.9
+                  v8.0.0
                 </span>
               </div>
               <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/40">

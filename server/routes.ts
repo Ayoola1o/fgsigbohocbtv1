@@ -916,41 +916,65 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         allExamSessions = await storage.getExamSessions();
       }
 
-      // Spin up background worker thread to run heavy statistics math
-      const { Worker } = require("worker_threads");
-      const worker = new Worker(path.join(process.cwd(), "workers", "psychometricWorker.js"), {
-        workerData: {
-          selectedExamId,
-          termFilter,
-          classFilter,
-          subjectFilter,
-          studentFilter,
-          allResults,
-          allQuestions,
-          allExams,
-          allStudents,
-          allExamSessions
-        }
-      });
+      const workerPayload = {
+        selectedExamId,
+        termFilter,
+        classFilter,
+        subjectFilter,
+        studentFilter,
+        allResults,
+        allQuestions,
+        allExams,
+        allStudents,
+        allExamSessions
+      };
 
-      worker.on("message", (computedData: any) => {
-        if (computedData.error) {
-          res.status(500).json({ error: computedData.error });
-        } else {
+      const runInline = () => {
+        if (res.headersSent) return;
+        try {
+          const { calculatePsychometrics } = require(path.join(process.cwd(), "workers", "psychometricWorker.js"));
+          const computedData = calculatePsychometrics(workerPayload);
           res.json(computedData);
+        } catch (calcError: any) {
+          console.error("Inline psychometrics computation failed:", calcError);
+          res.status(500).json({
+            error: "Analytics computation failed",
+            details: calcError.message || String(calcError)
+          });
         }
-      });
+      };
 
-      worker.on("error", (err: Error) => {
-        console.error("Worker Thread error:", err);
-        res.status(500).json({ error: "Worker Thread execution failed", details: err.message });
-      });
+      try {
+        let hasFinished = false;
+        const { Worker } = require("worker_threads");
+        const worker = new Worker(path.join(process.cwd(), "workers", "psychometricWorker.js"), {
+          workerData: workerPayload
+        });
 
-      worker.on("exit", (code: number) => {
-        if (code !== 0) {
-          console.warn(`Worker Thread stopped with exit code ${code}`);
-        }
-      });
+        worker.on("message", (computedData: any) => {
+          hasFinished = true;
+          if (computedData.error) {
+            res.status(500).json({ error: computedData.error });
+          } else {
+            res.json(computedData);
+          }
+        });
+
+        worker.on("error", (err: Error) => {
+          console.error("Worker Thread error, falling back to inline calculation:", err);
+          runInline();
+        });
+
+        worker.on("exit", (code: number) => {
+          if (code !== 0 && !hasFinished) {
+            console.warn(`Worker Thread stopped with exit code ${code}. Falling back to inline.`);
+            runInline();
+          }
+        });
+      } catch (workerError) {
+        console.warn("Worker Threads require failed/unsupported. Falling back to inline computation:", workerError);
+        runInline();
+      }
 
     } catch (error) {
       console.error("Analytics computation error:", error);

@@ -2,6 +2,13 @@
 
 All notable changes to the Faith Immaculate Academy CBT System will be documented in this file.
 
+## [8.0.0] - 2026-06-06
+
+### Added
+- **Multi-Subject Exam Sub-Counts & Breakdown**: Integrated active question count breakdowns per subject in the exam creation forms, exams list table, and the question linker dashboard.
+- **Multi-Department Question Selection**: Replaced single department select boxes with multi-department checkboxes for both manual question uploads and CSV/Smart importer configurations.
+- **Graceful Worker Thread Fallback**: Refactored the psychometrics background worker into an inline-runnable statistics module, providing an automatic inline execution fallback on serverless environments where `worker_threads` is unsupported.
+
 ## [5.7.9] - 2026-06-06
 
 ### Added

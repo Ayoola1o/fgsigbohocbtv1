@@ -393,12 +393,22 @@ export default function AdminExamDetails() {
                         structure
                       }
                     })}
-                    availableQuestions={questions?.filter(q =>
-                      q.examType === "Theory" &&
-                      q.classLevel === formData.classLevel &&
-                      q.subject === formData.subject &&
-                      (!formData.department || q.department === formData.department)
-                    ) || []}
+                    availableQuestions={questions?.filter(q => {
+                      const selectedSubjects = formData.subject
+                        ? formData.subject.split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+                        : [];
+                      const matchSubject = selectedSubjects.length > 0
+                        ? selectedSubjects.includes((q.subject || "").toLowerCase())
+                        : true;
+                      const qDepts = q.department ? q.department.split(",").map(d => d.trim()).filter(Boolean) : [];
+                      const matchDept = !formData.department || formData.department === "General"
+                        ? (qDepts.length === 0 || qDepts.includes("General"))
+                        : (qDepts.length === 0 || qDepts.includes("General") || qDepts.includes(formData.department));
+                      return q.examType === "Theory" &&
+                        q.classLevel === formData.classLevel &&
+                        matchSubject &&
+                        matchDept;
+                    }) || []}
 
                   />
                 </div>
@@ -417,9 +427,26 @@ export default function AdminExamDetails() {
                       Select objective or theory questions to compose this exam paper pool.
                     </CardDescription>
                   </div>
-                  <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-sm py-1 px-3 self-start sm:self-center">
-                    {formData.questionIds?.length || 0} Questions Linked
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1.5 self-start sm:self-center">
+                    <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-sm py-1 px-3">
+                      {formData.questionIds?.length || 0} Questions Linked
+                    </Badge>
+                    {formData.subject && formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).length > 1 && (
+                      <div className="flex flex-wrap gap-1 justify-end max-w-xs">
+                        {formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).map((subj: string) => {
+                          const count = (formData.questionIds || []).filter((qId: string) => {
+                            const q = questions?.find(question => question.id === qId);
+                            return q && q.subject.toLowerCase() === subj.toLowerCase();
+                          }).length;
+                          return (
+                            <Badge key={subj} variant="outline" className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-[10px] font-bold py-0.5 px-2">
+                              {subj}: {count}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-4">

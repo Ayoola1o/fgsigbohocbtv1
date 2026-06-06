@@ -1010,16 +1010,46 @@ export default function AdminQuestions() {
                       </div>
 
                       {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
-                        <div className="space-y-1.5 col-span-2">
-                          <Label className="text-xs font-bold text-slate-500">Department</Label>
-                          <Select value={csvDepartment} onValueChange={setCsvDepartment}>
-                            <SelectTrigger className="bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800"><SelectValue placeholder="Select Department" /></SelectTrigger>
-                            <SelectContent className="rounded-xl border-slate-150">
-                              {["Science", "Commercial", "Art", "Others", "General"].map(d => (
-                                <SelectItem key={d} value={d}>{d}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="space-y-1.5 col-span-2 animate-in fade-in duration-300">
+                          <Label className="text-xs font-bold text-slate-500 block">Department(s)</Label>
+                          <div className="flex flex-wrap gap-3 border rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800">
+                            {["General", "Science", "Commercial", "Art", "Others"].map((d) => {
+                              const selectedList = csvDepartment
+                                ? csvDepartment.split(",").map((x: any) => x.trim()).filter(Boolean)
+                                : ["General"];
+                              const isChecked = selectedList.includes(d);
+                              return (
+                                <div key={d} className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    id={`csv-dept-select-${d}`}
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      let newList;
+                                      if (e.target.checked) {
+                                        if (d === "General") {
+                                          newList = ["General"];
+                                        } else {
+                                          newList = selectedList.filter((x: any) => x !== "General");
+                                          newList.push(d);
+                                        }
+                                      } else {
+                                        newList = selectedList.filter((x: any) => x !== d);
+                                        if (newList.length === 0) {
+                                          newList = ["General"];
+                                        }
+                                      }
+                                      setCsvDepartment(newList.join(", "));
+                                    }}
+                                    className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 h-3.5 w-3.5 shrink-0"
+                                  />
+                                  <Label htmlFor={`csv-dept-select-${d}`} className="text-[11px] font-medium cursor-pointer select-none text-slate-705 dark:text-slate-350">
+                                    {d}
+                                  </Label>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2681,24 +2711,45 @@ function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initi
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="department">Department</Label>
-          <Select
-            value={formData.department}
-            onValueChange={(value: any) =>
-              setFormData({ ...formData, department: value })
-            }
-          >
-            <SelectTrigger data-testid="select-department">
-              <SelectValue placeholder="Select dept" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="General">General</SelectItem>
-              <SelectItem value="Science">Science</SelectItem>
-              <SelectItem value="Commercial">Commercial</SelectItem>
-              <SelectItem value="Art">Art</SelectItem>
-              <SelectItem value="Others">Others</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label className="text-xs font-bold text-slate-500 block">Department(s) *</Label>
+          <div className="flex flex-wrap gap-4 border rounded-xl p-3 bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800">
+            {["General", "Science", "Commercial", "Art", "Others"].map((d) => {
+              const selectedList = formData.department
+                ? formData.department.split(",").map((x: any) => x.trim()).filter(Boolean)
+                : ["General"];
+              const isChecked = selectedList.includes(d);
+              return (
+                <div key={d} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id={`dept-select-${d}`}
+                    checked={isChecked}
+                    onChange={(e) => {
+                      let newList;
+                      if (e.target.checked) {
+                        if (d === "General") {
+                          newList = ["General"];
+                        } else {
+                          newList = selectedList.filter((x: any) => x !== "General");
+                          newList.push(d);
+                        }
+                      } else {
+                        newList = selectedList.filter((x: any) => x !== d);
+                        if (newList.length === 0) {
+                          newList = ["General"];
+                        }
+                      }
+                      setFormData({ ...formData, department: newList.join(", ") });
+                    }}
+                    className="rounded border-slate-300 dark:border-slate-805 text-indigo-650 focus:ring-indigo-500 h-4 w-4 shrink-0"
+                  />
+                  <Label htmlFor={`dept-select-${d}`} className="text-xs font-medium cursor-pointer select-none text-slate-700 dark:text-slate-355">
+                    {d}
+                  </Label>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">

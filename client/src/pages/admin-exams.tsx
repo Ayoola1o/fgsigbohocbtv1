@@ -325,10 +325,27 @@ export default function AdminExams() {
 
                       {/* Subject */}
                       <TableCell className="py-4.5 px-4">
-                        {getSubjectBadge(
-                          exam.subject.includes(",") ? exam.title : exam.subject,
-                          exam.subject.includes(",")
-                        )}
+                        <div className="flex flex-col gap-1.5">
+                          {getSubjectBadge(
+                            exam.subject.includes(",") ? exam.title : exam.subject,
+                            exam.subject.includes(",")
+                          )}
+                          {exam.subject.includes(",") && (
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {exam.subject.split(",").map(s => s.trim()).filter(Boolean).map(subj => {
+                                const count = exam.questionIds?.filter(qId => {
+                                  const q = questions.find(question => question.id === qId);
+                                  return q && q.subject.toLowerCase() === subj.toLowerCase();
+                                }).length || 0;
+                                return (
+                                  <Badge key={subj} variant="outline" className="text-[9px] font-bold px-1 py-0 border-slate-200 dark:border-slate-800 text-slate-500 bg-slate-50/50">
+                                    {subj}: {count}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* Class & Dept */}
@@ -546,11 +563,16 @@ function ExamForm({
       ? formData.subject.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
 
+    const qDepts = q.department ? q.department.split(",").map(d => d.trim()).filter(Boolean) : [];
     const matchDept = !formData.department || formData.department === "General"
-      ? (!q.department || q.department === "General")
-      : (!q.department || q.department === "General" || q.department === formData.department);
+      ? (qDepts.length === 0 || qDepts.includes("General"))
+      : (qDepts.length === 0 || qDepts.includes("General") || qDepts.includes(formData.department));
 
-    let match = (selectedSubjects.length > 0 ? selectedSubjects.includes(q.subject) : true) &&
+    const matchSubject = selectedSubjects.length > 0
+      ? selectedSubjects.map(s => s.toLowerCase()).includes((q.subject || "").toLowerCase())
+      : true;
+
+    let match = matchSubject &&
       (formData.classLevel ? q.classLevel === formData.classLevel : true) &&
       (formData.term ? q.term === formData.term : true) &&
       matchDept;
@@ -1173,7 +1195,26 @@ function ExamForm({
               )
             )}
           </div>
-          <p className="text-xs font-bold text-slate-500 mt-1">{formData.questionIds.length} question(s) active in exam sheet pool</p>
+          <div className="flex flex-col gap-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800 pt-2.5">
+            <p className="text-xs font-black text-slate-700 dark:text-slate-300">
+              {formData.questionIds.length} question(s) active in exam sheet pool
+            </p>
+            {formData.subject && formData.subject.split(",").map(s => s.trim()).filter(Boolean).length > 1 && (
+              <div className="flex flex-wrap gap-1.5">
+                {formData.subject.split(",").map(s => s.trim()).filter(Boolean).map(subj => {
+                  const count = formData.questionIds.filter(qId => {
+                    const q = questions.find(question => question.id === qId);
+                    return q && q.subject.toLowerCase() === subj.toLowerCase();
+                  }).length;
+                  return (
+                    <Badge key={subj} variant="outline" className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-[10px] font-bold py-0.5 px-2">
+                      {subj}: {count} Qs
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

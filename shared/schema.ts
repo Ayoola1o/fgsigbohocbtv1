@@ -44,7 +44,7 @@ export const insertQuestionSchema = createInsertSchema(questions).omit({
   classLevel: z.enum(classLevels),
   term: z.enum(termOptions).default("First Term"),
   imageUrl: z.string().optional(),
-  department: z.enum(departments).optional(),
+  department: z.string().optional(),
 });
 
 

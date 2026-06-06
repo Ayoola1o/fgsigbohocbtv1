@@ -1,6 +1,4 @@
-const { parentPort, workerData } = require("worker_threads");
-
-try {
+function calculatePsychometrics(workerData) {
   const {
     selectedExamId,
     termFilter,
@@ -524,10 +522,7 @@ try {
       totalAttempts: totalCount
     };
   });
-
-
-  // ─── SEND COMPUTATION RESULTS BACK ───
-  parentPort.postMessage({
+  return {
     cohortPassProbability,
     atRiskCount,
     safeCount,
@@ -548,10 +543,23 @@ try {
     cronbachAlpha: Math.round(cronbachAlpha * 100) / 100,
     itemAnalysis: itemAnalysisSpreadsheet,
     totalCandidates
-  });
+  };
+}
 
-} catch (error) {
-  parentPort.postMessage({
-    error: error.message || String(error)
-  });
+// Export for main thread/inline calculation fallback
+module.exports = { calculatePsychometrics };
+
+// Conditionally hook into worker thread if available
+try {
+  const wt = require("worker_threads");
+  if (!wt.isMainThread && wt.parentPort) {
+    try {
+      const computed = calculatePsychometrics(wt.workerData);
+      wt.parentPort.postMessage(computed);
+    } catch (err) {
+      wt.parentPort.postMessage({ error: err.message || String(err) });
+    }
+  }
+} catch (e) {
+  // worker_threads require fails (e.g. in Vercel/serverless/bundler environments), ignore
 }
