@@ -16,6 +16,7 @@ export default function AdminDocumentation() {
     { id: "results", title: "4. Results Handling", icon: BarChart3 },
     { id: "students", title: "5. Student Registration", icon: GraduationCap },
     { id: "analysis", title: "6. Cognitive Analytics", icon: TrendingUp },
+    { id: "changelog", title: "7. System Release History", icon: Info },
   ];
 
   const handleScroll = (id: string) => {
@@ -67,7 +68,7 @@ export default function AdminDocumentation() {
           <div className="mt-3 flex items-center justify-between">
             <span className="text-[10px] text-indigo-300 font-bold">Active Build</span>
             <Badge className="bg-indigo-500/30 text-indigo-300 hover:bg-indigo-500/30 font-black border border-indigo-500/20 text-[10px] py-0.5 px-2">
-              V 5.7.7
+              V 5.7.9
             </Badge>
           </div>
         </div>
@@ -468,6 +469,117 @@ export default function AdminDocumentation() {
                 <p className="text-xs leading-relaxed text-slate-550">
                   Dashboard charts run on highly-optimized <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">O(N)</code> Map-based calculations. By replacing nested linear iteration loops with hash maps, analytical charts render instantly even with large sets of school data.
                 </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 7: Release History */}
+        <section id="changelog" className="scroll-mt-24 space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60 pb-2">
+            <Info className="h-5 w-5 text-indigo-500" />
+            <h2 className="text-xl font-extrabold text-slate-855 dark:text-slate-100">7. System Release & Build History</h2>
+          </div>
+          
+          <div className="space-y-6 text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+            <p>
+              The build pipeline history details cumulative releases and functional updates retrieved from the repository push logs:
+            </p>
+
+            <div className="relative border-l border-slate-200 dark:border-slate-800 pl-6 space-y-8 ml-2 mt-4">
+              {/* Release v5.7.9 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 ring-4 ring-white dark:ring-slate-950">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v5.7.9 <Badge className="bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">Active Build</Badge>
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">June 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">Candidate Security, Result Controls & Signatures</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Exam Re-attempt Lockout:</strong> Enforces zero-latency local storage locking hooks (`fia_submitted_exam_*`) to block student re-entry on form submits.</li>
+                  <li><strong>Verification Signatures:</strong> Dynamic settings uploads for Principal, Class Teacher, and Exam Officer Base64 signatures.</li>
+                  <li><strong>Print Verification:</strong> Embedded high-resolution verification signatures on official printed student report scorecards.</li>
+                  <li><strong>Result Visibility Toggle:</strong> Dynamic admin controls toggling candidate access to Performance Sheets.</li>
+                </ul>
+              </div>
+
+              {/* Release v5.7.7 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/50 ring-4 ring-white dark:ring-slate-950">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v5.7.7
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">May 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-indigo-650 dark:text-indigo-405 mt-0.5">Left-side Multi-subject Navigation Panel & Serverless Optimization</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Multi-subject Testing Sidebar:</strong> Added a sleek left-side subject navigation bar inside exam sessions to allow candidates to swap active exam sheets.</li>
+                  <li><strong>Vercel ESM Bundling:</strong> Resolved serverless path loading bugs via a custom script compile tool using `esbuild`.</li>
+                  <li><strong>Active/Inactive Filter:</strong> Injected filter controls into the Examination Management Board to filter active/inactive exams.</li>
+                  <li><strong>Documentation Uplift:</strong> Rebuilt the system operations manual to reflect active configurations.</li>
+                </ul>
+              </div>
+
+              {/* Release v5.7.4 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/30 ring-4 ring-white dark:ring-slate-950">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v5.7.4
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">April 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-indigo-600/75 dark:text-indigo-400/80 mt-0.5">Firebase Analytics, Profile Charts & UI/UX Revamp</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Visual Trajectory Models:</strong> Integrated Recharts analytics for cohort master comparison radar charts and historical performance grids.</li>
+                  <li><strong>Telemetry Pacing:</strong> Added telemetry filters to track speeding flags and suspicious student paces under 4 seconds.</li>
+                  <li><strong>UI UX Overhaul:</strong> Revamped Admin Portal Dashboards with an integrated dark mode theme selector.</li>
+                </ul>
+              </div>
+
+              {/* Release v5.2.0 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/20 ring-4 ring-white dark:ring-slate-950">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v5.2.0
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">March 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-450 mt-0.5">Smart Question Parser & Report Printers</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Fia Smart Importer:</strong> Implemented a parser to bulk import exam questions from Word `.docx` documents.</li>
+                  <li><strong>Consolidated Portfolios:</strong> Enabled multi-exam score printing and cumulative academic standing metrics.</li>
+                </ul>
+              </div>
+
+              {/* Release v1.0.0 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/10 ring-4 ring-white dark:ring-slate-950">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v1.0.0
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">January 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-450 mt-0.5">Foundation CBT Architecture</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Authentication Core:</strong> Secured administrator access paths and simple candidate login gates.</li>
+                  <li><strong>Exam Session:</strong> Created test timers and Firestore result storage integrations.</li>
+                </ul>
               </div>
             </div>
           </div>

@@ -13,6 +13,21 @@ export default function StudentPortal() {
   const [, setLocation] = useLocation();
   const [student, setStudent] = useState<Student | null>(null);
 
+  // Custom settings states
+  const [showResultButton, setShowResultButton] = useState<boolean>(true);
+  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setShowResultButton(localStorage.getItem("fia_cbt_settings_show_result_button") !== "false");
+      setHideCompleted(localStorage.getItem("fia_cbt_settings_hide_completed") === "true");
+    };
+
+    handleStorageChange();
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   useEffect(() => {
     const userStr = localStorage.getItem("student_user");
     if (!userStr) {
@@ -62,6 +77,22 @@ export default function StudentPortal() {
       (r.studentId?.trim().toLowerCase() === currentStudent?.studentId?.trim().toLowerCase() ||
        r.studentId?.trim().toLowerCase() === currentStudent?.id?.trim().toLowerCase())
     );
+  };
+
+  const isExamCompleted = (examId: string) => {
+    const hasResult = !!getStudentResult(examId);
+    if (hasResult) return true;
+    
+    // Check local storage intent lock
+    const studentIdKey = currentStudent?.studentId?.trim().toLowerCase();
+    const idKey = currentStudent?.id?.trim().toLowerCase();
+    if (studentIdKey && localStorage.getItem(`fia_submitted_exam_${studentIdKey}_${examId}`) === "true") {
+      return true;
+    }
+    if (idKey && localStorage.getItem(`fia_submitted_exam_${idKey}_${examId}`) === "true") {
+      return true;
+    }
+    return false;
   };
 
   const isExamBlocked = (examId: string) => {
@@ -179,6 +210,8 @@ export default function StudentPortal() {
               {exams
                 .filter((exam) => {
                   if (!exam.isActive) return false;
+                  // If hideCompleted setting is active, filter out completed exams
+                  if (hideCompleted && isExamCompleted(exam.id)) return false;
                   // If exam is general (no department or "General"), allow it for all
                   if (!exam.department || exam.department === "General") return true;
                   // If exam is specific to a department, student must match it
@@ -187,7 +220,7 @@ export default function StudentPortal() {
                 .map((exam) => {
                   const examResult = getStudentResult(exam.id);
                   const isBlocked = isExamBlocked(exam.id);
-                  const hasTaken = !!examResult;
+                  const hasTaken = isExamCompleted(exam.id);
                   return (
                     <Card
                       key={exam.id}
@@ -287,15 +320,29 @@ export default function StudentPortal() {
                             <div className="flex items-center justify-between text-xs font-extrabold text-emerald-600 dark:text-emerald-455">
                               <span className="flex items-center gap-1.5">
                                 <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
-                                Completed Score
+                                {showResultButton ? "Completed Score" : "Submission Status"}
                               </span>
-                              <span className="text-base font-black">{examResult.percentage}%</span>
+                              {showResultButton && examResult ? (
+                                <span className="text-base font-black">{examResult.percentage}%</span>
+                              ) : (
+                                <span className="text-xs font-bold bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded text-emerald-700 dark:text-emerald-400">Submitted</span>
+                              )}
                             </div>
-                            <Link href={`/exam/result/${examResult.id}`}>
-                              <Button variant="outline" className="w-full border-emerald-150 bg-emerald-50/50 hover:bg-emerald-100/40 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40 font-bold rounded-xl h-10 transition-colors">
-                                View Performance Sheet
+                            {showResultButton && examResult ? (
+                              <Link href={`/exam/result/${examResult.id}`}>
+                                <Button variant="outline" className="w-full border-emerald-150 bg-emerald-50/50 hover:bg-emerald-100/40 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40 font-bold rounded-xl h-10 transition-colors">
+                                  View Performance Sheet
+                                </Button>
+                              </Link>
+                            ) : !showResultButton ? (
+                              <Button disabled className="w-full bg-emerald-50/50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 font-bold rounded-xl h-10 border border-emerald-100/30 dark:border-emerald-900/30 cursor-not-allowed">
+                                Results Closed
                               </Button>
-                            </Link>
+                            ) : (
+                              <Button disabled className="w-full bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-650 font-bold rounded-xl h-10 cursor-not-allowed">
+                                Syncing Scorecard...
+                              </Button>
+                            )}
                           </div>
                         ) : (
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-805/40">

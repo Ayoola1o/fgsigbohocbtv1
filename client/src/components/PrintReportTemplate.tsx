@@ -45,6 +45,11 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     const schoolSloganSetting = localStorage.getItem("fia_cbt_settings_school_motto") !== "false"; // default true
     const scoreFormatSetting = localStorage.getItem("fia_cbt_settings_score_format") || "percentage";
 
+    // Load signature image assets
+    const principalSigBase64 = localStorage.getItem("fia_cbt_settings_signature_principal") || "";
+    const teacherSigBase64 = localStorage.getItem("fia_cbt_settings_signature_teacher") || "";
+    const officerSigBase64 = localStorage.getItem("fia_cbt_settings_signature_officer") || "";
+
     const handlePrint = () => {
         if (onPrint) {
             onPrint();
@@ -338,20 +343,41 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
 
                 {/* Footer/Signatures */}
                 <div className="mt-8 sm:mt-12 grid grid-cols-3 gap-6 sm:gap-12 text-center pb-6 sm:pb-8">
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center justify-end">
+                        <div className="h-12 flex items-end justify-center mb-1">
+                            {teacherSigBase64 ? (
+                                <img src={teacherSigBase64} alt="Form Master Signature" className="max-h-12 max-w-full object-contain" />
+                            ) : (
+                                <div className="h-6" />
+                            )}
+                        </div>
                         <div className="w-full border-t-2 border-gray-800 mb-1"></div>
                         <p className="text-[8px] sm:text-[10px] font-bold uppercase text-gray-700">Form Master Signature</p>
                     </div>
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center justify-end">
+                        <div className="h-12 flex items-end justify-center mb-1">
+                            {officerSigBase64 ? (
+                                <img src={officerSigBase64} alt="Exam Officer Signature" className="max-h-12 max-w-full object-contain" />
+                            ) : (
+                                <div className="h-6" />
+                            )}
+                        </div>
                         <div className="w-full border-t-2 border-gray-800 mb-1"></div>
                         <p className="text-[8px] sm:text-[10px] font-bold uppercase text-gray-700">Exam Officer Signature</p>
                     </div>
-                    <div className="flex flex-col items-center">
-                        {principalSignatureSetting ? (
-                            <div className="w-full border-t-2 border-gray-800 mb-1 italic font-serif text-blue-900 font-bold text-[10px] sm:text-sm">Approved</div>
-                        ) : (
-                            <div className="h-6 w-full mb-1"></div>
-                        )}
+                    <div className="flex flex-col items-center justify-end">
+                        <div className="h-12 flex items-end justify-center mb-1">
+                            {principalSignatureSetting ? (
+                                principalSigBase64 ? (
+                                    <img src={principalSigBase64} alt="Principal Signature" className="max-h-12 max-w-full object-contain" />
+                                ) : (
+                                    <span className="italic font-serif text-blue-900 font-bold text-[10px] sm:text-sm">Approved</span>
+                                )
+                            ) : (
+                                <div className="h-6" />
+                            )}
+                        </div>
+                        <div className="w-full border-t-2 border-gray-800 mb-1"></div>
                         <p className="text-[8px] sm:text-[10px] font-bold uppercase text-gray-700">Principal's Stamp</p>
                     </div>
                 </div>

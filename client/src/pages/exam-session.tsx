@@ -270,6 +270,13 @@ export default function ExamSessionPage() {
     }) => {
       console.log("submitExamMutation: Starting submission...");
 
+      // Save localized submission intent immediately to block re-entry
+      if (session?.studentId && session?.examId) {
+        const key = `fia_submitted_exam_${session.studentId.trim().toLowerCase()}_${session.examId}`;
+        localStorage.setItem(key, "true");
+        console.log(`Saved local submission intent: ${key}`);
+      }
+
       // 10 second timeout for the UI to wait before assuming success (local save)
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error("SUBMISSION_TIMEOUT")), 10000);

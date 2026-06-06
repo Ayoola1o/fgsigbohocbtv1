@@ -105,6 +105,32 @@ export default function ExamResult() {
     return `Focus your practice on ${weaknesses.join(", ")} to boost your performance. Review standard textbooks and complete mock exercises on these topics.`;
   }, [weaknesses]);
 
+  // Check global setting for result visibility
+  const showResultButton = localStorage.getItem("fia_cbt_settings_show_result_button") !== "false";
+  
+  if (!isAdminResult && !showResultButton) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-none shadow-2xl bg-white dark:bg-slate-900 rounded-3xl p-8 text-center animate-in fade-in zoom-in-95 duration-300">
+          <div className="mx-auto h-16 w-16 bg-amber-50 dark:bg-amber-955/20 text-amber-500 rounded-2xl flex items-center justify-center mb-6">
+            <AlertTriangle className="h-8 w-8" />
+          </div>
+          <CardTitle className="text-2xl font-black text-slate-850 dark:text-white mb-2">
+            Results Access Closed
+          </CardTitle>
+          <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold leading-relaxed mb-6">
+            The administrator has disabled candidate scorecard viewing for this session. Please contact the administrator or check back later.
+          </p>
+          <Link href="/">
+            <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl h-11 shadow-lg shadow-indigo-500/10 transition-all">
+              Return to Portal
+            </Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
+
   if (resultLoading || !result) {
     return (
       <div className="min-h-screen bg-background">

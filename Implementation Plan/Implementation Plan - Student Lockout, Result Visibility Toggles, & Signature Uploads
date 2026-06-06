@@ -1,0 +1,58 @@
+# Implementation Plan - Student Lockout, Result Visibility Toggles, & Signature Uploads
+
+This plan details the steps to:
+1. Prevent student re-attempts of completed exams by locking them out instantly, even when offline/network is slow, using localized browser tracking.
+2. Introduce granular control settings in the Admin System Settings page for showing results, hiding completed exams, and uploading signature images.
+3. Show uploaded Principal, Class Teacher, and Exam Officer signature images in print scorecards.
+4. Block access to student result pages when result viewing is globally disabled by admins.
+
+## Proposed Changes
+
+### 1. Admin Settings Page (`admin-settings.tsx`)
+Add configuration controls in the **System Settings** page:
+- **Allow Students to See Results**: Toggle switch (`fia_cbt_settings_show_result_button`).
+- **Hide Completed Exams from Portal**: Toggle switch (`fia_cbt_settings_hide_completed`).
+- **Official Signature Uploads**:
+  - File input fields for **Principal Signature**, **Form Master (Class Teacher) Signature**, and **Exam Officer Signature**.
+  - Convert file uploads to Base64 data URLs and persist them to browser `localStorage` (`fia_cbt_settings_signature_principal`, `fia_cbt_settings_signature_teacher`, `fia_cbt_settings_signature_officer`).
+  - Render sleek previews of the uploaded signatures and a "Remove Signature" reset button for each.
+
+---
+
+### 2. Student Portal & Exam Gateway (`student-portal.tsx`, `exam-start.tsx`, `exam-session.tsx`)
+Secure the candidate workspace against re-attempts and control visibility:
+- **Instant Local Tracking**: In `exam-session.tsx`'s `submitExamMutation` execution block, immediately write `localStorage.setItem("fia_submitted_exam_" + studentId + "_" + examId, "true")` before initiating network database requests.
+- **Student Portal Check**: In `student-portal.tsx`:
+  - A student has completed an exam if there is a Firestore result OR if the localized `fia_submitted_exam_...` key is present.
+  - If `fia_cbt_settings_hide_completed` is true, omit these completed exams from the dashboard.
+  - If `fia_cbt_settings_show_result_button` is false, hide the aggregate percentage score and replace the "View Performance Sheet" button with a simple status badge: `Submitted Successfully`.
+- **Exam Gateway Lockout**: In `exam-start.tsx`, if the student attempts to open the gateway, enforce the same check. If they have completed it, disable the "Begin Exam" button and show the completed session warning alert.
+
+---
+
+### 3. Student Result Review Lockout (`exam-result.tsx`)
+- If a student tries to access a result page directly (`/exam/result/:resultId`) while the `fia_cbt_settings_show_result_button` is toggled off, display a sleek, restricted access dashboard card explaining that results are currently closed for student review.
+
+---
+
+### 4. Print Scorecard Signatures (`PrintReportTemplate.tsx`)
+- Read the signature Base64 data URLs from `localStorage`.
+- In the print-ready scorecard template footer, render the uploaded signature images above the respective Form Master, Exam Officer, and Principal signature lines.
+
+---
+
+## Verification Plan
+
+### Automated / Build Verification
+- Run `npm run check` to ensure no TypeScript compilation or type mismatch errors occur.
+
+### Manual Verification
+1. **Settings Upload & Save**:
+   - Go to `/admin/settings`. Toggle the new switches, upload dummy signature PNGs, verify previews display correctly, and click "Save System Settings".
+2. **Student Portal Lockout**:
+   - Log in as a student and complete an exam. Verify the exam status card immediately changes to "Completed" (or disappears if "Hide Completed Exams" is active) upon submission.
+   - Verify the score is hidden if "Allow Students to See Results" is disabled.
+3. **Direct Navigation Lockout**:
+   - Disable student results view in settings. Try to navigate directly to the result page as a student. Verify the "Access Locked" screen displays.
+4. **Result Sheet Printing**:
+   - Open a result sheet in the admin dashboard and click "Print Scorecard". Verify the signatures print cleanly above the signature labels in the generated page.

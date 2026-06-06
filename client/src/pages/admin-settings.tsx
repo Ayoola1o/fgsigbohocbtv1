@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Save, Printer, Eye, EyeOff, Layout, Award, HelpCircle, ShieldAlert, Hourglass, Info } from "lucide-react";
+import { Settings, Save, Printer, Eye, EyeOff, Layout, Award, HelpCircle, ShieldAlert, Hourglass, Info, Upload, Trash2 } from "lucide-react";
 
 export default function AdminSettings() {
   const { toast } = useToast();
@@ -14,6 +14,13 @@ export default function AdminSettings() {
   const [removeTitle, setRemoveTitle] = useState<boolean>(false);
   const [reportSignature, setReportSignature] = useState<boolean>(true);
   const [schoolMotto, setSchoolMotto] = useState<boolean>(true);
+  
+  // Custom states requested by user
+  const [showResultButton, setShowResultButton] = useState<boolean>(true);
+  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
+  const [signaturePrincipal, setSignaturePrincipal] = useState<string>("");
+  const [signatureTeacher, setSignatureTeacher] = useState<string>("");
+  const [signatureOfficer, setSignatureOfficer] = useState<string>("");
   
   // Advanced Settings
   const [cheatProtection, setCheatProtection] = useState<boolean>(true);
@@ -56,7 +63,72 @@ export default function AdminSettings() {
     if (savedTimerWarning !== null) {
       setTimerWarning(Number(savedTimerWarning));
     }
+
+    // Load custom settings
+    const savedShowResultButton = localStorage.getItem("fia_cbt_settings_show_result_button");
+    if (savedShowResultButton !== null) {
+      setShowResultButton(savedShowResultButton === "true");
+    }
+
+    const savedHideCompleted = localStorage.getItem("fia_cbt_settings_hide_completed");
+    if (savedHideCompleted !== null) {
+      setHideCompleted(savedHideCompleted === "true");
+    }
+
+    const savedSigPrincipal = localStorage.getItem("fia_cbt_settings_signature_principal");
+    if (savedSigPrincipal !== null) {
+      setSignaturePrincipal(savedSigPrincipal);
+    }
+
+    const savedSigTeacher = localStorage.getItem("fia_cbt_settings_signature_teacher");
+    if (savedSigTeacher !== null) {
+      setSignatureTeacher(savedSigTeacher);
+    }
+
+    const savedSigOfficer = localStorage.getItem("fia_cbt_settings_signature_officer");
+    if (savedSigOfficer !== null) {
+      setSignatureOfficer(savedSigOfficer);
+    }
   }, []);
+
+  const handleSignatureUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setSignature: (base64: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload an image file (PNG, JPG, or SVG).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Limit size to ~500KB to prevent localStorage exceeding 5MB quota
+    if (file.size > 500 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Signature image must be under 500KB to ensure smooth synchronization.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setSignature(event.target.result as string);
+        toast({
+          title: "Image Uploaded",
+          description: "Signature loaded successfully. Click 'Save System Settings' to apply.",
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSaveSettings = () => {
     localStorage.setItem("fia_cbt_settings_score_format", scoreFormat);
@@ -67,6 +139,13 @@ export default function AdminSettings() {
     localStorage.setItem("fia_cbt_settings_passing_threshold", String(passingThreshold));
     localStorage.setItem("fia_cbt_settings_timer_warning", String(timerWarning));
     
+    // Save custom settings
+    localStorage.setItem("fia_cbt_settings_show_result_button", String(showResultButton));
+    localStorage.setItem("fia_cbt_settings_hide_completed", String(hideCompleted));
+    localStorage.setItem("fia_cbt_settings_signature_principal", signaturePrincipal);
+    localStorage.setItem("fia_cbt_settings_signature_teacher", signatureTeacher);
+    localStorage.setItem("fia_cbt_settings_signature_officer", signatureOfficer);
+
     // Dispatch a storage event so other open pages reactive components know settings changed
     window.dispatchEvent(new Event("storage"));
 
@@ -224,6 +303,154 @@ export default function AdminSettings() {
                   checked={schoolMotto}
                   onCheckedChange={setSchoolMotto}
                 />
+              </div>
+
+              {/* Allow Students to See Results Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300">
+                <div className="space-y-1 pr-4">
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Allow Students to View Performance Scores</span>
+                  <span className="text-xs text-slate-500 leading-relaxed block">
+                    When active, students can view their cumulative percentages, grades, and detailed question-by-question result logs.
+                  </span>
+                </div>
+                <Switch 
+                  checked={showResultButton}
+                  onCheckedChange={setShowResultButton}
+                />
+              </div>
+
+              {/* Hide Completed Exams Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300">
+                <div className="space-y-1 pr-4">
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Hide Completed Exams from Portal</span>
+                  <span className="text-xs text-slate-500 leading-relaxed block">
+                    Automatically filter out and remove exam cards from the student's available exam list immediately after submission.
+                  </span>
+                </div>
+                <Switch 
+                  checked={hideCompleted}
+                  onCheckedChange={setHideCompleted}
+                />
+              </div>
+
+            </CardContent>
+          </Card>
+
+          {/* Official Verification Signatures & Credentials Card */}
+          <Card className="border-none shadow-lg bg-white dark:bg-slate-900 rounded-2xl overflow-hidden animate-in fade-in duration-300">
+            <CardHeader className="border-b border-slate-50 dark:border-slate-800/40 pb-4">
+              <CardTitle className="text-base font-extrabold flex items-center gap-2 text-slate-850 dark:text-white">
+                <Printer className="h-4.5 w-4.5 text-indigo-500" /> Official Verification Signatures & Stamps
+              </CardTitle>
+              <CardDescription className="text-xs">Upload institutional signatures and stamps to append automatically to printed student report scorecards.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              
+              <div className="grid gap-6 sm:grid-cols-3">
+                {/* Principal Signature */}
+                <div className="space-y-3 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Principal Signature</span>
+                    <span className="text-xs text-slate-500 block">Appears in footer under "Principal's Stamp".</span>
+                  </div>
+                  <div className="space-y-3 mt-2">
+                    {signaturePrincipal ? (
+                      <div className="relative border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-slate-50/50 dark:bg-slate-950 flex flex-col items-center justify-center min-h-[100px]">
+                        <img src={signaturePrincipal} alt="Principal Signature" className="max-h-20 max-w-full object-contain" />
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setSignaturePrincipal("")} 
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 dark:bg-rose-950/80 dark:hover:bg-rose-900/80"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-6 cursor-pointer bg-slate-50/20 hover:bg-slate-50/55 dark:bg-slate-950/20 dark:hover:bg-slate-950/50 transition-all duration-300 min-h-[100px]">
+                        <Upload className="h-6 w-6 text-slate-400 mb-2 animate-bounce" />
+                        <span className="text-xs font-bold text-slate-500">Upload Image</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleSignatureUpload(e, setSignaturePrincipal)} 
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Form Master / Class Teacher Signature */}
+                <div className="space-y-3 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Class Teacher Signature</span>
+                    <span className="text-xs text-slate-500 block">Appears in footer under "Form Master Signature".</span>
+                  </div>
+                  <div className="space-y-3 mt-2">
+                    {signatureTeacher ? (
+                      <div className="relative border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-slate-50/50 dark:bg-slate-950 flex flex-col items-center justify-center min-h-[100px]">
+                        <img src={signatureTeacher} alt="Class Teacher Signature" className="max-h-20 max-w-full object-contain" />
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setSignatureTeacher("")} 
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 dark:bg-rose-955/80 dark:hover:bg-rose-900/80"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-6 cursor-pointer bg-slate-50/20 hover:bg-slate-50/55 dark:bg-slate-950/20 dark:hover:bg-slate-950/50 transition-all duration-300 min-h-[100px]">
+                        <Upload className="h-6 w-6 text-slate-400 mb-2 animate-bounce" />
+                        <span className="text-xs font-bold text-slate-500">Upload Image</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleSignatureUpload(e, setSignatureTeacher)} 
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Exam Officer Signature */}
+                <div className="space-y-3 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Exam Officer Signature</span>
+                    <span className="text-xs text-slate-500 block">Appears in footer under "Exam Officer Signature".</span>
+                  </div>
+                  <div className="space-y-3 mt-2">
+                    {signatureOfficer ? (
+                      <div className="relative border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-slate-50/50 dark:bg-slate-950 flex flex-col items-center justify-center min-h-[100px]">
+                        <img src={signatureOfficer} alt="Exam Officer Signature" className="max-h-20 max-w-full object-contain" />
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setSignatureOfficer("")} 
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 dark:bg-rose-955/80 dark:hover:bg-rose-900/80"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-6 cursor-pointer bg-slate-50/20 hover:bg-slate-50/55 dark:bg-slate-950/20 dark:hover:bg-slate-950/50 transition-all duration-300 min-h-[100px]">
+                        <Upload className="h-6 w-6 text-slate-400 mb-2 animate-bounce" />
+                        <span className="text-xs font-bold text-slate-500">Upload Image</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleSignatureUpload(e, setSignatureOfficer)} 
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
               </div>
 
             </CardContent>
