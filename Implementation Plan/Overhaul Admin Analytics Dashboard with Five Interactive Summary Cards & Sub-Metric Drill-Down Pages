@@ -1,0 +1,61 @@
+# Overhaul Admin Analytics Dashboard with Five Interactive Summary Cards & Sub-Metric Drill-Down Pages
+
+We will implement a premium, institutional analytics dashboard with five (5) primary interactive summary cards featuring embedded chart previews, a shared global filter bar, and drill-down views. All heavy psychometric calculations will run in a separate Worker Thread (`/workers/psychometricWorker.js`) to keep the Express server event loop unblocked.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Heavy Computations in Node.js Worker Thread**:
+> To prevent Express blocking, all analytics and collusion checks (O(N²)) will run asynchronously in a Worker Thread.
+>
+> **UI Styling**:
+> We will adhere to the following color tokens:
+> - **Emerald Green** (`#10b981`): Safe / Pass Predicted
+> - **Amber Yellow** (`#f59e0b`): Warning / Suspicious
+> - **Rose Red** (`#f43f5e`): Critical / Danger / High Fatigue
+> - **Indigo Blue** (`#6366f1`): Neutral / Volume Stats
+> - **Card States**: Crisp white background, subtle borders, soft shadows, and hover animations.
+
+## Proposed Changes
+
+---
+
+### Backend Components
+
+#### [NEW] [psychometricWorker.js](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/workers/psychometricWorker.js)
+Create the heavy calculations worker script at root:
+1. **Pass Probability Predictor**: Computes weighted likelihood of passing using historical score averages (60%), recent quiz trajectories (30%), and focus factors (10%).
+2. **Cognitive Fatigue Index**: Analyzes pacing accuracy drop + speed acceleration comparing the first 25% vs last 25% of question telemetry.
+3. **Collusion & Integrity Report**: Calculates incorrect choice matching similarity ($O(N^2)$ pairs analysis) and rapid guessing (<2.5s) / window blur telemetry flags.
+4. **Bell Curve Points**: Computes normal distribution curve parameters (mean $\mu$, standard deviation $\sigma$) for scores.
+5. **Psychometric Ledger (CTT)**: Computes Item Difficulty ($p$-value), Discrimination Index ($D$), Distractor choices percentage, and Cronbach's Alpha ($\alpha$) for the selected exam.
+
+#### [MODIFY] [routes.ts](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/server/routes.ts)
+1. Import `Worker` from `worker_threads` and instantiate `/workers/psychometricWorker.js`.
+2. Update the `/api/analytics` endpoint to fetch Firestore/Drizzle datasets, pass them into the worker, and stream the JSON response back.
+
+---
+
+### Frontend Components
+
+#### [MODIFY] [admin-analytics.tsx](file:///c:/Users/PC/Fia-Cbt-main/fgsigbohocbtv1/client/src/pages/admin-analytics.tsx)
+Overhaul the dashboard view to display the 5 cards with mini chart previews:
+1. **Student Pass Probability Predictor Card**: Embedded horizontal progress bar. Drill-down: student list table with At-Risk score sorting.
+2. **Cognitive Fatigue & Pacing Trajectory Card**: Mini line graph displaying response time vs accuracy slope. Drill-down: Scatter plots isolating Fast & Careless vs Exhausted.
+3. **Exam Cheating & Integrity Audit Report Card**: Colored donut chart. Drill-down: Security Audit Center showing prioritized threat log and telemetry timeline.
+4. **Class & Subject Grade Distribution Card**: Mini bell curve overlaying histogram. Drill-down: Curriculum and Cohort Distribution curve explorer.
+5. **Question Item Analysis Spreadsheet Card**: Mini matrix preview of flagged questions. Drill-down: sortable Psychometric Ledger spreadsheet.
+
+Introduce the **Unified Global Filter Bar** on all drill-down pages:
+- Selection sequence: `School Term ➔ Target Class ➔ Subject`.
+- Dynamic menu filtering: Choosing a Class limits available Subjects to those within the selected Class.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Build verification: Run `npm run check` to ensure there are no compilation errors.
+
+### Manual Verification
+- Deploy locally, navigate to `/admin/analytics`, select different exam contexts, toggle drill-down views, filter, and verify charts render correctly.

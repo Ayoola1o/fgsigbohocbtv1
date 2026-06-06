@@ -20,7 +20,8 @@ import {
   ArrowLeft, Search, Filter, ShieldCheck, AlertCircle, Edit, Trash2, Shield,
   RefreshCw
 } from "lucide-react";
-import type { Exam } from "@shared/schema";
+import type { Exam, Result } from "@shared/schema";
+import { getResults } from "@/lib/firebase-api";
 
 // Types for psychometric worker computed analytics
 interface AnalyticsData {
@@ -127,6 +128,19 @@ export default function AdminAnalytics() {
   // Fetch exams context
   const { data: exams = [] } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
+  });
+
+  // Fetch results to compute exam-by-exam analytics overview
+  const { data: results = [] } = useQuery<Result[]>({
+    queryKey: ["/api/results"],
+    queryFn: async () => {
+      try {
+        return await getResults();
+      } catch (err) {
+        console.error("AdminAnalytics: Error fetching results for comparative ledger:", err);
+        return [];
+      }
+    }
   });
 
   // Unique filters lists mapped dynamically from exams
@@ -825,6 +839,121 @@ export default function AdminAnalytics() {
             </Card>
 
           </div>
+
+          {/* Comparative Exam Performance Matrix */}
+          <Card className="border border-slate-150/70 dark:border-slate-800 rounded-2xl p-6">
+            <CardHeader className="pb-4 px-0 pt-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base font-extrabold text-slate-850 dark:text-white flex items-center gap-2">
+                    <Award className="h-5 w-5 text-indigo-500" /> Comparative Exam Performance Matrix
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Overview of historical averages, difficulty metrics, and diagnostic tracking across all examinations.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {exams && exams.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-slate-50/50 dark:bg-slate-950/30">
+                      <TableRow className="border-b border-slate-100 dark:border-slate-800">
+                        <TableHead className="font-bold text-[10px] uppercase">Exam Title</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase">Subject</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase">Class Level</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase text-center">Term</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase text-center">Candidates Sat</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase text-center">Class Average</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase text-center">Rigour Status</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase text-right">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {exams.map((exam) => {
+                        const examResults = results.filter(r => r.examId === exam.id);
+                        const candidatesCount = examResults.length;
+                        const meanScore = candidatesCount > 0
+                          ? Math.round(examResults.reduce((sum, r) => sum + (r.percentage || 0), 0) / candidatesCount)
+                          : 0;
+                        
+                        let rigourLabel = "No Data";
+                        let rigourClass = "bg-slate-100 text-slate-650 dark:bg-slate-800 dark:text-slate-400";
+                        
+                        if (candidatesCount > 0) {
+                          if (meanScore < 50) {
+                            rigourLabel = "Rigorous (Hard)";
+                            rigourClass = "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-450 border-rose-100/30";
+                          } else if (meanScore <= 75) {
+                            rigourLabel = "Balanced (Moderate)";
+                            rigourClass = "bg-amber-50 text-amber-600 dark:bg-amber-955/40 dark:text-amber-450 border-amber-100/30";
+                          } else {
+                            rigourLabel = "Optimal (Easy)";
+                            rigourClass = "bg-emerald-50 text-emerald-600 dark:bg-emerald-955/40 dark:text-emerald-450 border-emerald-100/30";
+                          }
+                        }
+
+                        return (
+                          <TableRow key={exam.id} className="border-b border-slate-50 dark:border-slate-850 hover:bg-slate-50/30 dark:hover:bg-slate-900/10">
+                            <TableCell className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                              {exam.title}
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-slate-500">
+                              {exam.subject}
+                            </TableCell>
+                            <TableCell className="text-xs font-bold text-slate-650 dark:text-slate-400">
+                              <Badge variant="secondary" className="font-extrabold text-[9px] uppercase tracking-wide px-1.5 py-0">
+                                {exam.classLevel}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-center font-semibold text-slate-500">
+                              {exam.term}
+                            </TableCell>
+                            <TableCell className="text-xs text-center font-bold text-slate-700 dark:text-slate-300">
+                              {candidatesCount}
+                            </TableCell>
+                            <TableCell className="text-xs text-center font-black text-slate-900 dark:text-white">
+                              {candidatesCount > 0 ? `${meanScore}%` : "-"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className={`font-black text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-lg ${rigourClass}`}>
+                                {rigourLabel}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedExamId(exam.id);
+                                  if (exam.term) setSelectedTerm(exam.term);
+                                  if (exam.classLevel) setSelectedClass(exam.classLevel);
+                                  if (exam.subject) setSelectedSubject(exam.subject);
+                                  setSelectedStudentFilter("__all__");
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  toast({
+                                    title: "Dashboard Context Set",
+                                    description: `Showing diagnostic details for ${exam.title}.`,
+                                  });
+                                }}
+                                className="h-7 text-[10px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-305 flex items-center gap-1 ml-auto"
+                              >
+                                Focus Analytics <ArrowUpRight className="h-3 w-3" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center text-slate-400 text-xs py-10">No examinations found in database.</div>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
       )}
 
