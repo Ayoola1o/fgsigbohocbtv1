@@ -57,6 +57,7 @@ export default function AdminExams() {
   const [filterSubject, setFilterSubject] = useState<string>("");
   const [filterExamType, setFilterExamType] = useState<string>("__all__");
   const [filterStatus, setFilterStatus] = useState<string>("__all__");
+  const [filterMultiple, setFilterMultiple] = useState<string>("__all__");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
@@ -116,7 +117,13 @@ export default function AdminExams() {
     const matchType = filterExamType === "__all__" || (exam.examType || "Objectives") === filterExamType;
     const matchStatus = filterStatus === "__all__" || 
       (filterStatus === "active" ? exam.isActive : !exam.isActive);
-    return matchTerm && matchDept && matchClass && matchSubject && matchType && matchStatus;
+    
+    // Check if it's a multiple subject exam (comma-separated subjects)
+    const isMultipleSubject = exam.subject.includes(",");
+    const matchMultiple = filterMultiple === "__all__" ||
+      (filterMultiple === "multiple" ? isMultipleSubject : !isMultipleSubject);
+      
+    return matchTerm && matchDept && matchClass && matchSubject && matchType && matchStatus && matchMultiple;
   });
 
   const totalItems = filteredExams.length;
@@ -173,7 +180,7 @@ export default function AdminExams() {
           </Badge>
           <div className="h-px bg-slate-100 dark:bg-slate-800/40 flex-1" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           {/* Term Filter */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">School Term</label>
@@ -258,6 +265,20 @@ export default function AdminExams() {
               <option value="__all__">All Statuses</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive / Draft</option>
+            </select>
+          </div>
+
+          {/* Subject Format Filter */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Subject Format</label>
+            <select
+              value={filterMultiple}
+              onChange={e => { setFilterMultiple(e.target.value); setCurrentPage(1); }}
+              className="border rounded-xl px-3 py-1.5 w-full bg-slate-50/50 dark:bg-slate-950/40 text-xs border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-9 font-bold text-slate-700 dark:text-slate-300"
+            >
+              <option value="__all__">All Formats</option>
+              <option value="single">Single Subject</option>
+              <option value="multiple">Multiple Subjects</option>
             </select>
           </div>
         </div>
