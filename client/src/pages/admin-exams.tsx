@@ -100,7 +100,10 @@ export default function AdminExams() {
   });
 
   // Custom Subject badge colors
-  const getSubjectBadge = (subj: string) => {
+  const getSubjectBadge = (subj: string, isMulti: boolean = false) => {
+    if (isMulti) {
+      return <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/40 font-bold">{subj}</Badge>;
+    }
     const s = subj.toLowerCase();
     if (s.includes("math")) return <Badge className="bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/40 font-bold">Mathematics</Badge>;
     if (s.includes("english")) return <Badge className="bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/40 font-bold">English</Badge>;
@@ -322,7 +325,10 @@ export default function AdminExams() {
 
                       {/* Subject */}
                       <TableCell className="py-4.5 px-4">
-                        {getSubjectBadge(exam.subject)}
+                        {getSubjectBadge(
+                          exam.subject.includes(",") ? exam.title : exam.subject,
+                          exam.subject.includes(",")
+                        )}
                       </TableCell>
 
                       {/* Class & Dept */}

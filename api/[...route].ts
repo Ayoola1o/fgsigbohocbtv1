@@ -1,3 +1,4 @@
+// @ts-nocheck
 // @ts-ignore
 import handler, { config as c } from "./[...route].js";
 

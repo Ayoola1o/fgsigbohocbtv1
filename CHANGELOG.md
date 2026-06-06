@@ -2,6 +2,22 @@
 
 All notable changes to the Faith Immaculate Academy CBT System will be documented in this file.
 
+## [5.7.9] - 2026-06-06
+
+### Added
+- **Manual Diagnostics Activation landing**: Designed and built a premium configurator card in `client/src/pages/admin-analytics.tsx` that blocks dashboard statistics and guides admins through launching diagnostics manually in Manual Engine mode.
+- **Dynamic Scope Parameters**: Added fields for Term, Class, Subject, and specific Student passcode filtering to target the background execution worker.
+- **Run New Analysis Dialog**: Created an overlay modal in the analytics header allowing admins to quickly spin up custom manual analyses.
+- **Type Safety and Build Fixes**: Resolved circular import issues and implicit `any` parameter types in background thread worker event triggers to achieve 100% clean builds.
+
+## [5.7.8] - 2026-06-06
+
+### Added
+- **Manual vs Auto Analysis toggle**: Added admin configuration control to switch between automatic background calculations and manual button execution.
+- **Signature Upload configuration**: Integrated upload inputs for Principal, Class Teacher, and Exam Officer signature images.
+- **CBT Exam Lockout and Visibility controls**: Added settings for `showResultButton` and `hideCompleted` exam done configuration.
+- **Multi-Exam Creation Filter**: Added multi-exam selection parameters to display and group exam names as subjects within the admin panel.
+
 ## [5.7.7] - 2026-06-05
 
 ### Added

@@ -21,7 +21,8 @@ export default function AdminSettings() {
   const [signaturePrincipal, setSignaturePrincipal] = useState<string>("");
   const [signatureTeacher, setSignatureTeacher] = useState<string>("");
   const [signatureOfficer, setSignatureOfficer] = useState<string>("");
-  
+  const [analysisMode, setAnalysisMode] = useState<"automatic" | "manual" | string>("automatic");
+
   // Advanced Settings
   const [cheatProtection, setCheatProtection] = useState<boolean>(true);
   const [passingThreshold, setPassingThreshold] = useState<number>(50);
@@ -89,6 +90,11 @@ export default function AdminSettings() {
     if (savedSigOfficer !== null) {
       setSignatureOfficer(savedSigOfficer);
     }
+
+    const savedAnalysisMode = localStorage.getItem("fia_cbt_settings_analysis_mode");
+    if (savedAnalysisMode !== null) {
+      setAnalysisMode(savedAnalysisMode);
+    }
   }, []);
 
   const handleSignatureUpload = (
@@ -145,6 +151,7 @@ export default function AdminSettings() {
     localStorage.setItem("fia_cbt_settings_signature_principal", signaturePrincipal);
     localStorage.setItem("fia_cbt_settings_signature_teacher", signatureTeacher);
     localStorage.setItem("fia_cbt_settings_signature_officer", signatureOfficer);
+    localStorage.setItem("fia_cbt_settings_analysis_mode", analysisMode);
 
     // Dispatch a storage event so other open pages reactive components know settings changed
     window.dispatchEvent(new Event("storage"));
@@ -466,6 +473,24 @@ export default function AdminSettings() {
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               
+              {/* Analysis Mode Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300">
+                <div className="space-y-1 pr-4">
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Analytics Computation Mode</span>
+                  <span className="text-xs text-slate-500 leading-relaxed block">
+                    Choose whether the psychometrics engine automatically runs on page load/filter change, or runs manually when clicking "Run Analysis".
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={`text-xs font-bold ${analysisMode === "manual" ? "text-indigo-650" : "text-slate-400"}`}>Manual</span>
+                  <Switch 
+                    checked={analysisMode === "automatic"}
+                    onCheckedChange={(checked) => setAnalysisMode(checked ? "automatic" : "manual")}
+                  />
+                  <span className={`text-xs font-bold ${analysisMode === "automatic" ? "text-indigo-650" : "text-slate-400"}`}>Auto</span>
+                </div>
+              </div>
+
               {/* Cheat Protection Switch */}
               <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300">
                 <div className="space-y-1 pr-4">

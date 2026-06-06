@@ -498,12 +498,32 @@ export default function AdminDocumentation() {
                   </h3>
                   <span className="text-xs font-bold text-slate-400">June 2026</span>
                 </div>
-                <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">Candidate Security, Result Controls & Signatures</p>
+                <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">Manual Diagnostics & Scoped Psychometrics Worker Engine</p>
                 <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
-                  <li><strong>Exam Re-attempt Lockout:</strong> Enforces zero-latency local storage locking hooks (`fia_submitted_exam_*`) to block student re-entry on form submits.</li>
-                  <li><strong>Verification Signatures:</strong> Dynamic settings uploads for Principal, Class Teacher, and Exam Officer Base64 signatures.</li>
-                  <li><strong>Print Verification:</strong> Embedded high-resolution verification signatures on official printed student report scorecards.</li>
-                  <li><strong>Result Visibility Toggle:</strong> Dynamic admin controls toggling candidate access to Performance Sheets.</li>
+                  <li><strong>Diagnostics Activation Panel:</strong> Premium dashboard UI to launch scoped psychometrics calculations in manual processing mode.</li>
+                  <li><strong>Target Search Coordinates:</strong> Ability to restrict background calculations to specific classes, subjects, terms, or student IDs.</li>
+                  <li><strong>Header Control Hub:</strong> Dedicated run badges and interactive overlay modal triggers for dynamic on-demand analyses.</li>
+                  <li><strong>ESM & Event Fixes:</strong> Fixed circular TS compilation definitions and typings inside worker thread responses.</li>
+                </ul>
+              </div>
+
+              {/* Release v5.7.8 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/80 ring-4 ring-white dark:ring-slate-950">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v5.7.8
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">June 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-indigo-500 dark:text-indigo-400 mt-0.5">Candidate Security, Result Lockout & Signature Configs</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Exam Re-attempt Lockout:</strong> Client-side browser restrictions blocking candidate access upon submission.</li>
+                  <li><strong>Manual/Automatic settings:</strong> Admin config toggle to schedule automated analyses vs manual execution.</li>
+                  <li><strong>Official Signatures:</strong> Upload support for Principal, Class Teacher, and Exam Officer verification signature images.</li>
+                  <li><strong>Multi-Exam Creation Filter:</strong> Dynamic UI grouping multi-subject exams as individual subject names in lists.</li>
                 </ul>
               </div>
 

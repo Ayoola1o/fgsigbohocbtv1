@@ -34,6 +34,7 @@ export interface IStorage {
   deleteExam(id: string): Promise<void>;
 
   // Exam Sessions
+  getExamSessions(): Promise<ExamSession[]>;
   getExamSession(id: string): Promise<ExamSession | undefined>;
   createExamSession(session: InsertExamSession): Promise<ExamSession>;
   updateExamSession(
@@ -248,6 +249,10 @@ export class MemStorage implements IStorage {
   }
 
   // Exam Sessions
+  async getExamSessions(): Promise<ExamSession[]> {
+    return Array.from(this.examSessions.values());
+  }
+
   async getExamSession(id: string): Promise<ExamSession | undefined> {
     return this.examSessions.get(id);
   }
