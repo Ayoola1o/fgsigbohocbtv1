@@ -236,25 +236,45 @@ export default function ExamStart() {
           </div>
 
           <CardContent className="p-6 sm:p-8 space-y-6">
-            <div className="grid gap-6 sm:grid-cols-3">
-              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
-                <Clock className="h-6 w-6 text-indigo-500 mx-auto mb-2" />
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Limit</span>
-                <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.duration} Minutes</span>
-              </div>
+            {!(exam.subject.includes(",") || exam.subject.includes(";")) ? (
+              <div className="grid gap-6 sm:grid-cols-3">
+                <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
+                  <Clock className="h-6 w-6 text-indigo-500 mx-auto mb-2" />
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Limit</span>
+                  <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.duration} Minutes</span>
+                </div>
 
-              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
-                <BookOpen className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Questions Count</span>
-                <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.questionIds?.length || 0} Items</span>
-              </div>
+                <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
+                  <BookOpen className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Questions to Answer</span>
+                  <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.numberOfQuestionsToDisplay || exam.questionIds?.length || 0} Items</span>
+                </div>
 
-              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
-                <CheckCircle className="h-6 w-6 text-indigo-500 mx-auto mb-2" />
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Passing score</span>
-                <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.passingScore}%</span>
+                <div className="bg-slate-50/70 dark:bg-slate-950/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-805/40 text-center">
+                  <CheckCircle className="h-6 w-6 text-indigo-500 mx-auto mb-2" />
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Passing score</span>
+                  <span className="block text-lg font-black text-slate-850 dark:text-slate-200 mt-1">{exam.passingScore}%</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-slate-50/70 dark:bg-slate-950/30 p-5 rounded-2.5xl border border-slate-100 dark:border-slate-805/40 space-y-4 text-left">
+                <div className="flex items-start gap-3">
+                  <BookOpen className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-405 dark:text-slate-500 uppercase tracking-widest">Subjects</span>
+                    <span className="block text-base font-black text-slate-800 dark:text-slate-200 mt-1 leading-tight">{exam.subject}</span>
+                  </div>
+                </div>
+                <div className="h-px bg-slate-200 dark:bg-slate-800" />
+                <div className="flex items-center gap-3">
+                  <Sparkles className="h-5 w-5 text-emerald-500 shrink-0" />
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-405 dark:text-slate-500 uppercase tracking-widest">Total Questions to Answer</span>
+                    <span className="block text-base font-black text-slate-800 dark:text-slate-200 mt-1">{exam.numberOfQuestionsToDisplay || exam.questionIds?.length || 0} Questions</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Custom Theory Config */}
             {exam.examType === "Theory" && exam.theoryInstructions && (

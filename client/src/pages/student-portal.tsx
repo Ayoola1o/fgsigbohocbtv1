@@ -287,22 +287,44 @@ export default function StudentPortal() {
                       </CardHeader>
 
                       <CardContent className="space-y-4 pt-0">
-                        <div className="flex items-center gap-4 bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-805/40 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="h-4 w-4 text-indigo-500 shrink-0" />
-                            <span>{exam.duration} Minutes</span>
-                          </div>
-                          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
-                          <div className="flex items-center gap-1.5">
-                            <BookOpen className="h-4 w-4 text-emerald-500 shrink-0" />
-                            <span>{exam.questionIds?.length || 0} Questions</span>
-                          </div>
-                        </div>
+                        {!(exam.subject.includes(",") || exam.subject.includes(";")) ? (
+                          <>
+                            <div className="flex items-center gap-4 bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-805/40 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="h-4 w-4 text-indigo-500 shrink-0" />
+                                <span>{exam.duration} Minutes</span>
+                              </div>
+                              <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+                              <div className="flex items-center gap-1.5">
+                                <BookOpen className="h-4 w-4 text-emerald-500 shrink-0" />
+                                <span>{exam.numberOfQuestionsToDisplay || exam.questionIds?.length || 0} Questions</span>
+                              </div>
+                            </div>
 
-                        <div className="flex items-center justify-between text-xs font-semibold px-1">
-                          <span className="text-slate-455">Grading Passing Score</span>
-                          <span className="font-extrabold text-slate-700 dark:text-slate-300">{exam.passingScore}%</span>
-                        </div>
+                            <div className="flex items-center justify-between text-xs font-semibold px-1">
+                              <span className="text-slate-455">Grading Passing Score</span>
+                              <span className="font-extrabold text-slate-700 dark:text-slate-300">{exam.passingScore}%</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex flex-col gap-2.5 bg-slate-50/50 dark:bg-slate-950/30 p-3.5 rounded-xl border border-slate-100 dark:border-slate-805/40 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            <div className="flex items-start gap-2">
+                              <BookOpen className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="block text-[9px] uppercase tracking-wider text-slate-405 dark:text-slate-500 font-bold">Subjects</span>
+                                <span className="text-slate-750 dark:text-slate-200 font-extrabold leading-tight">{exam.subject}</span>
+                              </div>
+                            </div>
+                            <div className="h-px bg-slate-200 dark:bg-slate-850" />
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
+                              <div>
+                                <span className="block text-[9px] uppercase tracking-wider text-slate-405 dark:text-slate-500 font-bold">Total Questions to Answer</span>
+                                <span className="text-slate-750 dark:text-slate-200 font-extrabold">{exam.numberOfQuestionsToDisplay || exam.questionIds?.length || 0} Questions</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Status Action Buttons */}
                         {isBlocked ? (
