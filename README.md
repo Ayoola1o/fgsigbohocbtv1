@@ -124,7 +124,6 @@ This project is configured for seamless deployment on **Vercel**.
 ├── api-src/              # Server route controllers
 │   └── [...route].ts     # Express router API entrypoint (Source)
 ├── api/                  # Production serverless folder
-│   ├── [...route].ts     # Vercel entrypoint (Re-exports bundled JS)
 │   └── [...route].js     # Auto-generated ESM bundle (Git-ignored)
 ├── client/               # React application code
 │   └── src/
