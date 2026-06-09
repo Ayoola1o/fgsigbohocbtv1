@@ -547,12 +547,19 @@ function calculatePsychometrics(workerData) {
 }
 
 // Export for main thread/inline calculation fallback
-module.exports = { calculatePsychometrics };
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { calculatePsychometrics };
+}
+
+export { calculatePsychometrics };
 
 // Conditionally hook into worker thread if available
 try {
-  const wt = require("worker_threads");
-  if (!wt.isMainThread && wt.parentPort) {
+  let wt;
+  if (typeof require !== "undefined") {
+    wt = require("worker_threads");
+  }
+  if (wt && !wt.isMainThread && wt.parentPort) {
     try {
       const computed = calculatePsychometrics(wt.workerData);
       wt.parentPort.postMessage(computed);

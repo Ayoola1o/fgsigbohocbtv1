@@ -15,6 +15,8 @@ import express from "express";
 import fs from "fs";
 import { extractTextFromFile } from "./docx-reader";
 import { GoogleGenAI } from "@google/genai";
+// @ts-ignore
+import { calculatePsychometrics } from "../workers/psychometricWorker.js";
 
 // Configure multer for local storage
 // Configure multer for local storage
@@ -932,7 +934,6 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       const runInline = () => {
         if (res.headersSent) return;
         try {
-          const { calculatePsychometrics } = require(path.join(process.cwd(), "workers", "psychometricWorker.js"));
           const computedData = calculatePsychometrics(workerPayload);
           res.json(computedData);
         } catch (calcError: any) {
@@ -946,7 +947,18 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
       try {
         let hasFinished = false;
-        const { Worker } = require("worker_threads");
+        let wt: any;
+        try {
+          wt = typeof require !== "undefined" ? require("worker_threads") : null;
+        } catch (e) {
+          wt = null;
+        }
+
+        if (!wt) {
+          throw new Error("worker_threads not supported in this environment");
+        }
+
+        const { Worker } = wt;
         const worker = new Worker(path.join(process.cwd(), "workers", "psychometricWorker.js"), {
           workerData: workerPayload
         });
