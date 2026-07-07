@@ -355,6 +355,11 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       res.json(parsedData);
     } catch (error) {
       console.error("AI Importer Error:", error);
+      try {
+        fs.writeFileSync(path.join(process.cwd(), "server-error.log"), error instanceof Error ? `${error.message}\n${error.stack}` : String(error));
+      } catch (logErr) {
+        console.error("Failed to write server-error.log", logErr);
+      }
       res.status(500).json({ 
         error: "Failed to parse questions with AI", 
         details: error instanceof Error ? error.message : String(error) 

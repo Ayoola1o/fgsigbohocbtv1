@@ -246,7 +246,10 @@ export default function AdminQuestions() {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "AI Parsing request failed.");
+        const errMsg = errorData.details 
+          ? `${errorData.error} (${errorData.details})` 
+          : (errorData.error || "AI Parsing request failed.");
+        throw new Error(errMsg);
       }
       
       const data = await response.json();
@@ -1645,16 +1648,19 @@ export default function AdminQuestions() {
                         let downloadUrl = "";
 
                         // 1. Try Firebase Storage first (ideal for standard cloud production)
-                        try {
-                          const { storage: fbStorage } = await import("@/lib/firebase");
-                          const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
-                          if (fbStorage) {
-                            const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
-                            const snapshot = await uploadBytes(storageRef, file);
-                            downloadUrl = await getDownloadURL(snapshot.ref);
+                        const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+                        if (!isLocalhost) {
+                          try {
+                            const { storage: fbStorage } = await import("@/lib/firebase");
+                            const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+                            if (fbStorage) {
+                              const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
+                              const snapshot = await uploadBytes(storageRef, file);
+                              downloadUrl = await getDownloadURL(snapshot.ref);
+                            }
+                          } catch (fbErr) {
+                            console.warn("Firebase Storage upload failed, falling back to local server upload:", fbErr);
                           }
-                        } catch (fbErr) {
-                          console.warn("Firebase Storage upload failed, falling back to local server upload:", fbErr);
                         }
 
                         // 2. Fallback to Express backend /api/upload
@@ -2550,16 +2556,19 @@ function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initi
       let downloadUrl = "";
 
       // 1. Try Firebase Storage first (ideal for standard cloud production)
-      try {
-        const { storage: fbStorage } = await import("@/lib/firebase");
-        const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
-        if (fbStorage) {
-          const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
-          const snapshot = await uploadBytes(storageRef, file);
-          downloadUrl = await getDownloadURL(snapshot.ref);
+      const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      if (!isLocalhost) {
+        try {
+          const { storage: fbStorage } = await import("@/lib/firebase");
+          const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+          if (fbStorage) {
+            const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            downloadUrl = await getDownloadURL(snapshot.ref);
+          }
+        } catch (fbErr) {
+          console.warn("Firebase Storage upload failed, falling back to local server upload:", fbErr);
         }
-      } catch (fbErr) {
-        console.warn("Firebase Storage upload failed, falling back to local server upload:", fbErr);
       }
 
       // 2. Fallback to Express backend /api/upload

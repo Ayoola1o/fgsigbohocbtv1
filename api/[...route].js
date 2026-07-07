@@ -1354,6 +1354,12 @@ ${rawText}
       res.json(parsedData);
     } catch (error) {
       console.error("AI Importer Error:", error);
+      try {
+        fs3.writeFileSync(path2.join(process.cwd(), "server-error.log"), error instanceof Error ? `${error.message}
+${error.stack}` : String(error));
+      } catch (logErr) {
+        console.error("Failed to write server-error.log", logErr);
+      }
       res.status(500).json({
         error: "Failed to parse questions with AI",
         details: error instanceof Error ? error.message : String(error)
