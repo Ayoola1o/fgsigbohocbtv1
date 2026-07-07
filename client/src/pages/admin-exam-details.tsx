@@ -202,7 +202,13 @@ export default function AdminExamDetails() {
           <form
             onSubmit={e => {
               e.preventDefault();
-              updateExamMutation.mutate(formData);
+              const dataToSubmit = { ...formData };
+              const hasSubjectLimits = dataToSubmit.subjectConfig && Object.keys(dataToSubmit.subjectConfig).length > 1;
+              if (hasSubjectLimits) {
+                const totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
+                dataToSubmit.numberOfQuestionsToDisplay = totalSubjectQuestions;
+              }
+              updateExamMutation.mutate(dataToSubmit);
             }}
             className="space-y-8"
           >
@@ -360,10 +366,12 @@ export default function AdminExamDetails() {
                 id="numberOfQuestionsToDisplay"
                 type="number"
                 min="0"
-                value={formData.numberOfQuestionsToDisplay || ""}
+                value={formData.subjectConfig && Object.keys(formData.subjectConfig).length > 1 
+                  ? (Object.values(formData.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0) || "")
+                  : (formData.numberOfQuestionsToDisplay || "")}
                 onChange={e => setFormData({ ...formData, numberOfQuestionsToDisplay: e.target.value ? parseInt(e.target.value) : undefined })}
                 placeholder="Leave blank to show all selected questions"
-                disabled={formData.examType === "Theory"}
+                disabled={formData.examType === "Theory" || (formData.subjectConfig && Object.keys(formData.subjectConfig).length > 1)}
               />
               <p className="text-xs text-muted-foreground">
                 {formData.examType === "Theory"
@@ -371,6 +379,41 @@ export default function AdminExamDetails() {
                   : "If set, students will be given a random subset of this many questions from the total selected."}
               </p>
             </div>
+
+            {/* Custom Subject Limits */}
+            {formData.examType !== "Theory" && formData.subject && formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).length > 1 && (
+              <div className="space-y-3 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200/40 animate-in fade-in duration-300">
+                <Label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Question Limits per Subject</Label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).map((subj: string) => (
+                    <div key={subj} className="flex items-center gap-2">
+                      <Label htmlFor={`subject-limit-${subj}`} className="text-xs font-bold text-slate-600 dark:text-slate-400 min-w-[120px] truncate">{subj}:</Label>
+                      <Input
+                        id={`subject-limit-${subj}`}
+                        type="number"
+                        min="1"
+                        placeholder="All"
+                        value={formData.subjectConfig?.[subj] ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value ? parseInt(e.target.value) : 0;
+                          const newConfig = { ...(formData.subjectConfig || {}) };
+                          if (val > 0) {
+                            newConfig[subj] = val;
+                          } else {
+                            delete newConfig[subj];
+                          }
+                          setFormData({ ...formData, subjectConfig: newConfig });
+                        }}
+                        className="h-8.5 text-xs font-bold w-24 rounded-lg border-slate-200 dark:border-slate-800 bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Set the exact number of random questions to draw from the pool for each subject. Leave blank or 0 to include all selected questions.
+                </p>
+              </div>
+            )}
 
             {formData.examType === "Theory" && (
               <div className="space-y-4 pt-4 border-t">

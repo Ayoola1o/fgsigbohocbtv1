@@ -224,6 +224,7 @@ export class MemStorage implements IStorage {
       theoryInstructions: (insertExam as any).theoryInstructions ?? null,
       examType: (insertExam as any).examType ?? "Objectives",
       theoryConfig: (insertExam as any).theoryConfig ?? null,
+      subjectConfig: (insertExam as any).subjectConfig ?? null,
       isActive: true,
       department: (insertExam as any).department ?? null,
       createdAt: new Date(),

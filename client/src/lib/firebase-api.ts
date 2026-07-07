@@ -280,16 +280,40 @@ export const createExamSession = async (session: InsertExamSession): Promise<Exa
         }
 
         let sessionQuestionIds = [...exam.questionIds];
-        // Shuffle questions for this specific session
-        // This ensures that if the exam pool (exam.questionIds) is larger than numberOfQuestionsToDisplay,
-        // each student will get a different random subset of questions.
-        for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
-        }
 
-        if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
-            sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+        if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+            const allQuestions = await getQuestions();
+            const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+            let selectedIds: string[] = [];
+
+            for (const [subj, count] of Object.entries(exam.subjectConfig as Record<string, number>)) {
+                const limit = Number(count) || 0;
+                if (limit <= 0) continue;
+
+                const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase() === subj.toLowerCase());
+
+                // Shuffle
+                for (let i = subjQuestions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+                }
+
+                const sliced = subjQuestions.slice(0, limit);
+                selectedIds = [...selectedIds, ...sliced.map(q => q.id)];
+            }
+            sessionQuestionIds = selectedIds;
+        } else {
+            // Shuffle questions for this specific session
+            // This ensures that if the exam pool (exam.questionIds) is larger than numberOfQuestionsToDisplay,
+            // each student will get a different random subset of questions.
+            for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
+            }
+
+            if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
+                sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+            }
         }
 
         const sessionData = cleanData({

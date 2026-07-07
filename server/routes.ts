@@ -648,14 +648,37 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
       let sessionQuestionIds = [...exam.questionIds];
 
-      // Shuffle the array
-      for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
-      }
+      if (exam.subjectConfig && Object.keys(exam.subjectConfig as object).length > 0) {
+        const allQuestions = await storage.getQuestions();
+        const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+        let selectedIds: string[] = [];
 
-      if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
-        sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+        for (const [subj, count] of Object.entries(exam.subjectConfig as Record<string, number>)) {
+          const limit = Number(count) || 0;
+          if (limit <= 0) continue;
+
+          const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase() === subj.toLowerCase());
+
+          // Shuffle
+          for (let i = subjQuestions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+          }
+
+          const sliced = subjQuestions.slice(0, limit);
+          selectedIds = [...selectedIds, ...sliced.map(q => q.id)];
+        }
+        sessionQuestionIds = selectedIds;
+      } else {
+        // Shuffle the array
+        for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
+        }
+
+        if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
+          sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+        }
       }
 
       const sessionData = {

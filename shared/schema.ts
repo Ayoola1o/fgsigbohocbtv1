@@ -67,6 +67,7 @@ export const exams = pgTable("exams", {
   theoryInstructions: text("theory_instructions"),
   examType: text("exam_type").notNull().default("Objectives"),
   theoryConfig: jsonb("theory_config").$type<any>(),
+  subjectConfig: jsonb("subject_config").$type<Record<string, number>>(),
   isActive: boolean("is_active").notNull().default(true),
   department: text("department"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -88,6 +89,7 @@ export const insertExamSchema = createInsertSchema(exams).omit({
   examType: z.enum(examTypeOptions).default("Objectives"),
   department: z.enum(departments).optional(),
   theoryConfig: z.any().optional(),
+  subjectConfig: z.record(z.number()).optional(),
 });
 
 

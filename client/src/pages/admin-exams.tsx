@@ -550,6 +550,7 @@ function ExamForm({
       },
       structure: [] as any[],
     },
+    subjectConfig: {} as Record<string, number>,
   });
   const [useSubjectSelectionLogic, setUseSubjectSelectionLogic] = useState(false);
   const [assignRandomQuestions, setAssignRandomQuestions] = useState(false);
@@ -641,7 +642,17 @@ function ExamForm({
     } else {
       const wantsServerSelection = !!formData.numberOfQuestionsToDisplay && formData.numberOfQuestionsToDisplay > 0;
 
-      if (!wantsServerSelection && formData.questionIds.length === 0) {
+      // If subjectConfig has multiple entries, calculate total and override wantsServerSelection
+      const hasSubjectLimits = dataToSubmit.subjectConfig && Object.keys(dataToSubmit.subjectConfig).length > 1;
+      let totalSubjectQuestions = 0;
+      if (hasSubjectLimits) {
+        totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
+        dataToSubmit.numberOfQuestionsToDisplay = totalSubjectQuestions;
+      }
+
+      const isDynamic = wantsServerSelection || totalSubjectQuestions > 0;
+
+      if (!isDynamic && formData.questionIds.length === 0) {
         toast({
           title: "No Questions Selected",
           description: "Please pick at least one objective question or enable server selection.",
@@ -654,7 +665,7 @@ function ExamForm({
         delete dataToSubmit.numberOfQuestionsToDisplay;
       }
 
-      if (wantsServerSelection) {
+      if (isDynamic && formData.questionIds.length === 0) {
         delete dataToSubmit.questionIds;
       }
     }
@@ -711,7 +722,7 @@ function ExamForm({
             <select
               id="classLevel"
               value={formData.classLevel}
-              onChange={e => setFormData({ ...formData, classLevel: e.target.value, subject: '', questionIds: [], department: '' })}
+              onChange={e => setFormData({ ...formData, classLevel: e.target.value, subject: '', questionIds: [], department: '', subjectConfig: {} })}
               required
               className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
               data-testid="select-exam-class-level"
@@ -727,7 +738,7 @@ function ExamForm({
             <select
               id="term"
               value={formData.term}
-              onChange={e => setFormData({ ...formData, term: e.target.value, subject: '', questionIds: [] })}
+              onChange={e => setFormData({ ...formData, term: e.target.value, subject: '', questionIds: [], subjectConfig: {} })}
               required
               className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
               data-testid="select-exam-term"
@@ -802,12 +813,15 @@ function ExamForm({
                       checked={isChecked}
                       onChange={(e) => {
                         let newList;
+                        const newConfig = { ...(formData.subjectConfig || {}) };
                         if (e.target.checked) {
                           newList = [...selectedList, subject];
+                          newConfig[subject] = 10;
                         } else {
                           newList = selectedList.filter(s => s !== subject);
+                          delete newConfig[subject];
                         }
-                        setFormData({ ...formData, subject: newList.join(", "), questionIds: [] });
+                        setFormData({ ...formData, subject: newList.join(", "), questionIds: [], subjectConfig: newConfig });
                       }}
                       className="rounded border-slate-300 dark:border-slate-800 text-indigo-650 focus:ring-indigo-500"
                     />
@@ -834,7 +848,8 @@ function ExamForm({
                     if (val) {
                       const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
                       if (!selectedList.includes(val)) {
-                        setFormData({ ...formData, subject: [...selectedList, val].join(", "), questionIds: [] });
+                        const newConfig = { ...(formData.subjectConfig || {}), [val]: 10 };
+                        setFormData({ ...formData, subject: [...selectedList, val].join(", "), questionIds: [], subjectConfig: newConfig });
                       }
                       e.currentTarget.value = "";
                     }
@@ -852,7 +867,8 @@ function ExamForm({
                   if (val) {
                     const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
                     if (!selectedList.includes(val)) {
-                      setFormData({ ...formData, subject: [...selectedList, val].join(", "), questionIds: [] });
+                      const newConfig = { ...(formData.subjectConfig || {}), [val]: 10 };
+                      setFormData({ ...formData, subject: [...selectedList, val].join(", "), questionIds: [], subjectConfig: newConfig });
                     }
                     if (input) input.value = "";
                   }
@@ -871,7 +887,9 @@ function ExamForm({
                       onClick={() => {
                         const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
                         const newList = selectedList.filter(s => s !== subj);
-                        setFormData({ ...formData, subject: newList.join(", "), questionIds: [] });
+                        const newConfig = { ...(formData.subjectConfig || {}) };
+                        delete newConfig[subj];
+                        setFormData({ ...formData, subject: newList.join(", "), questionIds: [], subjectConfig: newConfig });
                       }}
                       className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full text-xs font-bold leading-none"
                     >
@@ -925,9 +943,11 @@ function ExamForm({
             id="numberOfQuestionsToDisplay"
             type="number"
             min="0"
-            disabled={formData.examType === "Theory"}
-            placeholder={formData.examType === "Theory" ? "Not applicable for Theory" : `Defaults to all ${formData.questionIds.length} selected`}
-            value={formData.numberOfQuestionsToDisplay ?? ""}
+            disabled={formData.examType === "Theory" || Object.keys(formData.subjectConfig || {}).length > 1}
+            placeholder={formData.examType === "Theory" ? "Not applicable for Theory" : Object.keys(formData.subjectConfig || {}).length > 1 ? "Calculated from subject limits" : `Defaults to all ${formData.questionIds.length} selected`}
+            value={Object.keys(formData.subjectConfig || {}).length > 1 
+              ? (Object.values(formData.subjectConfig || {}).reduce((sum, val) => sum + (Number(val) || 0), 0) || "")
+              : (formData.numberOfQuestionsToDisplay ?? "")}
             onChange={(e) => setFormData({ ...formData, numberOfQuestionsToDisplay: e.target.value ? parseInt(e.target.value) : undefined })}
             className="h-10 border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/40"
             data-testid="input-exam-questions-to-display"
@@ -936,6 +956,41 @@ function ExamForm({
             If configured, the server presents a randomized subset of this limit size to the student.
           </p>
         </div>
+
+        {/* Custom Subject Limits */}
+        {formData.examType !== "Theory" && formData.subject && formData.subject.split(",").map(s => s.trim()).filter(Boolean).length > 1 && (
+          <div className="space-y-3 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200/40 animate-in fade-in duration-300">
+            <Label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Question Limits per Subject</Label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {formData.subject.split(",").map(s => s.trim()).filter(Boolean).map(subj => (
+                <div key={subj} className="flex items-center gap-2">
+                  <Label htmlFor={`subject-limit-${subj}`} className="text-xs font-bold text-slate-600 dark:text-slate-400 min-w-[120px] truncate">{subj}:</Label>
+                  <Input
+                    id={`subject-limit-${subj}`}
+                    type="number"
+                    min="1"
+                    placeholder="All"
+                    value={formData.subjectConfig?.[subj] ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseInt(e.target.value) : 0;
+                      const newConfig = { ...(formData.subjectConfig || {}) };
+                      if (val > 0) {
+                        newConfig[subj] = val;
+                      } else {
+                        delete newConfig[subj];
+                      }
+                      setFormData({ ...formData, subjectConfig: newConfig });
+                    }}
+                    className="h-8.5 text-xs font-bold w-24 rounded-lg border-slate-200 dark:border-slate-800 bg-white"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Set the exact number of random questions to draw from the pool for each subject. Leave blank or 0 to include all selected questions.
+            </p>
+          </div>
+        )}
 
         {/* Theory structures */}
         {formData.examType === "Theory" && (
