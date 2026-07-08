@@ -247,6 +247,7 @@ var MemStorage = class {
       theoryInstructions: insertExam.theoryInstructions ?? null,
       examType: insertExam.examType ?? "Objectives",
       theoryConfig: insertExam.theoryConfig ?? null,
+      subjectConfig: insertExam.subjectConfig ?? null,
       isActive: true,
       department: insertExam.department ?? null,
       createdAt: /* @__PURE__ */ new Date()
@@ -476,6 +477,7 @@ var exams = pgTable("exams", {
   theoryInstructions: text("theory_instructions"),
   examType: text("exam_type").notNull().default("Objectives"),
   theoryConfig: jsonb("theory_config").$type(),
+  subjectConfig: jsonb("subject_config").$type(),
   isActive: boolean("is_active").notNull().default(true),
   department: text("department"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`)
@@ -494,7 +496,8 @@ var insertExamSchema = createInsertSchema(exams).omit({
   term: z.enum(termOptions).default("First Term"),
   examType: z.enum(examTypeOptions).default("Objectives"),
   department: z.enum(departments).optional(),
-  theoryConfig: z.any().optional()
+  theoryConfig: z.any().optional(),
+  subjectConfig: z.record(z.number()).optional()
 });
 var examSessions = pgTable("exam_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1335,23 +1338,74 @@ Instructions:
 
 Strictly adhere to the provided JSON schema. Ensure 100% of questions are extracted without summaries or omissions.
 `;
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `${prompt}
-
-Document Content to Parse:
----
-${rawText}
----`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: isObjectives ? objectivesSchema : theorySchema,
-          temperature: 0.1
+      const targetChunkSize = 7e3;
+      const textChunks = [];
+      const lines = rawText.split(/\r?\n/);
+      let currentChunk = [];
+      let currentLength = 0;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const isNewQuestion = /^(?:question\s*(\d+)[:.]?|(\d+)[\s.)\]:-]+)/i.test(trimmed);
+        if (isNewQuestion && currentLength >= targetChunkSize) {
+          textChunks.push(currentChunk.join("\n"));
+          currentChunk = [line];
+          currentLength = line.length;
+        } else {
+          currentChunk.push(line);
+          currentLength += line.length + 1;
         }
-      });
-      console.log("AI Importer: Received successful structured response from Gemini AI.");
-      const parsedData = JSON.parse(response.text || "{}");
-      res.json(parsedData);
+      }
+      if (currentChunk.length > 0) {
+        textChunks.push(currentChunk.join("\n"));
+      }
+      console.log(`AI Importer: Splitting raw text into ${textChunks.length} chunks for processing.`);
+      const processChunk = async (chunkText, chunkIndex) => {
+        let attempt = 0;
+        const maxRetries = 3;
+        const initialDelay = 1500;
+        while (true) {
+          try {
+            console.log(`AI Importer: Sending chunk ${chunkIndex + 1}/${textChunks.length} to Gemini (Attempt ${attempt + 1})...`);
+            const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: `${prompt}
+
+Document Content to Parse (Chunk ${chunkIndex + 1} of ${textChunks.length}):
+---
+${chunkText}
+---`,
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: isObjectives ? objectivesSchema : theorySchema,
+                temperature: 0.1
+              }
+            });
+            const parsed = JSON.parse(response.text || "{}");
+            const questions2 = parsed.questions || [];
+            console.log(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} parsed successfully. Found ${questions2.length} questions.`);
+            return questions2;
+          } catch (err) {
+            attempt++;
+            const errMsg = err instanceof Error ? err.message : String(err);
+            const isNetworkError = errMsg.includes("fetch failed") || err.code === "ECONNRESET" || err.code === "ETIMEDOUT" || err.status === 429 || err.status >= 500;
+            if (attempt >= maxRetries || !isNetworkError) {
+              console.error(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} failed permanently on attempt ${attempt}:`, errMsg);
+              throw err;
+            }
+            const delay = initialDelay * Math.pow(2, attempt - 1);
+            console.warn(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} failed on attempt ${attempt} (${errMsg}). Retrying in ${delay}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+      };
+      const chunkPromises = textChunks.map((chunk, idx) => processChunk(chunk, idx));
+      const chunkResults = await Promise.all(chunkPromises);
+      const allQuestions = [];
+      for (const questions2 of chunkResults) {
+        allQuestions.push(...questions2);
+      }
+      console.log(`AI Importer: Completed parsing all chunks. Total questions extracted: ${allQuestions.length}`);
+      res.json({ questions: allQuestions });
     } catch (error) {
       console.error("AI Importer Error:", error);
       try {
@@ -1596,12 +1650,30 @@ ${error.stack}` : String(error));
         return res.status(404).json({ error: "Exam not found" });
       }
       let sessionQuestionIds = [...exam.questionIds];
-      for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
-      }
-      if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
-        sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+      if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+        const allQuestions = await storage.getQuestions();
+        const poolQuestions = allQuestions.filter((q) => exam.questionIds.includes(q.id));
+        let selectedIds = [];
+        for (const [subj, count] of Object.entries(exam.subjectConfig)) {
+          const limit = Number(count) || 0;
+          if (limit <= 0) continue;
+          const subjQuestions = poolQuestions.filter((q) => (q.subject || "").toLowerCase() === subj.toLowerCase());
+          for (let i = subjQuestions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+          }
+          const sliced = subjQuestions.slice(0, limit);
+          selectedIds = [...selectedIds, ...sliced.map((q) => q.id)];
+        }
+        sessionQuestionIds = selectedIds;
+      } else {
+        for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
+        }
+        if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
+          sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+        }
       }
       const sessionData = {
         ...validatedData,

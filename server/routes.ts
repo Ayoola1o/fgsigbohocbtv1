@@ -340,19 +340,88 @@ Instructions:
 Strictly adhere to the provided JSON schema. Ensure 100% of questions are extracted without summaries or omissions.
 `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `${prompt}\n\nDocument Content to Parse:\n---\n${rawText}\n---`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: isObjectives ? objectivesSchema : theorySchema,
-          temperature: 0.1
-        }
-      });
+      // Split rawText into smaller chunks to prevent timeout issues (ECONNRESET) on large documents
+      const targetChunkSize = 7000;
+      const textChunks: string[] = [];
+      const lines = rawText.split(/\r?\n/);
+      let currentChunk: string[] = [];
+      let currentLength = 0;
 
-      console.log("AI Importer: Received successful structured response from Gemini AI.");
-      const parsedData = JSON.parse(response.text || '{}');
-      res.json(parsedData);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // Check if the line looks like the start of a question
+        const isNewQuestion = /^(?:question\s*(\d+)[:.]?|(\d+)[\s.)\]:-]+)/i.test(trimmed);
+
+        if (isNewQuestion && currentLength >= targetChunkSize) {
+          textChunks.push(currentChunk.join("\n"));
+          currentChunk = [line];
+          currentLength = line.length;
+        } else {
+          currentChunk.push(line);
+          currentLength += line.length + 1; // +1 for newline
+        }
+      }
+      if (currentChunk.length > 0) {
+        textChunks.push(currentChunk.join("\n"));
+      }
+
+      console.log(`AI Importer: Splitting raw text into ${textChunks.length} chunks for processing.`);
+
+      // Parallel helper with automatic retries on network/transient failures
+      const processChunk = async (chunkText: string, chunkIndex: number) => {
+        let attempt = 0;
+        const maxRetries = 3;
+        const initialDelay = 1500;
+
+        while (true) {
+          try {
+            console.log(`AI Importer: Sending chunk ${chunkIndex + 1}/${textChunks.length} to Gemini (Attempt ${attempt + 1})...`);
+            const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: `${prompt}\n\nDocument Content to Parse (Chunk ${chunkIndex + 1} of ${textChunks.length}):\n---\n${chunkText}\n---`,
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: isObjectives ? objectivesSchema : theorySchema,
+                temperature: 0.1
+              }
+            });
+
+            const parsed = JSON.parse(response.text || '{}');
+            const questions = parsed.questions || [];
+            console.log(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} parsed successfully. Found ${questions.length} questions.`);
+            return questions;
+          } catch (err: any) {
+            attempt++;
+            const errMsg = err instanceof Error ? err.message : String(err);
+            const isNetworkError = errMsg.includes("fetch failed") || 
+                                   err.code === "ECONNRESET" || 
+                                   err.code === "ETIMEDOUT" ||
+                                   err.status === 429 ||
+                                   err.status >= 500;
+
+            if (attempt >= maxRetries || !isNetworkError) {
+              console.error(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} failed permanently on attempt ${attempt}:`, errMsg);
+              throw err;
+            }
+
+            const delay = initialDelay * Math.pow(2, attempt - 1);
+            console.warn(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} failed on attempt ${attempt} (${errMsg}). Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      };
+
+      // Process all chunks in parallel
+      const chunkPromises = textChunks.map((chunk, idx) => processChunk(chunk, idx));
+      const chunkResults = await Promise.all(chunkPromises);
+
+      const allQuestions: any[] = [];
+      for (const questions of chunkResults) {
+        allQuestions.push(...questions);
+      }
+
+      console.log(`AI Importer: Completed parsing all chunks. Total questions extracted: ${allQuestions.length}`);
+      res.json({ questions: allQuestions });
     } catch (error) {
       console.error("AI Importer Error:", error);
       try {
