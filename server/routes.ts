@@ -318,10 +318,11 @@ Instructions:
 2. Extract or infer the academic term (e.g., 'First Term', 'Second Term') for each question from the document or context headers. If the term is not discernible from the document, fallback to "${defaultMeta.term}". If classLevel/subject metadata is missing, use classLevel="${defaultMeta.classLevel}" and subject="${defaultMeta.subject}".
 3. Parse the options carefully. Group each option into an array of strings formatted like: ["A) Option Text", "B) Option Text", ...]. E.g. ["A) Apple", "B) Banana", "C) Orange"].
 4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, or by reasoning through the question if not explicitly marked.
-5. questionType: Must be strictly 'multiple_choice'.
-6. examType: Must be strictly 'Objectives'.
-7. difficulty: Must be strictly 'Easy', 'Medium', or 'Hard'. Capitalize first letter. Default to 'Medium'.
-8. points: Must be a valid integer, defaulting to 1 if unknown.
+5. Do NOT include any answer lines, correct answer labels, or explanation lines (such as "Answer: B", "Ans: B", or "*B*") in the options array. The options array must strictly contain only the choices/options (A, B, C, D, etc.).
+6. questionType: Must be strictly 'multiple_choice'.
+7. examType: Must be strictly 'Objectives'.
+8. difficulty: Must be strictly 'Easy', 'Medium', or 'Hard'. Capitalize first letter. Default to 'Medium'.
+9. points: Must be a valid integer, defaulting to 1 if unknown.
 
 Strictly adhere to the provided JSON schema. Ensure 100% of questions are extracted without summaries or omissions.
 ` : `
@@ -948,6 +949,59 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
     }
   });
 
+  // Analytics Response Cache Map: key -> { data, cacheHash }
+  const analyticsResponseCache = new Map<string, { data: any; cacheHash: string }>();
+
+  // Live Gemini AI Remedial Study Recommendation API Endpoint
+  app.post("/api/ai/remedial", async (req, res) => {
+    try {
+      const { candidateName, examTitle, score, totalPoints, percentage, incorrectQuestions } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (!apiKey) {
+        return res.json({
+          summary: `Candidate ${candidateName || 'Student'} scored ${percentage || 0}% in ${examTitle || 'the assessment'}.`,
+          strengths: ["Demonstrated commendable focus and basic topic understanding."],
+          remedialSteps: [
+            "Review key definitions and practice core drill problems daily.",
+            "Re-examine incorrectly answered topics in the detailed breakdown below."
+          ]
+        });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `You are an educational AI cognitive coach for Faith Immaculate Academy. Analyze candidate performance:
+Candidate: ${candidateName || 'Student'}
+Exam: ${examTitle || 'CBT Assessment'}
+Score: ${score}/${totalPoints} (${percentage}%)
+Incorrect Question Topics: ${JSON.stringify(incorrectQuestions || [])}
+
+Provide structured JSON with:
+1. "summary": Encouraging 2-sentence feedback.
+2. "strengths": Array of 2 strength bullet points.
+3. "remedialSteps": Array of 3 actionable, specific study/revision steps for improvement.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const text = response.text || "{}";
+      const parsed = JSON.parse(text);
+      res.json(parsed);
+    } catch (err: any) {
+      console.error("AI Remedial Generation Error:", err);
+      res.json({
+        summary: "Keep up the dedication to academic excellence!",
+        strengths: ["Active examination participation"],
+        remedialSteps: ["Review incorrect choices in the detailed breakdown below."]
+      });
+    }
+  });
+
   // ─── Server-Side Psychometric Analytics Engine ───
   // Moves ALL heavy computation off the browser thread to eliminate client freezing.
   app.get("/api/analytics", async (req, res) => {
@@ -969,6 +1023,17 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       } catch (e) {
         console.warn("⚠️ [routes.ts] Firestore results fetch failed. Falling back to local storage:", e);
         allResults = await storage.getResults();
+      }
+
+      // Compute cache hash based on results count and last completion timestamp
+      const lastResultTime = allResults.length > 0 ? (allResults[allResults.length - 1]?.completedAt || '') : '';
+      const cacheHash = `${allResults.length}_${lastResultTime}`;
+      const cacheKey = `${selectedExamId}:${termFilter}:${classFilter}:${subjectFilter}:${studentFilter}`;
+
+      const cachedEntry = analyticsResponseCache.get(cacheKey);
+      if (cachedEntry && cachedEntry.cacheHash === cacheHash) {
+        console.log(`[routes.ts] Instant Analytics Cache Hit for key: ${cacheKey}`);
+        return res.json(cachedEntry.data);
       }
 
       try {
@@ -1065,6 +1130,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
           if (computedData.error) {
             res.status(500).json({ error: computedData.error });
           } else {
+            analyticsResponseCache.set(cacheKey, { data: computedData, cacheHash });
             res.json(computedData);
           }
         });

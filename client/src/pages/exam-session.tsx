@@ -21,7 +21,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Clock, Flag, CheckCircle, AlertTriangle, Sparkles, BookOpen, ChevronLeft, ChevronRight, Send, HelpCircle, ShieldAlert, Award } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Clock, Flag, CheckCircle, AlertTriangle, Sparkles, BookOpen, ChevronLeft, ChevronRight, Send, HelpCircle, ShieldAlert, Award, Wifi, WifiOff, Volume2, Calculator, FileCode } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ExamSession, Question, Exam, Result } from "@shared/schema";
@@ -29,6 +35,7 @@ import {
   getExamSession,
   getExam,
   getQuestionsByIds,
+  getStudentQuestionsByIds,
   updateExamSession,
   submitExamSession
 } from "@/lib/firebase-api";
@@ -147,6 +154,45 @@ export default function ExamSessionPage() {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [viewedQuestionIndices, setViewedQuestionIndices] = useState<Set<number>>(new Set([0]));
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
+
+  // Tools & Accessibility state
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [showCalculator, setShowCalculator] = useState<boolean>(false);
+  const [showFormulaSheet, setShowFormulaSheet] = useState<boolean>(false);
+  const [calcInput, setCalcInput] = useState<string>("");
+  const [calcResult, setCalcResult] = useState<string>("");
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCalcClick = (val: string) => {
+    if (val === "C") {
+      setCalcInput("");
+      setCalcResult("");
+    } else if (val === "=") {
+      try {
+        const sanitized = calcInput.replace(/[^0-9+\-*/().]/g, "");
+        if (!sanitized) return;
+        const res = Function(`"use strict"; return (${sanitized})`)();
+        setCalcResult(String(res));
+      } catch (e) {
+        setCalcResult("Error");
+      }
+    } else {
+      setCalcInput((prev) => prev + val);
+    }
+  };
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     setViewedQuestionIndices((prev) => {
@@ -217,7 +263,7 @@ export default function ExamSessionPage() {
       if (!session?.sessionQuestionIds || session.sessionQuestionIds.length === 0) {
         return [];
       }
-      return getQuestionsByIds(session.sessionQuestionIds);
+      return getStudentQuestionsByIds(session.sessionQuestionIds);
     },
     enabled: !!session?.sessionQuestionIds && session.sessionQuestionIds.length > 0,
   });
@@ -429,36 +475,104 @@ export default function ExamSessionPage() {
   }, [session?.startedAt, exam?.duration, handleAutoSubmit]);
 
 
-  const handleAnswerChange = (questionId: string, answer: string) => {
-    const prevAnswer = answers[questionId];
-    if (prevAnswer && prevAnswer !== answer) {
-      revisionsRef.current += 1;
-    }
-    const newAnswers = { ...answers, [questionId]: answer };
-    setAnswers(newAnswers);
-    saveProgressMutation.mutate({
-      answers: newAnswers,
-      currentQuestionIndex,
-    });
-  };
+  const debouncedSaveProgress = useCallback(
+    (newAnswers: Record<string, string>, qIndex: number) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        saveProgressMutation.mutate({
+          answers: newAnswers,
+          currentQuestionIndex: qIndex,
+        });
+      }, 1200);
+    },
+    [saveProgressMutation]
+  );
 
-  const handleNavigate = (index: number) => {
-    saveProgressMutation.mutate({
-      answers,
-      currentQuestionIndex: index,
-    });
-    setCurrentQuestionIndex(index);
-  };
+  const handleAnswerChange = useCallback(
+    (questionId: string, answer: string) => {
+      const prevAnswer = answers[questionId];
+      if (prevAnswer && prevAnswer !== answer) {
+        revisionsRef.current += 1;
+      }
+      const newAnswers = { ...answers, [questionId]: answer };
+      setAnswers(newAnswers);
+      debouncedSaveProgress(newAnswers, currentQuestionIndex);
+    },
+    [answers, currentQuestionIndex, debouncedSaveProgress]
+  );
 
-  const toggleFlag = (index: number) => {
-    const newFlagged = new Set(flaggedQuestions);
-    if (newFlagged.has(index)) {
-      newFlagged.delete(index);
-    } else {
-      newFlagged.add(index);
-    }
-    setFlaggedQuestions(newFlagged);
-  };
+  const handleNavigate = useCallback(
+    (index: number) => {
+      debouncedSaveProgress(answers, index);
+      setCurrentQuestionIndex(index);
+    },
+    [answers, debouncedSaveProgress]
+  );
+
+  const toggleFlag = useCallback(
+    (index: number) => {
+      setFlaggedQuestions((prev) => {
+        const next = new Set(prev);
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  // Keyboard Shortcuts Listener (A, B, C, D / 1, 2, 3, 4, N, P, ArrowLeft, ArrowRight, F)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (!questions || questions.length === 0) return;
+
+      const key = e.key.toUpperCase();
+
+      if (e.key === "ArrowRight" || key === "N") {
+        if (currentQuestionIndex < questions.length - 1) {
+          handleNavigate(currentQuestionIndex + 1);
+        }
+      } else if (e.key === "ArrowLeft" || key === "P") {
+        if (currentQuestionIndex > 0) {
+          handleNavigate(currentQuestionIndex - 1);
+        }
+      } else if (key === "F") {
+        toggleFlag(currentQuestionIndex);
+      } else if (["A", "B", "C", "D", "1", "2", "3", "4"].includes(key)) {
+        const q = questions[currentQuestionIndex];
+        if (q && q.options && q.options.length > 0) {
+          let optionIdx = -1;
+          if (["A", "B", "C", "D"].includes(key)) {
+            optionIdx = key.charCodeAt(0) - 65;
+          } else if (["1", "2", "3", "4"].includes(key)) {
+            optionIdx = parseInt(key, 10) - 1;
+          }
+
+          if (optionIdx >= 0 && optionIdx < q.options.length) {
+            handleAnswerChange(q.id, q.options[optionIdx]);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentQuestionIndex, questions, handleNavigate, handleAnswerChange, toggleFlag]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -511,11 +625,32 @@ export default function ExamSessionPage() {
       {/* Premium Top Sticky Progress Navbar */}
       <div className="sticky top-0 z-40 border-b border-slate-150/70 bg-white/90 dark:bg-slate-900/90 dark:border-slate-805/80 backdrop-blur-md">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-lg bg-indigo-100 dark:bg-indigo-955/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 animate-pulse">
-              <Sparkles className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded-lg bg-indigo-100 dark:bg-indigo-955/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 animate-pulse">
+                <Sparkles className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Live Exam Session</span>
             </div>
-            <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Live Exam Session</span>
+
+            {/* Network Connection Status Badge */}
+            <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border transition-colors ${
+              isOnline 
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/40"
+                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/40"
+            }`}>
+              {isOnline ? (
+                <>
+                  <Wifi className="h-3 w-3 text-emerald-500" />
+                  <span>Online (Auto-Sync)</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="h-3 w-3 text-amber-500 animate-pulse" />
+                  <span>Offline (Saved Locally)</span>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -716,21 +851,84 @@ export default function ExamSessionPage() {
                         >
                           {(currentQuestion as Question)?.questionText}
                         </h2>
-                      </div>
+                        <div className="flex items-center gap-2">
+                          {/* TTS Audio Read-Aloud Button */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+                              if (isSpeaking) {
+                                window.speechSynthesis.cancel();
+                                setIsSpeaking(false);
+                                return;
+                              }
+                              const q = currentQuestion as Question;
+                              if (!q || !q.questionText) return;
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => toggleFlag(currentQuestionIndex)}
-                        className={`rounded-xl h-10 w-10 shrink-0 border transition-all ${
-                          flaggedQuestions.has(currentQuestionIndex) 
-                            ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-955/20 dark:border-rose-900/30" 
-                            : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900 text-slate-400"
-                        }`}
-                        data-testid="button-flag-question"
-                      >
-                        <Flag className={`h-4.5 w-4.5 ${flaggedQuestions.has(currentQuestionIndex) ? "fill-rose-500 text-rose-500" : ""}`} />
-                      </Button>
+                              let textToSpeak = `Question ${activeSubjectLocalIndex + 1}: ${q.questionText}. `;
+                              if (q.options && q.options.length > 0) {
+                                textToSpeak += "Options are: " + q.options.map((opt, idx) => `Option ${String.fromCharCode(65 + idx)}: ${opt}`).join(". ");
+                              }
+
+                              const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                              utterance.onend = () => setIsSpeaking(false);
+                              utterance.onerror = () => setIsSpeaking(false);
+                              setIsSpeaking(true);
+                              window.speechSynthesis.speak(utterance);
+                            }}
+                            className={`rounded-xl h-10 px-3 border text-xs font-bold transition-all ${
+                              isSpeaking
+                                ? "bg-indigo-50 border-indigo-300 text-indigo-650 dark:bg-indigo-950/40 dark:text-indigo-400 animate-pulse"
+                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                            }`}
+                            title="Read question aloud"
+                          >
+                            <Volume2 className={`h-4 w-4 mr-1.5 ${isSpeaking ? "text-indigo-600 animate-bounce" : ""}`} />
+                            {isSpeaking ? "Stop" : "Read Aloud"}
+                          </Button>
+
+                          {/* Scientific Calculator Trigger (If enabled or allowed) */}
+                          {exam.enableCalculator && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowCalculator((prev) => !prev)}
+                              className="rounded-xl h-10 px-3 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                            >
+                              <Calculator className="h-4 w-4 mr-1.5 text-indigo-500" />
+                              Calculator
+                            </Button>
+                          )}
+
+                          {/* Formula Sheet Trigger (If enabled or allowed) */}
+                          {exam.enableFormulaSheet && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowFormulaSheet((prev) => !prev)}
+                              className="rounded-xl h-10 px-3 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                            >
+                              <FileCode className="h-4 w-4 mr-1.5 text-pink-500" />
+                              Formulas
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => toggleFlag(currentQuestionIndex)}
+                            className={`rounded-xl h-10 w-10 shrink-0 border transition-all ${
+                              flaggedQuestions.has(currentQuestionIndex)
+                                ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-955/20 dark:border-rose-900/30"
+                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900 text-slate-400"
+                            }`}
+                            data-testid="button-flag-question"
+                          >
+                            <Flag className={`h-4.5 w-4.5 ${flaggedQuestions.has(currentQuestionIndex) ? "fill-rose-500 text-rose-500" : ""}`} />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Optional Image Diagram */}
@@ -929,6 +1127,70 @@ export default function ExamSessionPage() {
           </div>
         </div>
       </div>
+
+      {/* Scientific Calculator Modal */}
+      <Dialog open={showCalculator} onOpenChange={setShowCalculator}>
+        <DialogContent className="sm:max-w-xs rounded-3xl p-5 border border-slate-200 dark:border-slate-800">
+          <DialogHeader className="pb-2 border-b">
+            <DialogTitle className="text-sm font-black flex items-center gap-2">
+              <Calculator className="h-4 w-4 text-indigo-500" />
+              Scientific Calculator
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 pt-2">
+            <div className="bg-slate-900 text-white p-3 rounded-2xl text-right font-mono min-h-[60px] flex flex-col justify-between">
+              <span className="text-xs text-slate-400 truncate">{calcInput || "0"}</span>
+              <span className="text-lg font-bold text-emerald-400">{calcResult}</span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {["C", "(", ")", "/", "7", "8", "9", "*", "4", "5", "6", "-", "1", "2", "3", "+", "0", ".", "="].map((btn) => (
+                <Button
+                  key={btn}
+                  variant={btn === "=" ? "default" : btn === "C" ? "destructive" : "outline"}
+                  onClick={() => handleCalcClick(btn)}
+                  className={`h-10 text-sm font-black rounded-xl ${btn === "=" ? "col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white" : ""}`}
+                >
+                  {btn}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Formula Sheet Reference Modal */}
+      <Dialog open={showFormulaSheet} onOpenChange={setShowFormulaSheet}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800">
+          <DialogHeader className="pb-2 border-b">
+            <DialogTitle className="text-base font-black flex items-center gap-2">
+              <FileCode className="h-4.5 w-4.5 text-pink-500" />
+              Subject Formula & Constants Sheet
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-3 max-h-[400px] overflow-y-auto pr-1 text-xs">
+            <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-150/70 dark:border-slate-800">
+              <h4 className="font-extrabold text-indigo-600 dark:text-indigo-400 uppercase text-[10px] tracking-wider mb-1.5">Physics Constants & Equations</h4>
+              <p className="font-mono text-slate-700 dark:text-slate-300">g = 9.81 m/s² | c = 3.0 × 10⁸ m/s</p>
+              <p className="font-mono text-slate-700 dark:text-slate-300 mt-1">F = m · a | E = m · c² | v = u + a · t</p>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-150/70 dark:border-slate-800">
+              <h4 className="font-extrabold text-indigo-600 dark:text-indigo-400 uppercase text-[10px] tracking-wider mb-1.5">Chemistry & Gas Laws</h4>
+              <p className="font-mono text-slate-700 dark:text-slate-300">P · V = n · R · T (R = 8.314 J/mol·K)</p>
+              <p className="font-mono text-slate-700 dark:text-slate-300 mt-1">pH = -log[H⁺] | Mol = Mass / Molar Mass</p>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-150/70 dark:border-slate-800">
+              <h4 className="font-extrabold text-indigo-600 dark:text-indigo-400 uppercase text-[10px] tracking-wider mb-1.5">Mathematics & Geometry</h4>
+              <p className="font-mono text-slate-700 dark:text-slate-300">Quadratic: x = (-b ± √(b² - 4ac)) / (2a)</p>
+              <p className="font-mono text-slate-700 dark:text-slate-300 mt-1">Circle Area = π · r² | Volume = ⁴⁄₃ · π · r³</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Submit Dialog */}
       <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>

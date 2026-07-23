@@ -78,14 +78,38 @@ export const getQuestion = async (id: string): Promise<Question | null> => {
 
 export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
     if (!ids || ids.length === 0) return [];
-    // Firestore 'in' query supports up to 10 items.
-    // If more, we need multiple queries or just fetch all and filter (for offline/small scale).
-    // Given "offline" requirement and likely small dataset, fetching all is safest/easiest.
-    // Or we can fetch individually.
+    
+    // Chunk requests into batches of 10 for Firestore 'in' query on documentId()
+    const CHUNK_SIZE = 10;
+    const results: Question[] = [];
+    
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        try {
+            const q = query(collection(db, "questions"), where(documentId(), "in", chunk));
+            const snapshot = await getDocs(q);
+            results.push(...snapshot.docs.map(d => docToData<Question>(d)));
+        } catch (e) {
+            console.warn("Error in chunked getQuestionsByIds query, falling back to document lookup", e);
+            for (const id of chunk) {
+                const single = await getQuestion(id);
+                if (single) results.push(single);
+            }
+        }
+    }
 
-    // Optimization: Fetch all questions (cached) and filter.
-    const all = await getQuestions();
-    return all.filter(q => ids.includes(q.id));
+    // Preserve original ID ordering requested by exam session
+    const map = new Map(results.map(q => [q.id, q]));
+    return ids.map(id => map.get(id)).filter(Boolean) as Question[];
+};
+
+// Sanitized question getter for active candidate exam sessions (strips correctAnswer from memory/network payload)
+export const getStudentQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
+    const questions = await getQuestionsByIds(ids);
+    return questions.map(q => ({
+        ...q,
+        correctAnswer: "" // Hide answer key from student browser inspect / devtools during session
+    }));
 };
 
 export const createQuestion = async (question: InsertQuestion): Promise<Question> => {

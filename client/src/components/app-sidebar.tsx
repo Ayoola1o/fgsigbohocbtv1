@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Settings,
   BookOpen,
+  Radio,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -28,6 +29,12 @@ const menuItems = [
     url: "/admin",
     icon: LayoutDashboard,
     testId: "link-dashboard",
+  },
+  {
+    title: "Invigilator Hub",
+    url: "/admin/invigilator",
+    icon: Radio,
+    testId: "link-invigilator",
   },
   {
     title: "Exams",

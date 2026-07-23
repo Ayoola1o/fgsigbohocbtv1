@@ -69,6 +69,8 @@ export const exams = pgTable("exams", {
   theoryConfig: jsonb("theory_config").$type<any>(),
   subjectConfig: jsonb("subject_config").$type<Record<string, number>>(),
   isActive: boolean("is_active").notNull().default(true),
+  enableCalculator: boolean("enable_calculator").notNull().default(false),
+  enableFormulaSheet: boolean("enable_formula_sheet").notNull().default(false),
   department: text("department"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -90,6 +92,8 @@ export const insertExamSchema = createInsertSchema(exams).omit({
   department: z.enum(departments).optional(),
   theoryConfig: z.any().optional(),
   subjectConfig: z.record(z.number()).optional(),
+  enableCalculator: z.boolean().optional(),
+  enableFormulaSheet: z.boolean().optional(),
 });
 
 

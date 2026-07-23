@@ -176,22 +176,28 @@ export default function ExamStart() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 font-sans">
-      <div className="container mx-auto px-4 py-12 max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
-        {/* Simple Header back button */}
-        <div className="mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLocation("/student-portal")}
-            className="rounded-xl font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-900/60 h-9 px-3 flex items-center gap-1.5"
-            data-testid="button-cancel"
-          >
-            <ChevronLeft className="h-4.5 w-4.5" />
-            Back to Portal
-          </Button>
-        </div>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-no-repeat pb-20 font-sans relative"
+      style={{ backgroundImage: 'url("/login-bg.jpg")' }}
+    >
+      {/* Overlay layer for better contrast and readability */}
+      <div className="absolute inset-0 bg-slate-900/15 dark:bg-slate-950/40 backdrop-blur-[2px] pointer-events-none" />
+
+      <div className="relative z-10 container mx-auto px-4 py-12 max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <Card className="border border-slate-200/50 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-2xl rounded-[32px] p-6 sm:p-8 md:p-10">
+          {/* Simple Header back button */}
+          <div className="mb-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation("/student-portal")}
+              className="rounded-xl font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-900/60 h-9 px-3 flex items-center gap-1.5"
+              data-testid="button-cancel"
+            >
+              <ChevronLeft className="h-4.5 w-4.5" />
+              Back to Portal
+            </Button>
+          </div>
 
         {/* Pre-Exam Identification Header */}
         <div className="mb-10 bg-gradient-to-r from-indigo-900 via-indigo-950 to-indigo-900 dark:from-indigo-955 dark:via-indigo-965 dark:to-indigo-955 text-white p-6 sm:p-8 rounded-3xl shadow-xl shadow-indigo-950/10 relative overflow-hidden">
@@ -344,7 +350,8 @@ export default function ExamStart() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </Card>
     </div>
+  </div>
   );
 }

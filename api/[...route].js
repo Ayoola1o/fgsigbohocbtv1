@@ -1317,10 +1317,11 @@ Instructions:
 2. Extract or infer the academic term (e.g., 'First Term', 'Second Term') for each question from the document or context headers. If the term is not discernible from the document, fallback to "${defaultMeta.term}". If classLevel/subject metadata is missing, use classLevel="${defaultMeta.classLevel}" and subject="${defaultMeta.subject}".
 3. Parse the options carefully. Group each option into an array of strings formatted like: ["A) Option Text", "B) Option Text", ...]. E.g. ["A) Apple", "B) Banana", "C) Orange"].
 4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, or by reasoning through the question if not explicitly marked.
-5. questionType: Must be strictly 'multiple_choice'.
-6. examType: Must be strictly 'Objectives'.
-7. difficulty: Must be strictly 'Easy', 'Medium', or 'Hard'. Capitalize first letter. Default to 'Medium'.
-8. points: Must be a valid integer, defaulting to 1 if unknown.
+5. Do NOT include any answer lines, correct answer labels, or explanation lines (such as "Answer: B", "Ans: B", or "*B*") in the options array. The options array must strictly contain only the choices/options (A, B, C, D, etc.).
+6. questionType: Must be strictly 'multiple_choice'.
+7. examType: Must be strictly 'Objectives'.
+8. difficulty: Must be strictly 'Easy', 'Medium', or 'Hard'. Capitalize first letter. Default to 'Medium'.
+9. points: Must be a valid integer, defaulting to 1 if unknown.
 
 Strictly adhere to the provided JSON schema. Ensure 100% of questions are extracted without summaries or omissions.
 ` : `

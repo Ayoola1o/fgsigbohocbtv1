@@ -226,6 +226,8 @@ export class MemStorage implements IStorage {
       theoryConfig: (insertExam as any).theoryConfig ?? null,
       subjectConfig: (insertExam as any).subjectConfig ?? null,
       isActive: true,
+      enableCalculator: insertExam.enableCalculator ?? false,
+      enableFormulaSheet: insertExam.enableFormulaSheet ?? false,
       department: (insertExam as any).department ?? null,
       createdAt: new Date(),
     };

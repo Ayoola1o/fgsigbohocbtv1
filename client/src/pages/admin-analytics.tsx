@@ -18,7 +18,7 @@ import {
   TrendingUp, Activity, HelpCircle, Users, Award, ShieldAlert, Zap, Hourglass,
   Cpu, Database, Sparkles, Brain, AlertTriangle, ArrowUpRight, Loader2,
   ArrowLeft, Search, Filter, ShieldCheck, AlertCircle, Edit, Trash2, Shield,
-  RefreshCw
+  RefreshCw, Download
 } from "lucide-react";
 import type { Exam, Result } from "@shared/schema";
 import { getResults } from "@/lib/firebase-api";
@@ -1422,9 +1422,41 @@ export default function AdminAnalytics() {
                   Classical Test Theory parameters tracking question items performance metrics.
                 </CardDescription>
               </div>
-              <Badge className="bg-indigo-50 border border-indigo-150 text-indigo-700 font-extrabold text-xs py-1 px-3">
-                Cronbach Alpha Reliability: α = {cronbachAlpha}
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!itemAnalysis || itemAnalysis.length === 0) return;
+                    const headers = ["Question ID", "Question Text", "Subject", "Class", "P-Index (Difficulty)", "D-Index (Discrimination)", "Attempts"];
+                    const rows = itemAnalysis.map(item => [
+                      `"${item.id}"`,
+                      `"${item.questionText.replace(/"/g, '""')}"`,
+                      `"${item.subject}"`,
+                      `"${item.classLevel}"`,
+                      item.pIndex,
+                      item.dIndex,
+                      item.totalAttempts
+                    ]);
+                    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", `Psychometric_Ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5 text-indigo-500" />
+                  Export CSV
+                </Button>
+
+                <Badge className="bg-indigo-50 border border-indigo-150 text-indigo-700 font-extrabold text-xs py-1 px-3">
+                  Cronbach Alpha Reliability: α = {cronbachAlpha}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">

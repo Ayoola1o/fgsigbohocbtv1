@@ -1,2 +1,7 @@
-fetch failed
-TypeError: fetch failed
+Unterminated string in JSON at position 7517 (line 1 column 7518)
+SyntaxError: Unterminated string in JSON at position 7517 (line 1 column 7518)
+    at JSON.parse (<anonymous>)
+    at processChunk (C:\Users\ASUS\Documents\fgsigbohocbtv1\server\routes.ts:389:33)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Promise.all (index 1)
+    at async <anonymous> (C:\Users\ASUS\Documents\fgsigbohocbtv1\server\routes.ts:416:28)

@@ -235,53 +235,69 @@ function calculatePsychometrics(workerData) {
     const examObj = examMap.get(eId);
     if (resultsList.length < 2) return;
 
-    for (let i = 0; i < resultsList.length; i++) {
-      for (let j = i + 1; j < resultsList.length; j++) {
-        const A = resultsList[i];
-        const B = resultsList[j];
-
-        // Find incorrect questions they both answered
-        const commonMissed = [];
-        if (A.correctAnswers && B.correctAnswers) {
-          Object.keys(A.answers || {}).forEach(qId => {
-            if (A.correctAnswers[qId] === false && B.correctAnswers[qId] === false) {
-              commonMissed.push(qId);
-            }
-          });
+    // Inverted index for fast candidate pair candidate matching: "qId:answer" -> Array of candidate results
+    const wrongAnswerMap = new Map();
+    resultsList.forEach(r => {
+      Object.entries(r.answers || {}).forEach(([qId, ans]) => {
+        if (r.correctAnswers?.[qId] === false && ans) {
+          const key = `${qId}:${ans.trim().toLowerCase()}`;
+          const list = wrongAnswerMap.get(key) || [];
+          list.push(r);
+          wrongAnswerMap.set(key, list);
         }
+      });
+    });
 
-        if (commonMissed.length >= 3) {
-          let identicalMisses = 0;
-          commonMissed.forEach(qId => {
-            if (A.answers[qId] === B.answers[qId]) {
-              identicalMisses++;
-            }
-          });
-          
-          const collusionIndex = Math.round((identicalMisses / commonMissed.length) * 100) / 100;
-          
-          if (collusionIndex >= 0.6) {
-            collusionPairs.push({
-              studentA: A.studentName,
-              studentIdA: A.studentId,
-              studentB: B.studentName,
-              studentIdB: B.studentId,
-              examTitle: examObj?.title || "Exam",
-              commonMissedCount: commonMissed.length,
-              identicalMisses,
-              index: collusionIndex
-            });
-
-            // Update student max collusion index
-            const maxA = studentMaxCollusion.get(A.studentId) || 0;
-            if (collusionIndex > maxA) studentMaxCollusion.set(A.studentId, collusionIndex);
-
-            const maxB = studentMaxCollusion.get(B.studentId) || 0;
-            if (collusionIndex > maxB) studentMaxCollusion.set(B.studentId, collusionIndex);
-          }
+    // Pair candidate index accumulator: "studentIdA:studentIdB" -> { identicalMisses, commonMissedSet }
+    const pairMatches = new Map();
+    wrongAnswerMap.forEach((candidates) => {
+      if (candidates.length < 2) return;
+      for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+          const A = candidates[i];
+          const B = candidates[j];
+          const key = A.studentId < B.studentId ? `${A.studentId}|${B.studentId}` : `${B.studentId}|${A.studentId}`;
+          const matchObj = pairMatches.get(key) || { A, B, identicalMisses: 0 };
+          matchObj.identicalMisses += 1;
+          pairMatches.set(key, matchObj);
         }
       }
-    }
+    });
+
+    // Calculate collusion index for matched pairs
+    pairMatches.forEach(({ A, B, identicalMisses }) => {
+      // Find total common missed questions
+      let commonMissedCount = 0;
+      if (A.correctAnswers && B.correctAnswers) {
+        Object.keys(A.answers || {}).forEach(qId => {
+          if (A.correctAnswers[qId] === false && B.correctAnswers[qId] === false) {
+            commonMissedCount++;
+          }
+        });
+      }
+
+      if (commonMissedCount >= 3) {
+        const collusionIndex = Math.round((identicalMisses / commonMissedCount) * 100) / 100;
+        if (collusionIndex >= 0.6) {
+          collusionPairs.push({
+            studentA: A.studentName,
+            studentIdA: A.studentId,
+            studentB: B.studentName,
+            studentIdB: B.studentId,
+            examTitle: examObj?.title || "Exam",
+            commonMissedCount,
+            identicalMisses,
+            index: collusionIndex
+          });
+
+          const maxA = studentMaxCollusion.get(A.studentId) || 0;
+          if (collusionIndex > maxA) studentMaxCollusion.set(A.studentId, collusionIndex);
+
+          const maxB = studentMaxCollusion.get(B.studentId) || 0;
+          if (collusionIndex > maxB) studentMaxCollusion.set(B.studentId, collusionIndex);
+        }
+      }
+    });
   });
 
   // Score integrity bands

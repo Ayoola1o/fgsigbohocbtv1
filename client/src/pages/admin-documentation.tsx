@@ -547,6 +547,29 @@ export default function AdminDocumentation() {
               </div>
 
               {/* Release v5.7.7 */}
+              {/* Release v8.0.0 */}
+              <div className="relative">
+                <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 ring-4 ring-white dark:ring-slate-950 animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                </span>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                    Build v8.0.0
+                    <Badge className="bg-indigo-600 text-white font-extrabold text-[9px] px-2 py-0">LATEST RELEASE</Badge>
+                  </h3>
+                  <span className="text-xs font-bold text-indigo-500">July 2026</span>
+                </div>
+                <p className="text-xs font-semibold text-indigo-650 dark:text-indigo-400 mt-0.5">Security Shielding, Candidate Hotkeys, Query Chunking & Debounced Auto-Saves</p>
+                <ul className="list-disc pl-5 text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
+                  <li><strong>Answer Key Shielding (`getStudentQuestionsByIds`):</strong> Omitted `correctAnswer` fields during active candidate sessions to prevent browser inspect malpractice.</li>
+                  <li><strong>Chunked Document Queries:</strong> Replaced full question bank table scans in `getQuestionsByIds` with batch `documentId()` Firestore `in` queries (10 docs per chunk).</li>
+                  <li><strong>Debounced Session Saves:</strong> Debounced answer auto-save calls by 1.2s to preserve network bandwidth and prevent Firestore write rate limits.</li>
+                  <li><strong>Candidate Keyboard Navigation:</strong> Added key controls (`A`/`B`/`C`/`D` option selection, `N`/`P`/`ArrowRight`/`ArrowLeft` navigation, `F` flag toggle).</li>
+                  <li><strong>Live Network Badge:</strong> Real-time connection indicator in sticky session navbar showing `Online (Auto-Sync)` or `Offline (Saved Locally)`.</li>
+                </ul>
+              </div>
+
+              {/* Release v5.7.7 */}
               <div className="relative">
                 <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/50 ring-4 ring-white dark:ring-slate-950">
                   <span className="h-2 w-2 rounded-full bg-white"></span>

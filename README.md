@@ -1,10 +1,19 @@
-# Faith Immaculate Academy CBT System (V5.7.7)
+# Faith Immaculate Academy CBT System (V8.0.0)
 
 A state-of-the-art, offline-first computer-based testing (CBT) platform and diagnostic analytics engine designed for modern educational institutions. Built using React, Express, and Firebase with offline synchronization and Gemini AI-driven assessment tools.
 
 ---
 
-## 🚀 What's New in V5.7.7
+## 🚀 What's New in V8.0.0
+
+### 🛡️ Security & Performance Enhancements
+- **Answer Key Security (`getStudentQuestionsByIds`)**: Active candidate exam sessions no longer load `correctAnswer` in client-side memory or network payloads during live exams.
+- **Chunked Firestore Query Optimization**: `getQuestionsByIds` queries Firestore in document ID batches of 10 (`where(documentId(), "in", chunk)`), eliminating full database scans and dramatically reducing read operations.
+- **Debounced Progress Auto-Save**: Candidate answer updates are debounced by 1.2s to prevent Firestore quota exhaustion while keeping local React state instantly responsive.
+
+### ⌨️ Candidate Keyboard Hotkeys & Real-time Network Indicator
+- **Keyboard Shortcuts**: Option selection via `A`/`B`/`C`/`D` or `1`/`2`/`3`/`4`, question navigation via `ArrowRight`/`N` (Next) and `ArrowLeft`/`P` (Previous), and `F` key to flag/unflag questions for review.
+- **Live Connection Badge**: Real-time visual pill status in the sticky progress bar indicating `Online (Auto-Sync)` or `Offline (Saved Locally)`.
 
 ### 🧠 Gemini AI-Powered Smart Importer
 - **Messy Docx/Txt Ingestion**: Upload unstructured Microsoft Word (`.docx`) and text files directly.

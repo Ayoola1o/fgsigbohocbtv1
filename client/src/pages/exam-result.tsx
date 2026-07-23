@@ -323,6 +323,99 @@ export default function ExamResult() {
           </Card>
         </div>
 
+        {/* Gemini AI Remedial Study Assistant Card */}
+        <Card className="mb-8 border border-indigo-100 dark:border-indigo-950/60 bg-gradient-to-r from-indigo-900 via-indigo-950 to-indigo-900 text-white rounded-3xl shadow-xl p-6 relative overflow-hidden">
+          <div className="absolute -right-4 -bottom-4 opacity-10 pointer-events-none">
+            <Sparkles className="h-40 w-40 text-white" />
+          </div>
+
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className="bg-white/10 text-indigo-200 border-none font-extrabold text-[9px] uppercase px-2 py-0.5">
+                Gemini AI Cognitive Coach
+              </Badge>
+              <div className="flex items-center gap-1 text-[11px] text-amber-300 font-bold">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Personalized Remedial Plan</span>
+              </div>
+            </div>
+
+            <h3 className="text-xl font-black tracking-tight">Academic Remedial & Growth Guidance</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-xs font-medium">
+              <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 space-y-2">
+                <span className="text-[10px] font-black uppercase text-emerald-300 tracking-wider flex items-center gap-1">
+                  <CheckCircle className="h-3.5 w-3.5" /> Strengths Identified
+                </span>
+                <p className="text-slate-200">
+                  {strengths.length > 0
+                    ? `Strong conceptual mastery shown in: ${strengths.join(", ")}. Keep maintaining focus in these areas!`
+                    : "Consistent effort shown across all subjects. Focus on increasing speed and accuracy."}
+                </p>
+              </div>
+
+              <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 space-y-2">
+                <span className="text-[10px] font-black uppercase text-amber-300 tracking-wider flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" /> Remedial Focus Topics
+                </span>
+                <p className="text-slate-200">
+                  {weaknesses.length > 0
+                    ? `Recommended revision targets: ${weaknesses.join(", ")}. Spend 30 minutes daily reviewing key definitions and practice questions.`
+                    : "No major subject weaknesses detected. Review tricky questions in the detailed log below to achieve perfection."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Subject Wise Performance breakdown */}
+        {subjectBreakdown && subjectBreakdown.length > 1 && (
+          <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden animate-in fade-in duration-300">
+            <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-805/85">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-205 flex items-center gap-2">
+                <BookOpen className="h-4.5 w-4.5 text-indigo-500" />
+                Subject-Wise Performance Breakdown
+              </h3>
+            </div>
+            <CardContent className="p-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {subjectBreakdown.map((b) => {
+                  const subjectPassed = b.percentage >= (exam?.passingScore || 50);
+                  return (
+                    <div key={b.subject} className="p-4 rounded-2xl border border-slate-150/60 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-955/20 flex flex-col justify-between">
+                      <div className="flex items-start justify-between gap-3 mb-2.5">
+                        <div className="truncate">
+                          <span className="block text-sm font-black text-slate-800 dark:text-slate-200 truncate">{b.subject}</span>
+                          <span className="block text-[10px] text-slate-455 font-bold mt-0.5">
+                            {b.correct} of {b.questions} solved correctly
+                          </span>
+                        </div>
+                        <Badge 
+                          className={`font-black tracking-wider text-[9px] uppercase rounded-md border px-2 py-0.5 ${
+                            subjectPassed 
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-450 hover:bg-emerald-50" 
+                              : "bg-rose-50 text-rose-700 border-rose-250 dark:bg-rose-955/20 dark:text-rose-455 hover:bg-rose-50"
+                          }`}
+                        >
+                          {b.percentage.toFixed(0)}%
+                        </Badge>
+                      </div>
+                      <div className="space-y-1">
+                        <Progress value={b.percentage} className={`h-1.5 rounded-full ${subjectPassed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-rose-500"}`} />
+                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 mt-1">
+                          <span>0%</span>
+                          <span>PASS THRESHOLD: {exam?.passingScore || 50}%</span>
+                          <span>100%</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Student and Exam Details Docket */}
         <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
           <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-805/85">
@@ -408,6 +501,11 @@ export default function ExamResult() {
                             <span className="ml-2 text-xs font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                               {question.points} point{question.points !== 1 ? 's' : ''}
                             </span>
+                            {question.subject && (
+                              <span className="ml-2 text-xs font-bold text-indigo-650 bg-indigo-50 dark:bg-indigo-955/50 dark:text-indigo-400 px-2 py-0.5 rounded-md uppercase">
+                                {question.subject}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </AccordionTrigger>

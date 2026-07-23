@@ -266,7 +266,18 @@ export default function AdminQuestions() {
         if (type === "fill_in_the_blank" || type === "essay") type = "theory";
         
         let opts = q.options;
-        if (type === "theory") opts = undefined;
+        if (type === "theory") {
+          opts = undefined;
+        } else if (Array.isArray(opts)) {
+          // Remove options that look like answer keys, e.g. "Answer: B", "Ans: B", etc.
+          opts = opts.filter((o: string) => {
+            const trimmed = o.trim().toLowerCase();
+            return !trimmed.startsWith("answer:") && 
+                   !trimmed.startsWith("ans:") && 
+                   !trimmed.startsWith("correct answer:") &&
+                   !trimmed.startsWith("correct key:");
+          });
+        }
         
         return {
           questionText: q.questionText,
@@ -521,6 +532,107 @@ export default function AdminQuestions() {
     return () => el.removeEventListener("change", onChange as any);
   }, []);
 
+  const normalizeQuestion = (
+    row: any,
+    targetClassLevel: string,
+    targetSubject: string,
+    targetTerm: string,
+    targetExamType: string,
+    targetDepartment?: string
+  ) => {
+    let rowOptions = row.options;
+    let rowCorrectAnswer = row.correctAnswer;
+    let rowQuestionType = row.questionType;
+
+    if (targetExamType === "Theory") {
+      rowQuestionType = "theory";
+      rowOptions = undefined; // No options for theory
+      if (!rowCorrectAnswer || String(rowCorrectAnswer).trim() === "") {
+        rowCorrectAnswer = "Theory Question"; // Default if missing
+      }
+    } else if (rowOptions?.length > 0 && rowCorrectAnswer) {
+      // Validation/Normalization for Objective/Multiple Choice
+      const normalizedCorrect = String(rowCorrectAnswer).trim();
+
+      // 1. Try exact match (case insensitive)
+      const exactMatch = rowOptions.find((o: string) => o.trim().toLowerCase() === normalizedCorrect.toLowerCase());
+
+      if (exactMatch) {
+        rowCorrectAnswer = exactMatch;
+      } else {
+        // 2. Try matching by index/letter (e.g. "a" matches "(a) ...", "A" matches "A. ...")
+        // Common patterns: "a", "b", "c" OR "0", "1", "2"
+
+        // Check if correct answer is a single letter (handles "a", "(a)", "a.", etc)
+        const letterMatch = normalizedCorrect.match(/^\(?([a-eA-E])\)?\.?$/);
+        const isLetter = !!letterMatch;
+        // Check if correct answer is a number
+        const isDigit = /^\d+$/.test(normalizedCorrect);
+
+        let matchedOption: string | undefined;
+
+        if (isLetter) {
+          const letter = letterMatch![1].toLowerCase();
+          const index = letter.charCodeAt(0) - 97; // 'a' -> 0
+
+          // First check by direct index if within bounds
+          if (index >= 0 && index < rowOptions.length) {
+            // Check prefixes
+            matchedOption = rowOptions.find((o: string) => {
+              const lower = o.toLowerCase().trim();
+              return lower.startsWith(`(${letter})`) || lower.startsWith(`${letter}.`) || lower.startsWith(`${letter})`);
+            });
+
+            // Fallback to index if no prefix match found (assuming strict order A, B, C...)
+            if (!matchedOption) {
+              matchedOption = rowOptions[index];
+            }
+          }
+        } else if (isDigit) {
+          const idx = parseInt(normalizedCorrect, 10);
+          if (idx >= 0 && idx < rowOptions.length) {
+            matchedOption = rowOptions[idx];
+          }
+        }
+
+        // 3. Try matching "Letter Text" format (e.g. "C unrepentant")
+        const compositeMatch = normalizedCorrect.match(/^([a-eA-E])\s+(.+)$/);
+        if (compositeMatch && !matchedOption) {
+          const letter = compositeMatch[1].toLowerCase();
+          const textPart = compositeMatch[2].trim();
+          const index = letter.charCodeAt(0) - 97;
+
+          // Try to match text part first
+          const textMatch = rowOptions.find((o: string) => o.trim().toLowerCase() === textPart.toLowerCase());
+          if (textMatch) {
+            matchedOption = textMatch;
+          }
+          // If text doesn't match exactly, fallback to using the letter as index
+          else if (index >= 0 && index < rowOptions.length) {
+            matchedOption = rowOptions[index];
+          }
+        }
+
+        if (matchedOption) {
+          rowCorrectAnswer = matchedOption;
+        }
+      }
+    }
+
+    return {
+      ...row,
+      classLevel: row.classLevel || targetClassLevel,
+      subject: row.subject || targetSubject,
+      term: row.term || targetTerm,
+      department: row.department || targetDepartment || undefined,
+      examType: row.examType || targetExamType,
+      questionType: rowQuestionType,
+      options: rowOptions,
+      correctAnswer: rowCorrectAnswer,
+      points: row.points || (targetExamType === "Theory" ? 5 : 1)
+    };
+  };
+
   const uploadPreview = async (opts?: { chunkSize?: number }) => {
     let rows = previewRows;
     if (!rows || rows.length === 0) {
@@ -546,98 +658,17 @@ export default function AdminQuestions() {
       if (imageUrl && uploadedImageMap[imageUrl]) {
         imageUrl = uploadedImageMap[imageUrl];
       }
-      let rowOptions = row.options;
-      let rowCorrectAnswer = row.correctAnswer;
-
-      if (csvExamType === "Theory") {
-        row.questionType = "theory";
-        rowOptions = undefined; // No options for theory
-        if (!rowCorrectAnswer || String(rowCorrectAnswer).trim() === "") {
-          rowCorrectAnswer = "Theory Question"; // Default if missing
-        }
-      } else if (rowOptions?.length > 0 && rowCorrectAnswer) {
-        // Validation/Normalization for Objective/Multiple Choice
-        const normalizedCorrect = String(rowCorrectAnswer).trim();
-
-        // 1. Try exact match (case insensitive)
-        const exactMatch = rowOptions.find((o: string) => o.trim().toLowerCase() === normalizedCorrect.toLowerCase());
-
-        if (exactMatch) {
-          rowCorrectAnswer = exactMatch;
-        } else {
-          // 2. Try matching by index/letter (e.g. "a" matches "(a) ...", "A" matches "A. ...")
-          // Common patterns: "a", "b", "c" OR "0", "1", "2"
-
-          // Check if correct answer is a single letter (handles "a", "(a)", "a.", etc)
-          const letterMatch = normalizedCorrect.match(/^\(?([a-eA-E])\)?\.?$/);
-          const isLetter = !!letterMatch;
-          // Check if correct answer is a number (1-based or 0-based?) - usually 0-based in array context but 1-based in user mind
-          const isDigit = /^\d+$/.test(normalizedCorrect);
-
-          let matchedOption: string | undefined;
-
-          if (isLetter) {
-            const letter = letterMatch![1].toLowerCase();
-            const index = letter.charCodeAt(0) - 97; // 'a' -> 0
-
-            // First check by direct index if within bounds
-            if (index >= 0 && index < rowOptions.length) {
-              // But wait, user might mean option starting with 'a' NOT index 0 necessarily if shuffled (though import assumes ordered)
-              // Better to check prefixes
-              matchedOption = rowOptions.find((o: string) => {
-                const lower = o.toLowerCase().trim();
-                return lower.startsWith(`(${letter})`) || lower.startsWith(`${letter}.`) || lower.startsWith(`${letter})`);
-              });
-
-              // Fallback to index if no prefix match found (assuming strict order A, B, C...)
-              if (!matchedOption) {
-                matchedOption = rowOptions[index];
-              }
-            }
-          } else if (isDigit) {
-            const idx = parseInt(normalizedCorrect, 10);
-            // Assume 1-based if > 0? or 0-based? Let's assume 0-indexed if < length
-            if (idx >= 0 && idx < rowOptions.length) {
-              matchedOption = rowOptions[idx];
-            }
-          }
-
-          // 3. Try matching "Letter Text" format (e.g. "C unrepentant")
-          const compositeMatch = normalizedCorrect.match(/^([a-eA-E])\s+(.+)$/);
-          if (compositeMatch && !matchedOption) {
-            const letter = compositeMatch[1].toLowerCase();
-            const textPart = compositeMatch[2].trim();
-            const index = letter.charCodeAt(0) - 97;
-
-            // Try to match text part first
-            const textMatch = rowOptions.find((o: string) => o.trim().toLowerCase() === textPart.toLowerCase());
-            if (textMatch) {
-              matchedOption = textMatch;
-            }
-            // If text doesn't match exactly, fallback to using the letter as index
-            else if (index >= 0 && index < rowOptions.length) {
-              matchedOption = rowOptions[index];
-            }
-          }
-
-          if (matchedOption) {
-            rowCorrectAnswer = matchedOption;
-          }
-        }
-      }
-
+      const normalized = normalizeQuestion(
+        row,
+        csvClassLevel,
+        csvSubject,
+        csvTerm,
+        csvExamType,
+        csvDepartment
+      );
       return {
-        ...row,
-        // Prioritize row data if present, otherwise fall back to global selection
-        classLevel: row.classLevel || csvClassLevel,
-        subject: row.subject || csvSubject,
-        term: row.term || csvTerm,
-        department: row.department || csvDepartment,
-        examType: row.examType || csvExamType,
-
-        imageUrl,
-        options: rowOptions,
-        correctAnswer: rowCorrectAnswer
+        ...normalized,
+        imageUrl
       };
     });
 
@@ -713,16 +744,17 @@ export default function AdminQuestions() {
     setIsImporting(true);
 
     try {
-      // 1. Prepare questions array
-      const questionsToUpload = parsedQuestions.map(q => ({
-        ...q,
-        classLevel: csvClassLevel,
-        subject: csvSubject,
-        term: csvTerm,
-        examType: csvExamType,
-        department: csvDepartment || undefined,
-        points: q.points || 1,
-      }));
+      // 1. Prepare questions array with normalization
+      const questionsToUpload = parsedQuestions.map(q => 
+        normalizeQuestion(
+          q,
+          csvClassLevel,
+          csvSubject,
+          csvTerm,
+          csvExamType,
+          csvDepartment
+        )
+      );
 
       // 2. Perform bulk upload
       const uploadedQuestions = await apiRequest<Question[]>("POST", "/api/questions/bulk", questionsToUpload);

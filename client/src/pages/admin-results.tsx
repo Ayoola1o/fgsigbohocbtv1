@@ -867,6 +867,7 @@ export default function AdminResults() {
                     <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-16">Class</TableHead>
                     <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-20">Dept</TableHead>
                     <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[150px]">Examination</TableHead>
+                    <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Subject Breakdown</TableHead>
                     <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Points</TableHead>
                     <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden print:table-cell">Score (%)</TableHead>
                     <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Score %</TableHead>
@@ -929,6 +930,44 @@ export default function AdminResults() {
                           </TableCell>
                           <TableCell className="font-semibold text-xs text-slate-800 dark:text-slate-300 max-w-[150px] truncate py-4" title={getExamTitle(result.examId)}>
                             {getExamTitle(result.examId)}
+                          </TableCell>
+
+                          {/* Subject Breakdown column */}
+                          <TableCell className="print:hidden py-4">
+                            {(() => {
+                              const exam = exams?.find(e => e.id === result.examId);
+                              if (!exam || !questions) return <span className="text-slate-400">-</span>;
+                              const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+                              const subjects = Array.from(new Set(examQuestions.map(q => q.subject || "General")));
+                              if (subjects.length <= 1) return <span className="text-slate-400">-</span>;
+
+                              return (
+                                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                  {subjects.map(subj => {
+                                    const subjQuestions = examQuestions.filter(q => (q.subject || "General") === subj);
+                                    let correct = 0;
+                                    subjQuestions.forEach(q => {
+                                      if (result.correctAnswers?.[q.id]) correct++;
+                                    });
+                                    const passed = subjQuestions.length > 0 ? (correct / subjQuestions.length) >= 0.5 : false;
+                                    return (
+                                      <Badge 
+                                        key={subj} 
+                                        variant="outline" 
+                                        className={cn(
+                                          "text-[9px] py-0 px-1 font-semibold whitespace-nowrap",
+                                          passed 
+                                            ? "border-emerald-200/50 bg-emerald-50/50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
+                                            : "border-rose-200/50 bg-rose-50/50 text-rose-700 dark:bg-rose-955/20 dark:text-rose-450"
+                                        )}
+                                      >
+                                        {subj}: {correct}/{subjQuestions.length}
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
 
                           {/* Score Column: Visible on Screen, Hidden on Print */}

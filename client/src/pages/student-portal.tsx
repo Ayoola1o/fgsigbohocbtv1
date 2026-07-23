@@ -108,9 +108,15 @@ export default function StudentPortal() {
   const currentStudent = freshestStudent || student;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16 font-sans">
+    <div 
+      className="min-h-screen bg-cover bg-center bg-no-repeat pb-16 font-sans relative"
+      style={{ backgroundImage: 'url("/login-bg.jpg")' }}
+    >
+      {/* Overlay layer for better contrast and readability */}
+      <div className="absolute inset-0 bg-slate-900/15 dark:bg-slate-950/40 backdrop-blur-[2px] pointer-events-none" />
+
       {/* Top Banner and Navigation */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-805/80 sticky top-0 z-50 backdrop-blur-md bg-opacity-80 dark:bg-opacity-80">
+      <div className="relative z-10 bg-white/95 dark:bg-slate-900/95 border-b border-slate-100 dark:border-slate-805/80 sticky top-0 z-50 backdrop-blur-md">
         <div className="container mx-auto px-4 py-4.5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-10 w-10 rounded-2xl bg-indigo-600 dark:bg-indigo-500/10 text-white dark:text-indigo-400 flex items-center justify-center font-black shadow-lg shadow-indigo-650/15 dark:shadow-none animate-pulse">
@@ -135,7 +141,7 @@ export default function StudentPortal() {
             <Button
               variant="outline"
               onClick={handleLogout}
-              className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 dark:hover:text-rose-455 font-bold h-9 px-4.5 transition-colors"
+              className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-355 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 dark:hover:text-rose-455 font-bold h-9 px-4.5 transition-colors"
               data-testid="button-logout"
             >
               <LogOut className="mr-2 h-4 w-4" />
@@ -145,7 +151,8 @@ export default function StudentPortal() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-10 max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-550">
+      <div className="relative z-10 container mx-auto px-4 py-10 max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-550">
+        <Card className="border border-slate-200/50 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-2xl rounded-[32px] p-6 sm:p-8 md:p-10">
         {/* Welcome Dashboard Profile Panel */}
         <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-indigo-900 dark:from-indigo-955 dark:via-indigo-965 dark:to-indigo-955 text-white p-6 sm:p-8 rounded-3xl shadow-xl shadow-indigo-950/10 mb-10 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-5 dark:opacity-10 pointer-events-none">
@@ -394,6 +401,7 @@ export default function StudentPortal() {
             </Card>
           )}
         </div>
+        </Card>
       </div>
     </div>
   );
