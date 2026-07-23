@@ -1365,7 +1365,42 @@ export default function AdminAnalytics() {
                 </div>
 
                 <div className="p-4 bg-white dark:bg-slate-900 border border-slate-150/80 rounded-xl space-y-2 mt-4 shadow-sm">
-                  <span className="font-black text-xs text-indigo-650 dark:text-indigo-400 flex items-center gap-1.5"><Brain className="h-4 w-4" /> Curriculum Rigor diagnosis</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs text-indigo-650 dark:text-indigo-400 flex items-center gap-1.5"><Brain className="h-4 w-4" /> Curriculum Rigor diagnosis</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/ai/diagnose-curriculum", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              meanScore: analytics?.mean || 65,
+                              stdDev: analytics?.stdDev || 12,
+                              skewness: analytics?.skewness || 0,
+                              hardQuestionCount: (analytics?.itemAnalysis || []).filter(q => q.pIndex < 0.3).length,
+                              easyQuestionCount: (analytics?.itemAnalysis || []).filter(q => q.pIndex > 0.8).length
+                            })
+                          });
+                          const data = await res.json();
+                          toast({
+                            title: "AI Curriculum Diagnosis",
+                            description: `${data.diagnosis} Recommendations: ${data.actionSteps?.join(" ")}`,
+                          });
+                        } catch (err: any) {
+                          toast({
+                            title: "Diagnosis Error",
+                            description: "Could not run AI curriculum diagnostic.",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                      className="h-6 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-400 px-2 rounded-lg"
+                    >
+                      <Sparkles className="h-3 w-3 mr-1" /> Run AI Diagnosis
+                    </Button>
+                  </div>
                   <p className="text-[11px] leading-relaxed text-slate-500 font-semibold">
                     {analytics?.skewness !== undefined ? (
                       analytics.skewness < -0.5 ? "The cohort exhibits a negative/left skew. Student scores are highly clustered towards high percentages, indicating strong mastery or a highly accessible test rigor." :

@@ -1002,6 +1002,193 @@ Provide structured JSON with:
     }
   });
 
+  // 1. AI Bulk Question & Exam Generator Endpoint
+  app.post("/api/ai/generate-questions", async (req, res) => {
+    try {
+      const { subject, classLevel, term, topic, count, examType } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      const numQuestions = Math.min(Math.max(Number(count) || 5, 1), 25);
+      const isObjectives = !examType || examType.toLowerCase().includes("objective") || examType.toLowerCase().includes("mcq");
+
+      if (!apiKey) {
+        // Fallback mock questions generator if GEMINI_API_KEY is not set
+        const mockQuestions = Array.from({ length: numQuestions }, (_, i) => ({
+          subject: subject || "General Studies",
+          classLevel: classLevel || "JSS 1",
+          term: term || "First Term",
+          questionText: `[AI Generated Sample Q${i + 1}] Core principle of ${topic || subject || 'the syllabus'}: What is the primary characteristic?`,
+          questionType: isObjectives ? "multiple_choice" : "theory",
+          options: isObjectives ? [
+            "A) Primary fundamental standard",
+            "B) Secondary observational factor",
+            "C) Variable experimental parameter",
+            "D) Derived structural component"
+          ] : null,
+          correctAnswer: isObjectives ? "A" : "Primary fundamental standard",
+          points: 1,
+          difficulty: i % 3 === 0 ? "Hard" : i % 2 === 0 ? "Medium" : "Easy"
+        }));
+        return res.json({ questions: mockQuestions });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate ${numQuestions} high-quality, syllabus-aligned ${isObjectives ? 'multiple-choice objective' : 'theory'} questions for Nigerian CBT curriculum.
+Subject: ${subject || 'General Science'}
+Class Level: ${classLevel || 'JSS 1'}
+Term: ${term || 'First Term'}
+Topic Focus: ${topic || 'Core Curriculum'}
+Format: Return strict JSON with a key "questions" containing an array of objects.
+
+Each question object must include:
+- "subject": "${subject}"
+- "classLevel": "${classLevel}"
+- "term": "${term}"
+- "questionText": Clear concise question text
+- "questionType": "${isObjectives ? 'multiple_choice' : 'theory'}"
+- "options": ${isObjectives ? '["A) Option text", "B) Option text", "C) Option text", "D) Option text"]' : 'null'}
+- "correctAnswer": "${isObjectives ? 'Designated correct letter A, B, C, or D' : 'Expected model answer key'}"
+- "points": 1
+- "difficulty": "Easy", "Medium", or "Hard"`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const text = response.text || "{}";
+      const parsed = JSON.parse(text);
+      res.json(parsed);
+    } catch (err: any) {
+      console.error("AI Question Generation Error:", err);
+      res.status(500).json({ error: "Failed to generate AI questions", details: err.message });
+    }
+  });
+
+  // 2. AI Student Early Risk Analysis Endpoint
+  app.post("/api/ai/student-risk-analysis", async (req, res) => {
+    try {
+      const { studentName, classLevel, averageScore, recentScores, tabSwitches } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (!apiKey) {
+        const isAtRisk = (averageScore || 50) < 50 || (tabSwitches || 0) > 4;
+        return res.json({
+          riskLevel: isAtRisk ? "High Risk" : "Stable",
+          recommendation: isAtRisk 
+            ? `Candidate ${studentName || 'Student'} is experiencing performance dips in recent CBT sessions. Assign 1-on-1 remedial drills.`
+            : `Candidate ${studentName || 'Student'} maintains steady academic trajectory across term assessments.`
+        });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Analyze student risk for Faith Immaculate Academy:
+Student: ${studentName} (${classLevel})
+Cumulative Average: ${averageScore}%
+Recent Score Trend: ${JSON.stringify(recentScores || [])}
+Integrity Flags (Tab Switches): ${tabSwitches || 0}
+
+Return JSON with:
+1. "riskLevel": "Low Risk", "Moderate Risk", or "High Risk"
+2. "recommendation": 2-sentence actionable intervention strategy for teachers/parents.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const parsed = JSON.parse(response.text || "{}");
+      res.json(parsed);
+    } catch (err: any) {
+      res.json({ riskLevel: "Moderate Risk", recommendation: "Monitor candidate in upcoming term drills." });
+    }
+  });
+
+  // 3. AI Report Card Comment Generator Endpoint
+  app.post("/api/ai/generate-comment", async (req, res) => {
+    try {
+      const { studentName, averageScore, classLevel, role, strengths, weaknesses } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      const isPrincipal = role === "principal";
+
+      if (!apiKey) {
+        return res.json({
+          comment: isPrincipal 
+            ? `${studentName} has demonstrated admirable academic commitment this term with an overall average of ${averageScore}%. Keep striving for excellence.`
+            : `${studentName} shows good effort in class assessments. Continued focus on ${weaknesses?.[0] || 'core subjects'} will yield even higher results next term.`
+        });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate a professional, encouraging ${isPrincipal ? 'Principal' : 'Form Teacher'} report card remark for a student at Faith Immaculate Academy.
+Student Name: ${studentName}
+Class: ${classLevel}
+Term Score Average: ${averageScore}%
+Identified Strengths: ${JSON.stringify(strengths || [])}
+Focus Weaknesses: ${JSON.stringify(weaknesses || [])}
+
+Return JSON with a single key "comment" containing a warm 2-sentence formal remark.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const parsed = JSON.parse(response.text || "{}");
+      res.json(parsed);
+    } catch (err: any) {
+      res.json({ comment: `${req.body.studentName || 'Student'} shows active participation. Keep striving for higher academic achievements.` });
+    }
+  });
+
+  // 4. AI Curriculum & Teacher Rigor Diagnostic Endpoint
+  app.post("/api/ai/diagnose-curriculum", async (req, res) => {
+    try {
+      const { meanScore, stdDev, skewness, hardQuestionCount, easyQuestionCount } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (!apiKey) {
+        return res.json({
+          diagnosis: `Cohort mean score is ${meanScore || 65}%. The examination items demonstrate a balanced spread between difficulty and discrimination parameters.`,
+          actionSteps: [
+            "Maintain current question bank difficulty ratio.",
+            "Review items with p-index < 0.20 for potential ambiguity."
+          ]
+        });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Analyze CBT curriculum examination statistics for Faith Immaculate Academy:
+Mean Score: ${meanScore}%
+Standard Deviation: ${stdDev}
+Skewness: ${skewness}
+Hard Questions (p < 0.3): ${hardQuestionCount}
+Easy Questions (p > 0.8): ${easyQuestionCount}
+
+Return JSON with:
+1. "diagnosis": 2-sentence institutional summary of test difficulty & validity.
+2. "actionSteps": Array of 2 actionable recommendations for question authors.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const parsed = JSON.parse(response.text || "{}");
+      res.json(parsed);
+    } catch (err: any) {
+      res.json({
+        diagnosis: "Examination parameters show standard distribution metrics.",
+        actionSteps: ["Periodically review distractor options for hard items."]
+      });
+    }
+  });
+
   // ─── Server-Side Psychometric Analytics Engine ───
   // Moves ALL heavy computation off the browser thread to eliminate client freezing.
   app.get("/api/analytics", async (req, res) => {

@@ -27,6 +27,8 @@ export default function AdminSettings() {
   const [cheatProtection, setCheatProtection] = useState<boolean>(true);
   const [passingThreshold, setPassingThreshold] = useState<number>(50);
   const [timerWarning, setTimerWarning] = useState<number>(5);
+  const [conceptStrengthThreshold, setConceptStrengthThreshold] = useState<number>(70);
+  const [conceptFocusThreshold, setConceptFocusThreshold] = useState<number>(50);
 
   // Load settings on mount
   useEffect(() => {
@@ -63,6 +65,16 @@ export default function AdminSettings() {
     const savedTimerWarning = localStorage.getItem("fia_cbt_settings_timer_warning");
     if (savedTimerWarning !== null) {
       setTimerWarning(Number(savedTimerWarning));
+    }
+
+    const savedConceptStrength = localStorage.getItem("fia_cbt_settings_concept_strength_threshold");
+    if (savedConceptStrength !== null) {
+      setConceptStrengthThreshold(Number(savedConceptStrength));
+    }
+
+    const savedConceptFocus = localStorage.getItem("fia_cbt_settings_concept_focus_threshold");
+    if (savedConceptFocus !== null) {
+      setConceptFocusThreshold(Number(savedConceptFocus));
     }
 
     // Load custom settings
@@ -152,6 +164,8 @@ export default function AdminSettings() {
     localStorage.setItem("fia_cbt_settings_signature_teacher", signatureTeacher);
     localStorage.setItem("fia_cbt_settings_signature_officer", signatureOfficer);
     localStorage.setItem("fia_cbt_settings_analysis_mode", analysisMode);
+    localStorage.setItem("fia_cbt_settings_concept_strength_threshold", String(conceptStrengthThreshold));
+    localStorage.setItem("fia_cbt_settings_concept_focus_threshold", String(conceptFocusThreshold));
 
     // Dispatch a storage event so other open pages reactive components know settings changed
     window.dispatchEvent(new Event("storage"));
@@ -544,6 +558,48 @@ export default function AdminSettings() {
                     className="font-extrabold text-right rounded-xl border-slate-200 dark:border-slate-800"
                   />
                   <span className="text-xs font-bold text-slate-400">Min</span>
+                </div>
+              </div>
+
+              {/* Concept Strength Threshold Input */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300 gap-4">
+                <div className="space-y-1">
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Concept Strengths Threshold (🏆 ≥%)</span>
+                  <span className="text-xs text-slate-500 leading-relaxed block">
+                    Minimum percentage score required for a subject topic to qualify as a Concept Strength (🏆).
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 max-w-[120px] sm:max-w-none w-full sm:w-28 shrink-0">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={conceptStrengthThreshold}
+                    onChange={(e) => setConceptStrengthThreshold(Math.max(1, Math.min(100, Number(e.target.value))))}
+                    className="font-extrabold text-right rounded-xl border-slate-200 dark:border-slate-800"
+                  />
+                  <span className="text-xs font-bold text-slate-400">%</span>
+                </div>
+              </div>
+
+              {/* Focus Areas Threshold Input */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-slate-100 dark:border-slate-800/45 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300 gap-4">
+                <div className="space-y-1">
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Focus Areas Threshold (⚠️ &lt;%)</span>
+                  <span className="text-xs text-slate-500 leading-relaxed block">
+                    Percentage score cutoff below which a subject topic is flagged as a Focus Area (⚠️ requiring remedial revision).
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 max-w-[120px] sm:max-w-none w-full sm:w-28 shrink-0">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={conceptFocusThreshold}
+                    onChange={(e) => setConceptFocusThreshold(Math.max(1, Math.min(100, Number(e.target.value))))}
+                    className="font-extrabold text-right rounded-xl border-slate-200 dark:border-slate-800"
+                  />
+                  <span className="text-xs font-bold text-slate-400">%</span>
                 </div>
               </div>
 

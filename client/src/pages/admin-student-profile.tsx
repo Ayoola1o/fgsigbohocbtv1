@@ -390,16 +390,19 @@ export default function AdminStudentProfile() {
             });
         });
 
+        const strengthThreshold = Number(localStorage.getItem("fia_cbt_settings_concept_strength_threshold") || "70");
+        const focusThreshold = Number(localStorage.getItem("fia_cbt_settings_concept_focus_threshold") || "50");
+
         const strengths: string[] = [];
         const weaknesses: string[] = [];
 
         Object.entries(diagnostics).forEach(([subject, d]) => {
             const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
-            if (pct >= 70) strengths.push(subject);
-            else if (pct < 50) weaknesses.push(subject);
+            if (pct >= strengthThreshold) strengths.push(subject);
+            else if (pct < focusThreshold) weaknesses.push(subject);
         });
 
-        return { strengths, weaknesses };
+        return { strengths, weaknesses, strengthThreshold, focusThreshold };
     }, [studentResults, exams, questions]);
 
     const pedagogicalAnalysis = useMemo(() => {
@@ -1061,7 +1064,7 @@ export default function AdminStudentProfile() {
                                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                                               <div className="space-y-2">
                                                   <h5 className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                                                      <CheckCircle2 className="w-3.5 h-3.5" /> Concept Strengths (🏆 &ge;70%)
+                                                      <CheckCircle2 className="w-3.5 h-3.5" /> Concept Strengths (🏆 &ge;{subjectDiagnostics.strengthThreshold}%)
                                                   </h5>
                                                   <div className="flex flex-wrap gap-1.5">
                                                       {subjectDiagnostics.strengths.length > 0 ? (
@@ -1078,7 +1081,7 @@ export default function AdminStudentProfile() {
                           
                                               <div className="space-y-2">
                                                   <h5 className="text-[11px] font-black text-rose-600 dark:text-rose-450 uppercase tracking-wider flex items-center gap-1">
-                                                      <AlertTriangle className="w-3.5 h-3.5" /> Focus Areas (⚠️ &lt;50%)
+                                                      <AlertTriangle className="w-3.5 h-3.5" /> Focus Areas (⚠️ &lt;{subjectDiagnostics.focusThreshold}%)
                                                   </h5>
                                                   <div className="flex flex-wrap gap-1.5">
                                                       {subjectDiagnostics.weaknesses.length > 0 ? (
@@ -1098,9 +1101,46 @@ export default function AdminStudentProfile() {
                                       {/* Right Panel: Prescribed Action Plan */}
                                       <div className="lg:col-span-1 bg-slate-50/50 dark:bg-slate-900/40 p-5 rounded-2xl border border-slate-100/50 flex flex-col justify-between">
                                           <div className="space-y-3">
-                                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 border-b pb-2">
-                                                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Prescribed Action Plan
-                                              </h4>
+                                              <div className="flex items-center justify-between border-b pb-2">
+                                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Prescribed Action Plan
+                                                  </h4>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={async () => {
+                                                      try {
+                                                        const avg = Math.round(studentResults.reduce((acc, r) => acc + r.percentage, 0) / (studentResults.length || 1));
+                                                        const res = await fetch("/api/ai/generate-comment", {
+                                                          method: "POST",
+                                                          headers: { "Content-Type": "application/json" },
+                                                          body: JSON.stringify({
+                                                            studentName: student.name,
+                                                            averageScore: avg,
+                                                            classLevel: student.classLevel,
+                                                            role: "teacher",
+                                                            strengths: subjectDiagnostics.strengths,
+                                                            weaknesses: subjectDiagnostics.weaknesses
+                                                          })
+                                                        });
+                                                        const data = await res.json();
+                                                        toast({
+                                                          title: "AI Teacher Remark Generated",
+                                                          description: data.comment,
+                                                        });
+                                                      } catch (err: any) {
+                                                        toast({
+                                                          title: "Remark Error",
+                                                          description: "Failed to generate AI comment.",
+                                                          variant: "destructive"
+                                                        });
+                                                      }
+                                                    }}
+                                                    className="h-7 text-[10px] font-bold rounded-lg gap-1 border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100"
+                                                  >
+                                                    <Sparkles className="h-3 w-3 text-indigo-600" /> AI Remark
+                                                  </Button>
+                                              </div>
                                               <ul className="space-y-3 pt-1">
                                                   {pedagogicalAnalysis.planSteps.map((step, idx) => (
                                                       <li key={idx} className="flex gap-2.5 items-start text-[12px] font-semibold text-slate-600 dark:text-slate-350">
