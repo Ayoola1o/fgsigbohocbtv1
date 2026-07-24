@@ -295,7 +295,34 @@ export const getExamSession = async (id: string): Promise<(ExamSession & { serve
     return d.exists() ? { ...docToData<ExamSession>(d), serverTime: new Date().toISOString() } : null;
 };
 
-export const createExamSession = async (session: InsertExamSession): Promise<ExamSession> => {
+export const getSubjectDepartment = (subjectName: string, questionDepartment?: string): string => {
+    if (questionDepartment && questionDepartment !== "General" && questionDepartment !== "Others") {
+        return questionDepartment;
+    }
+
+    const subj = (subjectName || "").toLowerCase().trim();
+
+    // Science stream
+    if (subj.includes("physics") || subj.includes("chemistry") || subj.includes("biology") || subj.includes("further math") || subj.includes("further mathematics")) {
+        return "Science";
+    }
+
+    // Art stream
+    if (subj.includes("government") || subj.includes("literature") || subj.includes("history") || subj.includes("crs") || subj.includes("irs") || subj.includes("christian religious") || subj.includes("islamic religious") || subj.includes("fine art") || subj.includes("music")) {
+        return "Art";
+    }
+
+    // Commercial stream
+    if (subj.includes("accounting") || subj.includes("commerce") || subj.includes("office practice") || subj.includes("bookkeeping") || subj.includes("store management") || subj.includes("financial accounting")) {
+        return "Commercial";
+    }
+
+    // Default General
+    return "General";
+};
+
+export const createExamSession = async (session: { examId: string; studentName: string; studentId: string; [key: string]: any }): Promise<ExamSession> => {
+    console.log("createExamSession: Starting session creation...", session);
     try {
         const exam = await getExam(session.examId);
         if (!exam) {
@@ -303,11 +330,39 @@ export const createExamSession = async (session: InsertExamSession): Promise<Exa
             throw new Error("Exam not found");
         }
 
+        // Retrieve candidate's department if available
+        let candidateDepartment = "";
+        if (session.studentId) {
+            try {
+                const students = await getStudents();
+                const student = students.find(s => 
+                    s.studentId?.trim().toLowerCase() === session.studentId?.trim().toLowerCase() ||
+                    s.id?.trim().toLowerCase() === session.studentId?.trim().toLowerCase()
+                );
+                if (student && student.department) {
+                    candidateDepartment = student.department;
+                }
+            } catch (e) {
+                console.warn("Could not fetch student department for exam session filter", e);
+            }
+        }
+
         let sessionQuestionIds = [...exam.questionIds];
+        const allQuestions = await getQuestions();
+        let poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+
+        // Filter pool questions based on candidate department stream (e.g. Science vs Art vs Commercial vs General)
+        if (candidateDepartment && candidateDepartment !== "General" && candidateDepartment !== "Others") {
+            poolQuestions = poolQuestions.filter(q => {
+                const qDept = getSubjectDepartment(q.subject, q.department || undefined);
+                if (qDept !== "General" && qDept.toLowerCase() !== candidateDepartment.toLowerCase()) {
+                    return false; // Skip questions strictly belonging to another department stream
+                }
+                return true;
+            });
+        }
 
         if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
-            const allQuestions = await getQuestions();
-            const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
             let selectedIds: string[] = [];
 
             for (const [subj, count] of Object.entries(exam.subjectConfig as Record<string, number>)) {
@@ -315,6 +370,7 @@ export const createExamSession = async (session: InsertExamSession): Promise<Exa
                 if (limit <= 0) continue;
 
                 const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase() === subj.toLowerCase());
+                if (subjQuestions.length === 0) continue;
 
                 // Shuffle
                 for (let i = subjQuestions.length - 1; i > 0; i--) {
@@ -327,9 +383,9 @@ export const createExamSession = async (session: InsertExamSession): Promise<Exa
             }
             sessionQuestionIds = selectedIds;
         } else {
+            sessionQuestionIds = poolQuestions.map(q => q.id);
+
             // Shuffle questions for this specific session
-            // This ensures that if the exam pool (exam.questionIds) is larger than numberOfQuestionsToDisplay,
-            // each student will get a different random subset of questions.
             for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];

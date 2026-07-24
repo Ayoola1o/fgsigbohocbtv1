@@ -835,6 +835,17 @@ function ExamForm({
                 <p className="text-[10px] text-slate-400 italic">No existing questions found for this class.</p>
               )}
             </div>
+
+            {formData.subject && formData.subject.includes(",") && (
+              <div className="p-2.5 bg-indigo-50/60 dark:bg-indigo-955/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-[11px] font-semibold text-indigo-800 dark:text-indigo-300 mt-2 space-y-1">
+                <span className="font-extrabold flex items-center gap-1 text-indigo-700 dark:text-indigo-400 uppercase tracking-wider text-[9px]">
+                  <Sparkles className="h-3 w-3 text-indigo-500" /> Candidate Smart Stream Filter Active
+                </span>
+                <p className="leading-tight">
+                  Pooled subjects (e.g. Physics, Government, Yoruba) automatically adapt per student session: Science candidates get Physics + General, Art candidates get Government + General.
+                </p>
+              </div>
+            )}
             {/* Custom subject */}
             <div className="flex gap-2 items-center mt-2">
               <Input

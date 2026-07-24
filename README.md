@@ -1,10 +1,18 @@
-# Faith Immaculate Academy CBT System (V8.0.0)
+# Faith Immaculate Academy CBT System (V8.1.0)
 
 A state-of-the-art, offline-first computer-based testing (CBT) platform and diagnostic analytics engine designed for modern educational institutions. Built using React, Express, and Firebase with offline synchronization and Gemini AI-driven assessment tools.
 
 ---
 
-## 🚀 What's New in V8.0.0
+## 🚀 What's New in V8.1.0
+
+### 🎯 Candidate Department-Aware Composite Exam Stream Filter
+- **Multi-Subject Pooling**: Administrators can pool all subjects (e.g. Physics, Government, Agricultural Science, Yoruba) into a single composite exam paper.
+- **Smart Candidate Stream Adaptability**: When a student starts an exam session, the system automatically checks their registered department (Science, Art, Commercial) and filters questions dynamically:
+  - **Science Candidates**: Presented with Physics (Science) + Agricultural Science & Yoruba (General). Non-matching stream subjects (e.g., Government for Art) are automatically filtered out.
+  - **Art Candidates**: Presented with Government (Art) + Agricultural Science & Yoruba (General).
+  - **Commercial Candidates**: Presented with Commercial stream subjects + General subjects.
+- **Fair Score Normalization**: `submitExamSession` calculates candidates' total points and percentage scores out of their exact assigned stream questions.
 
 ### 🛡️ Security & Performance Enhancements
 - **Answer Key Security (`getStudentQuestionsByIds`)**: Active candidate exam sessions no longer load `correctAnswer` in client-side memory or network payloads during live exams.
