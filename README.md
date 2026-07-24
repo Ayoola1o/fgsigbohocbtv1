@@ -12,6 +12,7 @@ A state-of-the-art, offline-first computer-based testing (CBT) platform and diag
   - **Science Candidates**: Presented with Physics (Science) + Agricultural Science & Yoruba (General). Non-matching stream subjects (e.g., Government for Art) are automatically filtered out.
   - **Art Candidates**: Presented with Government (Art) + Agricultural Science & Yoruba (General).
   - **Commercial Candidates**: Presented with Commercial stream subjects + General subjects.
+- **Student Portal Exam Deck Filtering**: The student portal deck automatically filters exam cards so candidates only see exams relevant to their department stream or general institutional assessments.
 - **Fair Score Normalization**: `submitExamSession` calculates candidates' total points and percentage scores out of their exact assigned stream questions.
 
 ### 🛡️ Security & Performance Enhancements

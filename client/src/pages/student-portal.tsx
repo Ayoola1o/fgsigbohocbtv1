@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Clock, BookOpen, CheckCircle, LogOut, Lock, Sparkles, Award, ShieldAlert, User, ArrowRight } from "lucide-react";
 import type { Exam, Student, Result } from "@shared/schema";
-import { getExams } from "@/lib/firebase-api";
+import { getExams, getSubjectDepartment } from "@/lib/firebase-api";
 
 export default function StudentPortal() {
   const [, setLocation] = useLocation();
@@ -219,10 +219,41 @@ export default function StudentPortal() {
                   if (!exam.isActive) return false;
                   // If hideCompleted setting is active, filter out completed exams
                   if (hideCompleted && isExamCompleted(exam.id)) return false;
-                  // If exam is general (no department or "General"), allow it for all
-                  if (!exam.department || exam.department === "General") return true;
-                  // If exam is specific to a department, student must match it
-                  return exam.department === currentStudent.department;
+
+                  const candidateDept = currentStudent?.department?.trim();
+
+                  // 1. If exam has explicit department set, check department match
+                  if (exam.department && exam.department !== "General" && exam.department !== "Others") {
+                    if (candidateDept && candidateDept !== "General" && candidateDept !== "Others") {
+                      if (exam.department.toLowerCase() !== candidateDept.toLowerCase()) {
+                        return false;
+                      }
+                    }
+                  }
+
+                  // 2. If single subject exam (no comma in subject name), check subject stream department
+                  if (exam.subject && !exam.subject.includes(",")) {
+                    const subjDept = getSubjectDepartment(exam.subject, exam.department || undefined);
+                    if (subjDept !== "General" && candidateDept && candidateDept !== "General" && candidateDept !== "Others") {
+                      if (subjDept.toLowerCase() !== candidateDept.toLowerCase()) {
+                        return false;
+                      }
+                    }
+                  }
+
+                  // 3. For multi-subject composite exams, if candidate has a specific department, ensure at least one subject matches candidate stream or is General
+                  if (exam.subject && exam.subject.includes(",")) {
+                    if (candidateDept && candidateDept !== "General" && candidateDept !== "Others") {
+                      const subjects = exam.subject.split(",").map(s => s.trim()).filter(Boolean);
+                      const hasMatchingSubject = subjects.some(s => {
+                        const sDept = getSubjectDepartment(s);
+                        return sDept === "General" || sDept.toLowerCase() === candidateDept.toLowerCase();
+                      });
+                      if (!hasMatchingSubject) return false;
+                    }
+                  }
+
+                  return true;
                 })
                 .map((exam) => {
                   const examResult = getStudentResult(exam.id);
