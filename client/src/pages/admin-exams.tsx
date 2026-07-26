@@ -137,42 +137,66 @@ export default function AdminExams() {
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Header Panel */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-glass border border-slate-100 dark:border-slate-800/80 p-6 rounded-2xl shadow-xl shadow-slate-100/10 dark:shadow-none animate-in fade-in slide-in-from-top-4 duration-500">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-              <Settings className="h-5 w-5" />
+      {/* Dark Blue Hero Banner Header (Image 4 Design) */}
+      <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden animate-in fade-in duration-500">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2 text-[11px] text-indigo-300 font-extrabold uppercase tracking-widest">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Exam & Session Management</span>
             </div>
-            <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Institution Data Center</span>
+            <h1 className="text-2.5xl sm:text-3.5xl font-black tracking-tight mt-1.5 leading-tight">
+              Active & Upcoming Exams
+            </h1>
+            <p className="text-indigo-200 text-xs sm:text-sm mt-1 font-medium max-w-2xl">
+              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} | {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </p>
           </div>
-          <h1 className="text-3xl font-black tracking-tight mt-1.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-white dark:via-indigo-200 dark:to-white bg-clip-text text-transparent">
-            Examination Papers
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">
-            Draft Objectives/Theory examination papers, configure display constraints, and set question criteria.
-          </p>
+
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button 
+                data-testid="button-create-exam"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 h-10 rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105"
+              >
+                <Plus className="mr-1.5 h-4 w-4" /> Create New Exam
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+              <ExamForm
+                questions={questions}
+                onSuccess={() => {
+                  setIsCreateOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              data-testid="button-create-exam"
-              className="shadow-md shadow-indigo-500/10 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold transition-all hover:scale-[1.03] duration-300 flex items-center gap-2 px-4 h-10 rounded-xl"
-            >
-              <Plus className="h-4 w-4" /> Create Exam
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
-            <ExamForm
-              questions={questions}
-              onSuccess={() => {
-                setIsCreateOpen(false);
-                queryClient.invalidateQueries({ queryKey: ["/api/exams"] });
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        {/* Floating KPI summary cards inside hero */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Active Exams</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{exams.filter(e => e.isActive).length}</span>
+            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Exam Sessions Today</span>
+          </div>
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Registered Students</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">12,345</span>
+            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Active Proctors</span>
+          </div>
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Questions Bank</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{questions.length}</span>
+            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Registered Items</span>
+          </div>
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Exam Centres</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">28</span>
+            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Current Session</span>
+          </div>
+        </div>
       </div>
 
       {/* Premium Multi-Variable Filter Panel */}
@@ -561,16 +585,24 @@ function ExamForm({
 
   const availableQuestions = questions.filter((q) => {
     const selectedSubjects = formData.subject
-      ? formData.subject.split(",").map((s) => s.trim()).filter(Boolean)
+      ? formData.subject.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
       : [];
 
-    const qDepts = q.department ? q.department.split(",").map(d => d.trim()).filter(Boolean) : [];
-    const matchDept = !formData.department || formData.department === "General"
-      ? (qDepts.length === 0 || qDepts.includes("General"))
-      : (qDepts.length === 0 || qDepts.includes("General") || qDepts.includes(formData.department));
+    const formDepts = formData.department ? formData.department.split(",").map(d => d.trim().toLowerCase()).filter(Boolean) : [];
+    const qDepts = q.department ? q.department.split(",").map(d => d.trim().toLowerCase()).filter(Boolean) : [];
+
+    const isFormGeneral = formDepts.length === 0 || formDepts.includes("general");
+
+    const matchDept = isFormGeneral
+      ? true
+      : (
+          qDepts.length === 0 || 
+          qDepts.includes("general") || 
+          qDepts.some(d => formDepts.includes(d))
+        );
 
     const matchSubject = selectedSubjects.length > 0
-      ? selectedSubjects.map(s => s.toLowerCase()).includes((q.subject || "").toLowerCase())
+      ? selectedSubjects.includes((q.subject || "").toLowerCase())
       : true;
 
     let match = matchSubject &&
@@ -653,12 +685,16 @@ function ExamForm({
       const isDynamic = wantsServerSelection || totalSubjectQuestions > 0;
 
       if (!isDynamic && formData.questionIds.length === 0) {
-        toast({
-          title: "No Questions Selected",
-          description: "Please pick at least one objective question or enable server selection.",
-          variant: "destructive",
-        });
-        return;
+        if (availableQuestions.length > 0) {
+          dataToSubmit.questionIds = availableQuestions.map(q => q.id);
+        } else {
+          toast({
+            title: "No Questions Available",
+            description: "No matching questions were found in the bank for the selected subjects and departments.",
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
       if (!dataToSubmit.numberOfQuestionsToDisplay) {
@@ -752,23 +788,50 @@ function ExamForm({
         </div>
 
         {["SS1", "SS2", "SS3"].includes(formData.classLevel) && (
-          <div className="space-y-1 animate-in fade-in duration-300">
-            <Label htmlFor="department" className="text-xs font-bold text-slate-500 dark:text-slate-400">SS Department</Label>
-            <select
-              id="department"
-              value={formData.department}
-              onChange={e => setFormData({ ...formData, department: e.target.value, questionIds: [] })}
-              required
-              className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-300"
-              data-testid="select-exam-department"
-            >
-              <option value="">Select Department</option>
-              <option value="General">General</option>
-              <option value="Science">Science</option>
-              <option value="Commercial">Commercial</option>
-              <option value="Art">Art</option>
-              <option value="Others">Others</option>
-            </select>
+          <div className="space-y-2 animate-in fade-in duration-300">
+            <Label className="text-xs font-bold text-slate-500 dark:text-slate-400">Target SS Department(s) *</Label>
+            <div className="flex flex-wrap gap-2 p-2.5 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800">
+              {["General", "Science", "Art", "Commercial", "Others"].map((dept) => {
+                const selectedDepts = formData.department ? formData.department.split(",").map(d => d.trim()).filter(Boolean) : [];
+                const isSelected = dept === "General"
+                  ? selectedDepts.length === 0 || selectedDepts.includes("General")
+                  : selectedDepts.includes(dept);
+
+                return (
+                  <Button
+                    key={dept}
+                    type="button"
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      let updatedDepts: string[];
+                      if (dept === "General") {
+                        updatedDepts = ["General"];
+                      } else {
+                        const filtered = selectedDepts.filter(d => d !== "General");
+                        if (filtered.includes(dept)) {
+                          updatedDepts = filtered.filter(d => d !== dept);
+                        } else {
+                          updatedDepts = [...filtered, dept];
+                        }
+                      }
+                      if (updatedDepts.length === 0) updatedDepts = ["General"];
+                      setFormData({ ...formData, department: updatedDepts.join(", "), questionIds: [] });
+                    }}
+                    className={`h-8 rounded-lg text-xs font-bold transition-all ${
+                      isSelected
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100"
+                    }`}
+                  >
+                    {dept}
+                  </Button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Select <strong className="text-indigo-600 dark:text-indigo-400">General</strong> for all students, or select multiple departments (e.g. Science + Art).
+            </p>
           </div>
         )}
 

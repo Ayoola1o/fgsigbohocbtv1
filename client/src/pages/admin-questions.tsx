@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, X, Upload, HelpCircle, Download, MoreVertical, Edit, Settings, Sparkles, FileText, BookOpen, AlertTriangle } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Question, InsertQuestion } from "@shared/schema";
 import { Loader2 } from "lucide-react";
@@ -1552,21 +1553,47 @@ export default function AdminQuestions() {
               </select>
             </div>
             {["SS1", "SS2", "SS3"].includes(csvClassLevel) && (
-              <div className="space-y-1">
-                <Label htmlFor="csv-department" className="text-xs font-bold text-slate-550">Department *</Label>
-                <select
-                  id="csv-department"
-                  value={csvDepartment}
-                  onChange={e => setCsvDepartment(e.target.value)}
-                  className="border rounded-xl px-3 py-2 w-full bg-slate-50/50 dark:bg-slate-950/40 text-sm border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-550 h-10 font-bold text-slate-700 dark:text-slate-350"
-                >
-                  <option value="">Select Department</option>
-                  <option value="General">General</option>
-                  <option value="Science">Science</option>
-                  <option value="Commercial">Commercial</option>
-                  <option value="Art">Art</option>
-                  <option value="Others">Others</option>
-                </select>
+              <div className="space-y-1.5 col-span-full">
+                <Label className="text-xs font-bold text-slate-550 block">Target Department(s) *</Label>
+                <div className="flex flex-wrap gap-2 p-2 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800">
+                  {["General", "Science", "Art", "Commercial", "Others"].map((dept) => {
+                    const selectedDepts = csvDepartment ? csvDepartment.split(",").map(d => d.trim()).filter(Boolean) : [];
+                    const isSelected = dept === "General"
+                      ? selectedDepts.length === 0 || selectedDepts.includes("General")
+                      : selectedDepts.includes(dept);
+
+                    return (
+                      <Button
+                        key={dept}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          let updatedDepts: string[];
+                          if (dept === "General") {
+                            updatedDepts = ["General"];
+                          } else {
+                            const filtered = selectedDepts.filter(d => d !== "General");
+                            if (filtered.includes(dept)) {
+                              updatedDepts = filtered.filter(d => d !== dept);
+                            } else {
+                              updatedDepts = [...filtered, dept];
+                            }
+                          }
+                          if (updatedDepts.length === 0) updatedDepts = ["General"];
+                          setCsvDepartment(updatedDepts.join(", "));
+                        }}
+                        className={`h-7 px-3 rounded-lg text-xs font-bold transition-all ${
+                          isSelected
+                            ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                            : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100"
+                        }`}
+                      >
+                        {dept}
+                      </Button>
+                    );
+                  })}
+                </div>
               </div>
             )}
             <div className="space-y-1">

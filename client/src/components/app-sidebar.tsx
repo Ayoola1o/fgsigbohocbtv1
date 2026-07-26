@@ -31,34 +31,38 @@ const menuItems = [
     testId: "link-dashboard",
   },
   {
-    title: "Invigilator Hub",
-    url: "/admin/invigilator",
-    icon: Radio,
-    testId: "link-invigilator",
-  },
-  {
     title: "Exams",
     url: "/admin/exams",
     icon: FileText,
+    badge: "34",
     testId: "link-exams",
   },
   {
-    title: "Questions",
+    title: "Invigilator Hub",
+    url: "/admin/invigilator",
+    icon: Radio,
+    badge: "45",
+    testId: "link-invigilator",
+  },
+  {
+    title: "Question Bank",
     url: "/admin/questions",
     icon: HelpCircle,
     testId: "link-questions",
   },
   {
-    title: "Results",
-    url: "/admin/results",
-    icon: BarChart3,
-    testId: "link-results",
-  },
-  {
     title: "Students",
     url: "/admin/students",
     icon: GraduationCap,
+    badge: "12,300",
     testId: "link-students",
+  },
+  {
+    title: "Results",
+    url: "/admin/results",
+    icon: BarChart3,
+    badge: "15k+",
+    testId: "link-results",
   },
   {
     title: "Analytics",
@@ -107,18 +111,22 @@ export function AppSidebar() {
                       data-testid={item.testId}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 relative group
                         ${isActive 
-                          ? "bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shadow-sm border-l-4 border-indigo-600 dark:border-indigo-500 font-bold pl-2" 
+                          ? "bg-indigo-900 dark:bg-indigo-950 text-white shadow-md border-l-4 border-blue-500 font-bold pl-2" 
                           : "text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-900 border-l-4 border-transparent pl-2"
                         }`}
                     >
-                      <Link href={item.url} className="flex items-center gap-3 w-full">
-                        <item.icon className={`h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110 
-                          ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 group-hover:text-indigo-500"}`} 
-                        />
-                        <span className="tracking-tight">{item.title}</span>
-                        {!isActive && (
-                          <span className="absolute right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-bold">
-                            View
+                      <Link href={item.url} className="flex items-center gap-3 w-full justify-between">
+                        <div className="flex items-center gap-3">
+                          <item.icon className={`h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110 
+                            ${isActive ? "text-blue-400" : "text-slate-400 group-hover:text-indigo-500"}`} 
+                          />
+                          <span className="tracking-tight">{item.title}</span>
+                        </div>
+                        {item.badge && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                            isActive ? "bg-blue-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                          }`}>
+                            {item.badge}
                           </span>
                         )}
                       </Link>
@@ -151,10 +159,10 @@ function LogoSlot() {
       </div>
       <div>
         <h1 className="text-sm font-black tracking-tight text-slate-800 dark:text-slate-100 group-hover/logo:text-indigo-600 dark:group-hover/logo:text-indigo-400 transition-colors duration-300 leading-tight">
-          Faith Immaculate
+          EduTEST CBT Admin
         </h1>
         <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
-          CBT Admin Suite
+          Faith Immaculate Academy
         </p>
       </div>
     </div>

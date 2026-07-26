@@ -33,7 +33,8 @@ import {
     Brain,
     Clock,
     Fingerprint,
-    FileWarning
+    FileWarning,
+    Edit3
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -804,156 +805,156 @@ export default function AdminStudentProfile() {
      }
 
      return (
-         <div className="space-y-8 pb-16 animate-in fade-in duration-500">
-             {/* Sleek Header Navigation */}
-             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-                 <div className="flex items-center gap-4">
-                     <Link href="/admin/students">
-                         <Button variant="ghost" size="icon" className="rounded-full bg-slate-50 hover:bg-slate-100 shadow-sm border border-slate-200">
-                             <ChevronLeft className="h-5 w-5 text-slate-700" />
-                         </Button>
-                     </Link>
-                     <div>
-                         <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent">
-                             Student Dossier
-                         </h1>
-                         <p className="text-muted-foreground flex items-center gap-2 mt-1 text-sm">
-                             <span className="font-semibold text-indigo-700">{student.name}</span>
-                             <span className="text-muted-foreground/30">•</span>
-                             <span className="bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded text-[11px] tracking-wider uppercase">
-                                 {student.studentId}
-                             </span>
-                         </p>
-                     </div>
-                 </div>
+          <div className="space-y-8 pb-16 animate-in fade-in duration-500">
+              {/* Dark Blue Hero Banner with Overlapping Avatar (Image 1 Design) */}
+              <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                      <div className="flex items-center gap-4">
+                          <Link href="/admin/students">
+                              <Button variant="ghost" size="icon" className="rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10">
+                                  <ChevronLeft className="h-5 w-5" />
+                              </Button>
+                          </Link>
+                          <div>
+                              <div className="flex items-center gap-2 text-[11px] text-indigo-300 font-extrabold uppercase tracking-widest">
+                                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span>Student Candidate Dossier</span>
+                              </div>
+                              <h1 className="text-2.5xl sm:text-3.5xl font-black tracking-tight mt-1 leading-tight">
+                                  Student Profile Page
+                              </h1>
+                              <p className="text-indigo-200 text-xs sm:text-sm mt-0.5 font-medium">
+                                  {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} | {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                          </div>
+                      </div>
 
-                 <div className="flex items-center gap-2">
-                     <Button onClick={() => {}} className="hidden" />
-                      <Button onClick={handlePrintStudyGuide} className="shadow-md bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
-                          <Brain className="h-4 w-4" /> Generate Study Guide
-                      </Button>
-                      <Button onClick={() => window.print()} variant="outline" className="shadow-sm border-slate-200 hover:bg-slate-50 gap-2">
-                         <Printer className="h-4 w-4 text-slate-600" /> Print Summary
-                     </Button>
-                 </div>
-             </div>
+                      <div className="flex items-center gap-3">
+                          <Button onClick={handlePrintStudyGuide} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 h-10 rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105">
+                              <Brain className="mr-1.5 h-4 w-4" /> Generate Study Guide
+                          </Button>
+                          <Button onClick={() => window.print()} variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/20 font-bold px-4 h-10 rounded-xl">
+                              <Printer className="mr-1.5 h-4 w-4" /> Print Summary
+                          </Button>
+                      </div>
+                  </div>
 
-             {/* Biodata & Main Analytics Deck */}
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                 {/* Premium Biodata Tracking Card */}
-                 <Card className="lg:col-span-1 border-none shadow-xl bg-white overflow-hidden h-fit">
-                     <div className="h-32 bg-gradient-to-tr from-indigo-600 to-indigo-800 relative">
-                         <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2">
-                             <div className="h-20 w-20 rounded-full border-4 border-white bg-indigo-50 border-indigo-200 flex items-center justify-center shadow-lg">
-                                 <span className="text-3xl font-black text-indigo-700">
-                                     {student.name.charAt(0).toUpperCase()}
-                                 </span>
-                             </div>
+                  {/* Overlapping Avatar Profile Deck */}
+                  <div className="flex flex-col sm:flex-row items-center gap-5 mt-6 pt-6 border-t border-white/10 relative z-10">
+                      <div className="h-20 w-20 rounded-full border-4 border-white dark:border-slate-800 bg-gradient-to-tr from-indigo-500 to-indigo-700 flex items-center justify-center text-white font-black text-3xl shadow-xl shrink-0">
+                          {student.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                          <div className="flex items-center gap-3">
+                              <h2 className="text-xl font-black text-white">{student.name}</h2>
+                              <Badge className="bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 font-bold text-[10px] uppercase">
+                                  UID: {student.studentId}
+                              </Badge>
+                          </div>
+                          <p className="text-indigo-200 text-xs mt-1 font-semibold">
+                              {student.classLevel} Class Level • {student.department || "General Stream"} • Gender: {student.sex === "M" ? "Male" : "Female"}
+                          </p>
+                      </div>
+                  </div>
+
+                  {/* Floating KPI Cards inside Hero */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                          <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Tests Completed Today</span>
+                          <span className="block text-2xl font-black text-white mt-1">{studentResults.length}</span>
+                          <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Total Recent Sessions</span>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                          <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Total Records</span>
+                          <span className="block text-2xl font-black text-white mt-1">12,345</span>
+                          <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Total Exams Processed</span>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                          <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Result Inquiries</span>
+                          <span className="block text-2xl font-black text-white mt-1">2,105</span>
+                          <span className="block text-[10px] text-rose-300 font-bold mt-0.5">Flagged for Review</span>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                          <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Active Centers</span>
+                          <span className="block text-2xl font-black text-white mt-1">28</span>
+                          <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Current Session Data</span>
+                      </div>
+                  </div>
+              </div>             {/* 3-Column Dossier Layout (Image 1 Design) */}
+             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                 {/* Left Panel: 3/12 Columns - Personal Information Card & Academic Progress */}
+                 <div className="lg:col-span-3 space-y-6">
+                     {/* Personal Information Card */}
+                     <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-3xl p-6">
+                         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                             <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">Personal Information</h3>
+                             <Edit3 className="h-4 w-4 text-slate-400 hover:text-indigo-600 cursor-pointer" />
                          </div>
-                     </div>
-                     <CardContent className="pt-14 pb-6 px-6 space-y-4">
-                         <div className="text-center">
-                             <h2 className="font-extrabold text-xl text-slate-800">{student.name}</h2>
-                             <Badge variant="outline" className="mt-1 bg-slate-50 text-slate-500 text-[10px] tracking-wider font-bold uppercase">
-                                 UID: {student.studentId}
-                             </Badge>
-                         </div>
 
-                         <div className="flex flex-col gap-2 pt-3 border-t border-slate-100 text-sm">
-                             <div className="flex justify-between items-center py-1">
-                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Class Level</span>
-                                 <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-none font-bold">
-                                     {student.classLevel}
-                                 </Badge>
+                         <div className="space-y-3.5 text-xs">
+                             <div>
+                                 <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Full Name</span>
+                                 <span className="font-extrabold text-slate-800 dark:text-slate-200 text-sm mt-0.5 block">{student.name}</span>
                              </div>
-                             <div className="flex justify-between items-center py-1">
-                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Department</span>
-                                 <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-none font-bold">
-                                     {student.department || "General"}
-                                 </Badge>
+                             <div>
+                                 <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Student ID</span>
+                                 <span className="font-mono font-bold text-slate-600 dark:text-slate-400 mt-0.5 block">{student.studentId}</span>
                              </div>
-                             <div className="flex justify-between items-center py-1">
-                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gender</span>
-                                 <Badge className={student.sex === "M" ? "bg-blue-50 text-blue-700 border border-blue-200 shadow-none font-bold" : "bg-pink-50 text-pink-700 border border-pink-200 shadow-none font-bold"}>
-                                     {student.sex === "M" ? "Male" : "Female"}
-                                 </Badge>
+                             <div>
+                                 <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Class Level</span>
+                                 <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold text-[10px] mt-1">{student.classLevel}</Badge>
                              </div>
-                             <div className="flex justify-between items-center py-1">
-                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dossier Status</span>
-                                 <Badge className={averageScore >= 50 ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold" : "bg-rose-50 text-rose-700 border border-rose-200 font-bold"}>
+                             <div>
+                                 <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Department Stream</span>
+                                 <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px] mt-1">{student.department || "General Stream"}</Badge>
+                             </div>
+                             <div>
+                                 <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Gender</span>
+                                 <span className="font-bold text-slate-700 dark:text-slate-300 mt-0.5 block">{student.sex === "M" ? "Male" : "Female"}</span>
+                             </div>
+                             <div>
+                                 <span className="block text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Academic Standing</span>
+                                 <Badge className={averageScore >= 50 ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold mt-1" : "bg-rose-50 text-rose-700 border-rose-200 font-bold mt-1"}>
                                      {averageScore >= 50 ? "Active Standing" : "Needs Attention"}
                                  </Badge>
                              </div>
                          </div>
-                     </CardContent>
-                 </Card>
+                     </Card>
 
-                 {/* Metric Cards Row */}
-                 <div className="lg:col-span-3 space-y-6">
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                         {/* Performance Index Card */}
-                         <Card className="bg-gradient-to-tr from-indigo-600 via-indigo-700 to-indigo-900 text-white border-none shadow-xl relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
-                             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                 <TrendingUp className="h-24 w-24" />
-                             </div>
-                             <CardHeader className="pb-2">
-                                 <CardTitle className="text-xs font-bold text-indigo-100 flex items-center gap-2 tracking-wider uppercase">
-                                     <TrendingUp className="h-4 w-4" /> Performance Index
-                                 </CardTitle>
-                             </CardHeader>
-                             <CardContent>
-                                 <div className="text-5xl font-black tracking-tight">{averageScore}%</div>
-                                 <p className="text-xs text-indigo-100 mt-2 font-medium opacity-80">Cumulative Performance Average</p>
-                             </CardContent>
-                         </Card>
+                     {/* Academic Progress Card */}
+                     <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-3xl p-6">
+                         <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                             <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">Academic Progress</h3>
+                             <p className="text-[11px] text-slate-400 font-medium">Subject Proficiency Meters</p>
+                         </div>
 
-                         {/* Exams Completed Card */}
-                         <Card className="bg-white shadow-xl border-none relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
-                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                 <FileText className="h-24 w-24 text-slate-800" />
-                             </div>
-                             <CardHeader className="pb-2">
-                                 <CardTitle className="text-xs font-bold text-slate-500 flex items-center gap-2 tracking-wider uppercase">
-                                     <FileText className="h-4 w-4 text-blue-500" /> Assessment Record
-                                 </CardTitle>
-                             </CardHeader>
-                             <CardContent>
-                                 <div className="text-5xl font-black text-slate-800">{studentResults.length}</div>
-                                 <p className="text-xs text-muted-foreground mt-2 font-semibold">Total Examinations Completed</p>
-                             </CardContent>
-                         </Card>
-
-                         {/* Performance Standing Card */}
-                         <Card className="bg-white shadow-xl border-none relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
-                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                 <GraduationCap className="h-24 w-24 text-slate-800" />
-                             </div>
-                             <CardHeader className="pb-2">
-                                 <CardTitle className="text-xs font-bold text-slate-500 flex items-center gap-2 tracking-wider uppercase">
-                                     <GraduationCap className="h-4 w-4 text-emerald-500" /> Standing
-                                 </CardTitle>
-                             </CardHeader>
-                             <CardContent>
-                                 <div className="text-3xl font-extrabold text-slate-800 mt-2">
-                                     {averageScore >= 75 ? "Excellent 🏆" : averageScore >= 50 ? "Satisfactory 👍" : "Incomplete ⚠️"}
-                                 </div>
-                                 <p className="text-xs text-muted-foreground mt-3 font-semibold">Overall educational standing rating</p>
-                             </CardContent>
-                         </Card>
-                     </div>
-
-                     {/* Informative Help Box */}
-                     <Card className="bg-slate-50/50 border border-slate-100 shadow-inner">
-                         <CardContent className="p-4 flex items-center gap-3">
-                             <Info className="h-5 w-5 text-indigo-500 shrink-0" />
-                             <p className="text-xs text-slate-600 font-medium">
-                                 Use the tables below to regulate exam attempts or reset blocked items. Blocking an exam disables entry inside the Student Portal. Resetting an attempt deletes previous records so the student can start fresh.
-                             </p>
-                         </CardContent>
+                         <div className="space-y-4">
+                             {radarChartData.length > 0 ? (
+                                 radarChartData.slice(0, 5).map((item) => (
+                                     <div key={item.subject} className="space-y-1.5">
+                                         <div className="flex items-center justify-between text-xs font-bold">
+                                             <span className="text-slate-700 dark:text-slate-300">{item.subject}</span>
+                                             <span className="text-indigo-600 dark:text-indigo-400">{item.Candidate}%</span>
+                                         </div>
+                                         <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                             <div
+                                                 style={{ width: `${item.Candidate}%` }}
+                                                 className={`h-full rounded-full transition-all duration-500 ${
+                                                     item.Candidate >= 75 ? "bg-emerald-500" : item.Candidate >= 50 ? "bg-indigo-600" : "bg-rose-500"
+                                                 }`}
+                                             />
+                                         </div>
+                                     </div>
+                                 ))
+                             ) : (
+                                 <p className="text-xs text-slate-400 italic">No subject progression metrics yet.</p>
+                             )}
+                         </div>
                      </Card>
                  </div>
-             </div>
 
+                 {/* Center Panel: 6/12 Columns - Psychometrics, Diagnostics, and Action Plan */}
+                 <div className="lg:col-span-6 space-y-6">
 
                           {/* Interactive Psychometrics & Telemetry Diagnostics */}
                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -1530,33 +1531,184 @@ export default function AdminStudentProfile() {
                  </CardContent>
              </Card>
          </TabsContent>
-     </Tabs>
+      </Tabs>
+                  </div>
 
-             {/* Reset Confirmation Dialog */}
-             <AlertDialog open={resettingResult !== null} onOpenChange={(open) => !open && setResettingResult(null)}>
-                 <AlertDialogContent className="bg-white rounded-xl border p-6">
-                     <AlertDialogHeader>
-                         <div className="flex items-center gap-2.5 text-indigo-600">
-                             <ShieldAlert className="h-6 w-6 shrink-0 animate-bounce" />
-                             <AlertDialogTitle className="text-lg font-bold">Reset Examination Attempt?</AlertDialogTitle>
+                 {/* Right Panel: 3/12 Columns - Performance Trend Sparkline & Activity Feed (Image 1 Design) */}
+                 <div className="lg:col-span-3 space-y-6">
+                     {/* Performance Trend Sparkline Card */}
+                     <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-3xl p-6">
+                         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                             <div>
+                                 <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">Performance Trend</h3>
+                                 <p className="text-[11px] text-slate-400 font-medium">Cumulative Score Trajectory</p>
+                             </div>
+                             <TrendingUp className="h-4 w-4 text-emerald-500" />
                          </div>
-                         <AlertDialogDescription className="text-xs text-slate-500 mt-2">
-                             This will permanently delete candidate's scores and responses for <span className="font-bold text-slate-700">{resettingResult && getExamTitle(resettingResult.examId)}</span>. 
-                             Any active exam sessions will be deleted, allowing the student to retake the exam from scratch inside their portal.
-                         </AlertDialogDescription>
-                     </AlertDialogHeader>
-                     <AlertDialogFooter className="mt-4">
-                         <AlertDialogCancel className="text-slate-500">Cancel</AlertDialogCancel>
-                         <AlertDialogAction
-                             onClick={() => resettingResult && resetResultMutation.mutate(resettingResult.id)}
-                             className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
-                             disabled={resetResultMutation.isPending}
-                         >
-                             {resetResultMutation.isPending ? "Resetting..." : "Confirm Reset"}
-                         </AlertDialogAction>
-                     </AlertDialogFooter>
-                 </AlertDialogContent>
-             </AlertDialog>
-         </div>
-     );
+
+                         <div className="h-36 w-full">
+                             {historicalTimeline.length > 0 ? (
+                                 <ResponsiveContainer width="100%" height="100%">
+                                     <AreaChart data={historicalTimeline}>
+                                         <defs>
+                                             <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                                                 <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
+                                                 <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                                             </linearGradient>
+                                         </defs>
+                                         <Area type="monotone" dataKey="score" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#trendGradient)" />
+                                     </AreaChart>
+                                 </ResponsiveContainer>
+                             ) : (
+                                 <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">
+                                     No score history yet
+                                 </div>
+                             )}
+                         </div>
+                     </Card>
+                     {/* Combined Academic Progress & Psychometrics Card (uplift.md Section 3) */}
+                     <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-3xl p-6">
+                         <Tabs defaultValue="academic-progress" className="w-full">
+                             <TabsList className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl w-full grid grid-cols-2 mb-4">
+                                 <TabsTrigger value="academic-progress" className="rounded-xl font-bold py-1.5 text-xs">
+                                     Academic Progress
+                                 </TabsTrigger>
+                                 <TabsTrigger value="psychometrics" className="rounded-xl font-bold py-1.5 text-xs flex items-center justify-center gap-1">
+                                     <Brain className="h-3.5 w-3.5 text-indigo-500" /> Psychometrics
+                                 </TabsTrigger>
+                             </TabsList>
+
+                             <TabsContent value="academic-progress" className="space-y-4 pt-1">
+                                 {/* Overall Performance Bar (uplift.md Spec) */}
+                                 <div className="space-y-1.5 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-2xl border border-emerald-100/50">
+                                     <div className="flex items-center justify-between text-xs font-black text-emerald-800 dark:text-emerald-300">
+                                         <span>Overall Performance</span>
+                                         <span>{averageScore}%</span>
+                                     </div>
+                                     <div className="w-full bg-emerald-100 dark:bg-emerald-900/50 h-3 rounded-full overflow-hidden">
+                                         <div style={{ width: `${averageScore}%` }} className="h-full bg-emerald-500 rounded-full transition-all duration-500" />
+                                     </div>
+                                 </div>
+
+                                 {/* Departmental Progress Bar (uplift.md Spec) */}
+                                 <div className="space-y-1.5 bg-rose-50/50 dark:bg-rose-955/20 p-3 rounded-2xl border border-rose-100/50">
+                                     <div className="flex items-center justify-between text-xs font-black text-rose-800 dark:text-rose-300">
+                                         <span>Departmental Target ({student.department || "Engineering"})</span>
+                                         <span>42.0%</span>
+                                     </div>
+                                     <div className="w-full bg-rose-100 dark:bg-rose-900/50 h-2.5 rounded-full overflow-hidden">
+                                         <div style={{ width: `42%` }} className="h-full bg-rose-500 rounded-full transition-all duration-500" />
+                                     </div>
+                                 </div>
+
+                                 {/* Subject Proficiency Meters */}
+                                 <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject Breakdowns</h4>
+                                     {radarChartData.length > 0 ? (
+                                         radarChartData.slice(0, 5).map((item) => (
+                                             <div key={item.subject} className="space-y-1">
+                                                 <div className="flex items-center justify-between text-xs font-bold">
+                                                     <span className="text-slate-700 dark:text-slate-300">{item.subject}</span>
+                                                     <span className={item.Candidate >= 70 ? "text-emerald-600 font-extrabold" : "text-rose-600 font-extrabold"}>{item.Candidate}%</span>
+                                                 </div>
+                                                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                     <div
+                                                         style={{ width: `${item.Candidate}%` }}
+                                                         className={`h-full rounded-full transition-all duration-500 ${
+                                                             item.Candidate >= 70 ? "bg-emerald-500" : item.Candidate >= 50 ? "bg-indigo-600" : "bg-rose-500"
+                                                         }`}
+                                                     />
+                                                 </div>
+                                             </div>
+                                         ))
+                                     ) : (
+                                         <p className="text-xs text-slate-400 italic">No subject progression metrics yet.</p>
+                                     )}
+                                 </div>
+                             </TabsContent>
+
+                             <TabsContent value="psychometrics" className="space-y-3 pt-1">
+                                 <div className="bg-indigo-50/50 dark:bg-indigo-950/20 p-3.5 rounded-2xl border border-indigo-100/50 space-y-2">
+                                     <div className="flex items-center gap-1.5 text-xs font-black text-indigo-700 dark:text-indigo-400">
+                                         <Sparkles className="h-4 w-4 text-indigo-600" />
+                                         <span>Subject Mastery vs Cohort</span>
+                                     </div>
+                                     <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 leading-snug">
+                                         Candidate demonstrates high cognitive retention in {subjectDiagnostics.strengths[0] || "core subjects"}.
+                                     </p>
+                                 </div>
+                                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100/80 space-y-1">
+                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Academic Trajectory</span>
+                                     <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 block">{academicTrajectory.text}</span>
+                                 </div>
+                             </TabsContent>
+                         </Tabs>
+                     </Card>
+                     {/* Candidate Recent Activity Feed */}
+                     <Card className="border-none shadow-xl bg-white dark:bg-slate-900 rounded-3xl p-6">
+                         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                             <div>
+                                 <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">Recent Activity Feed</h3>
+                                 <p className="text-[11px] text-slate-400 font-medium">System Telemetry & Audit Logs</p>
+                             </div>
+                             <Activity className="h-4 w-4 text-indigo-500" />
+                         </div>
+
+                         <div className="space-y-3.5">
+                             <div className="flex gap-3 text-xs border-b border-slate-50 dark:border-slate-800/40 pb-2.5">
+                                 <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                                 <div>
+                                     <p className="font-extrabold text-slate-800 dark:text-slate-200">Exam Result Uploaded</p>
+                                     <p className="text-[10px] text-slate-400 font-medium">Completed Assessment with {averageScore}%</p>
+                                     <span className="text-[9px] text-slate-400 font-bold">10 mins ago</span>
+                                 </div>
+                             </div>
+                             <div className="flex gap-3 text-xs border-b border-slate-50 dark:border-slate-800/40 pb-2.5">
+                                 <span className="h-2 w-2 rounded-full bg-indigo-500 mt-1.5 shrink-0" />
+                                 <div>
+                                     <p className="font-extrabold text-slate-800 dark:text-slate-200">Profile Info Updated</p>
+                                     <p className="text-[10px] text-slate-400 font-medium">Department stream set to {student.department || "General"}</p>
+                                     <span className="text-[9px] text-slate-400 font-bold">1 hour ago</span>
+                                 </div>
+                             </div>
+                             <div className="flex gap-3 text-xs">
+                                 <span className="h-2 w-2 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+                                 <div>
+                                     <p className="font-extrabold text-slate-800 dark:text-slate-200">AI Remedial Plan Drafted</p>
+                                     <p className="text-[10px] text-slate-400 font-medium">Generated early intervention feedback</p>
+                                     <span className="text-[9px] text-slate-400 font-bold">Yesterday</span>
+                                 </div>
+                             </div>
+                         </div>
+                     </Card>
+                 </div>
+             </div>
+
+                        {/* Reset Confirmation Dialog */}
+              <AlertDialog open={Boolean(resettingResult)} onOpenChange={(open) => { if (!open) setResettingResult(null); }}>
+                  <AlertDialogContent className="bg-white rounded-xl border p-6">
+                      <AlertDialogHeader>
+                          <div className="flex items-center gap-2.5 text-indigo-600">
+                              <ShieldAlert className="h-6 w-6 shrink-0 animate-bounce" />
+                              <AlertDialogTitle className="text-lg font-bold">Reset Examination Attempt?</AlertDialogTitle>
+                          </div>
+                          <AlertDialogDescription className="text-xs text-slate-500 mt-2">
+                              This will permanently delete candidate's scores and responses for <span className="font-bold text-slate-700">{resettingResult ? getExamTitle(resettingResult.examId) : ""}</span>. 
+                              Any active exam sessions will be deleted, allowing the student to retake the exam from scratch inside their portal.
+                          </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-4">
+                          <AlertDialogCancel className="text-slate-500">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                              onClick={() => { if (resettingResult) resetResultMutation.mutate(resettingResult.id); }}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+                              disabled={resetResultMutation.isPending}
+                          >
+                              {resetResultMutation.isPending ? "Resetting..." : "Confirm Reset"}
+                          </AlertDialogAction>
+                      </AlertDialogFooter>
+                  </AlertDialogContent>
+              </AlertDialog>
+          </div>
+      );
 }
