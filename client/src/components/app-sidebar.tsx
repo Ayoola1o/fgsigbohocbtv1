@@ -159,7 +159,7 @@ function LogoSlot() {
       </div>
       <div>
         <h1 className="text-sm font-black tracking-tight text-slate-800 dark:text-slate-100 group-hover/logo:text-indigo-600 dark:group-hover/logo:text-indigo-400 transition-colors duration-300 leading-tight">
-          EduTEST CBT Admin
+          Fia CBT Admin
         </h1>
         <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
           Faith Immaculate Academy

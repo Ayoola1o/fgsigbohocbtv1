@@ -1,105 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { 
-  FileText, 
-  HelpCircle, 
-  Users, 
   TrendingUp, 
   GraduationCap, 
-  Award,
   ChevronRight,
-  Clock,
   Sparkles,
   BookOpen,
-  ArrowUpRight
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import type { Exam, Question, Result, Student } from "@shared/schema";
 import { useMemo } from "react";
+import { useScoreFormat } from "@/hooks/use-score-format";
 
-const getClassStyle = (classLevel: string) => {
-  const level = classLevel.toUpperCase();
-  if (level.includes("JSS1") || level.includes("JSS2")) {
-    return {
-      bg: "bg-emerald-50/75 border border-emerald-100/50 dark:bg-emerald-950/20 dark:border-emerald-900/30",
-      stripe: "bg-emerald-500",
-      text: "text-emerald-900 dark:text-emerald-250 font-black",
-      subText: "text-emerald-700/90 dark:text-emerald-300/80 font-bold",
-      faintText: "text-emerald-600/80 dark:text-emerald-400/80 font-bold",
-      badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200/50"
-    };
-  } else if (level.includes("JSS3") || level.includes("SS1")) {
-    return {
-      bg: "bg-sky-50/75 border border-sky-100/50 dark:bg-sky-950/20 dark:border-sky-900/30",
-      stripe: "bg-sky-500",
-      text: "text-sky-900 dark:text-sky-255 font-black",
-      subText: "text-sky-700/90 dark:text-sky-300/80 font-bold",
-      faintText: "text-sky-600/80 dark:text-sky-400/80 font-bold",
-      badge: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 border-sky-200/50"
-    };
-  } else if (level.includes("SS2") || level.includes("SS3")) {
-    return {
-      bg: "bg-amber-50/75 border border-amber-100/50 dark:bg-amber-950/20 dark:border-amber-900/30",
-      stripe: "bg-amber-500",
-      text: "text-amber-900 dark:text-amber-255 font-black",
-      subText: "text-amber-700/90 dark:text-amber-300/80 font-bold",
-      faintText: "text-amber-600/80 dark:text-amber-400/80 font-bold",
-      badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200/50"
-    };
-  } else {
-    return {
-      bg: "bg-rose-50/75 border border-rose-100/50 dark:bg-rose-950/20 dark:border-rose-900/30",
-      stripe: "bg-rose-500",
-      text: "text-rose-900 dark:text-rose-255 font-black",
-      subText: "text-rose-700/90 dark:text-rose-300/80 font-bold",
-      faintText: "text-rose-600/80 dark:text-rose-400/80 font-bold",
-      badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200/50"
-    };
-  }
-};
 
-const getDeptStyle = (dept: string) => {
-  const name = dept.toLowerCase();
-  if (name.includes("science")) {
-    return {
-      bg: "bg-emerald-50/75 border border-emerald-100/50 dark:bg-emerald-950/20 dark:border-emerald-900/30",
-      stripe: "bg-emerald-500",
-      text: "text-emerald-900 dark:text-emerald-255 font-black",
-      subText: "text-emerald-700/90 dark:text-emerald-300/80 font-bold",
-      badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-350 border-emerald-250/50"
-    };
-  } else if (name.includes("commercial")) {
-    return {
-      bg: "bg-sky-50/75 border border-sky-100/50 dark:bg-sky-950/20 dark:border-sky-900/30",
-      stripe: "bg-sky-500",
-      text: "text-sky-900 dark:text-sky-255 font-black",
-      subText: "text-sky-700/90 dark:text-sky-300/80 font-bold",
-      badge: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-355 border-sky-250/50"
-    };
-  } else if (name.includes("art")) {
-    return {
-      bg: "bg-amber-50/75 border border-amber-100/50 dark:bg-amber-950/20 dark:border-amber-900/30",
-      stripe: "bg-amber-500",
-      text: "text-amber-900 dark:text-amber-255 font-black",
-      subText: "text-amber-700/90 dark:text-amber-300/80 font-bold",
-      badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-355 border-amber-250/50"
-    };
-  } else {
-    return {
-      bg: "bg-rose-50/75 border border-rose-100/50 dark:bg-rose-950/20 dark:border-rose-900/30",
-      stripe: "bg-rose-500",
-      text: "text-rose-900 dark:text-rose-255 font-black",
-      subText: "text-rose-700/90 dark:text-rose-300/80 font-bold",
-      badge: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-355 border-rose-250/50"
-    };
-  }
-};
 
 export default function AdminDashboard() {
+  const { formatScore } = useScoreFormat();
   const { data: exams, isLoading: examsLoading } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
@@ -250,43 +170,7 @@ export default function AdminDashboard() {
     ? [...results].sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()).slice(0, 5)
     : [];
 
-  const subjectStats = useMemo(() => {
-    if (!results || results.length === 0) return [];
 
-    // Map exam details by ID to get the correct subject name
-    const examMap = new Map<string, Exam>();
-    if (exams) {
-      exams.forEach(e => examMap.set(e.id, e));
-    }
-
-    const statsMap: Record<string, { sum: number; count: number; studentsSet: Set<string> }> = {};
-
-    results.forEach(r => {
-      // Find subject name from the exam mapping or fallback to result metadata
-      const examProfile = examMap.get(r.examId);
-      const subjectName = examProfile?.subject || (r as any).examName || "General";
-
-      if (!statsMap[subjectName]) {
-        statsMap[subjectName] = {
-          sum: 0,
-          count: 0,
-          studentsSet: new Set<string>()
-        };
-      }
-
-      statsMap[subjectName].sum += r.percentage;
-      statsMap[subjectName].count++;
-      if (r.studentId) {
-        statsMap[subjectName].studentsSet.add(r.studentId.trim().toLowerCase());
-      }
-    });
-
-    return Object.entries(statsMap).map(([subject, stats]) => ({
-      subject,
-      avgScore: Math.round(stats.sum / stats.count),
-      students: stats.studentsSet.size,
-    }));
-  }, [results, exams]);
 
   const classChartData = useMemo(() => {
     return Object.entries(schoolAnalysis.classScores).map(([classLevel, data]) => ({
@@ -565,7 +449,7 @@ export default function AdminDashboard() {
               </div>
               <div className="flex items-center gap-4 mt-3 text-[8px] font-bold text-slate-400">
                 <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-emerald-500" /> Completion</div>
-                <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-400" /> Completion</div>
+                <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-400" /> In Progress</div>
                 <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-rose-400" /> Success</div>
               </div>
             </div>
@@ -670,7 +554,7 @@ export default function AdminDashboard() {
                       <td className="px-2 py-2 text-slate-500 text-[9px] font-medium">{new Date(result.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                       <td className="px-3 py-2 text-center">
                         <span className={`font-black text-xs ${result.passed ? "text-emerald-600" : "text-rose-500"}`}>
-                          {result.percentage}
+                          {formatScore(result.score, result.totalPoints, result.percentage)}
                         </span>
                       </td>
                     </tr>

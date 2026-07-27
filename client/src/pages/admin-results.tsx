@@ -32,9 +32,11 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { getResults } from "@/lib/firebase-api";
+import { useScoreFormat } from "@/hooks/use-score-format";
 
 export default function AdminResults() {
   const { toast } = useToast();
+  const { formatScore } = useScoreFormat();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterExamId, setFilterExamId] = useState<string>("ALL");
@@ -361,7 +363,9 @@ export default function AdminResults() {
         name: r.studentName,
         class: student?.classLevel || filterClassLevel || "-",
         subject: getExamTitle(r.examId),
-        score: r.percentage
+        score: r.score,
+        total: r.totalPoints,
+        percentage: r.percentage
       };
     });
 
@@ -1066,7 +1070,7 @@ export default function AdminResults() {
                                 <span className="font-black text-sm">{result.percentage}%</span>
                               </TableCell>
 
-                              {/* Percentage Column: Visible on Screen, Hidden on Print */}
+                              {/* Percentage / Score Presentation Column */}
                               <TableCell className="print:hidden py-4">
                                 <span
                                   className={`font-black text-sm ${
@@ -1075,7 +1079,7 @@ export default function AdminResults() {
                                       : "text-rose-600 dark:text-rose-455"
                                   }`}
                                 >
-                                  {result.percentage}%
+                                  {formatScore(result.score, result.totalPoints, result.percentage)}
                                 </span>
                               </TableCell>
 

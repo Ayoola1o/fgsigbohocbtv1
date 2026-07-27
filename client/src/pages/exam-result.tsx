@@ -17,9 +17,10 @@ import { createRoot } from "react-dom/client";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import type { Result, Question, Exam, Student } from "@shared/schema";
 import { getResult, getExam, getQuestionsByIds, getStudents } from "@/lib/firebase-api";
-
+import { useScoreFormat } from "@/hooks/use-score-format";
 
 export default function ExamResult() {
+  const { formatScore } = useScoreFormat();
   const params = useParams<{ resultId: string }>();
   const [isAdminResult] = useRoute("/admin/results/:resultId");
   const resultId = params.resultId;
@@ -279,7 +280,7 @@ export default function ExamResult() {
             </CardHeader>
             <CardContent>
               <div className="text-3.5xl font-black text-slate-800 dark:text-white leading-none" data-testid="text-score">
-                {result.percentage}%
+                {formatScore(result.score, result.totalPoints, result.percentage)}
               </div>
               <p className="text-[11px] font-semibold text-slate-455 mt-1.5">
                 Obtained {result.score} / {result.totalPoints} total points

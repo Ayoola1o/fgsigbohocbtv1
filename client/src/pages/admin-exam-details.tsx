@@ -14,7 +14,7 @@ import type { Question } from "@shared/schema";
 import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/components/theory-structure-editor";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { createRoot } from "react-dom/client";
-import { Printer } from "lucide-react";
+import { Printer, RefreshCw, Sparkles, Plus, Check, Layers, Settings2, BookOpen, ArrowRight } from "lucide-react";
 
 export default function AdminExamDetails() {
   const { id } = useParams();
@@ -96,6 +96,92 @@ export default function AdminExamDetails() {
     const filteredIds = filteredQuestionsForLinker.map(q => q.id);
     const newIds = currentIds.filter((id: string) => !filteredIds.includes(id));
     setFormData({ ...formData, questionIds: newIds });
+  };
+
+  const handleSyncQuestionBank = (targetSubject?: string) => {
+    if (!formData || !questions) return;
+    const currentIds = new Set<string>(formData.questionIds || []);
+    
+    const subjectsToMatch = targetSubject 
+      ? [targetSubject.trim().toLowerCase()]
+      : (formData.subject || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+
+    const isTheory = formData.examType === "Theory";
+
+    const matchingQuestions = questions.filter(q => {
+      const matchClass = !formData.classLevel || q.classLevel === formData.classLevel;
+      const matchType = isTheory
+        ? (q.examType === "Theory" || q.questionType === "theory")
+        : (q.examType === "Objectives" || q.questionType === "objectives" || !q.examType);
+      const qSubj = (q.subject || "General").trim().toLowerCase();
+      const matchSubj = subjectsToMatch.length === 0 || subjectsToMatch.some((s: string) => qSubj.includes(s) || s.includes(qSubj));
+      return matchClass && matchType && matchSubj;
+    });
+
+    const newQuestionIdsToAdd = matchingQuestions.map(q => q.id).filter(id => !currentIds.has(id));
+
+    if (newQuestionIdsToAdd.length === 0) {
+      toast({
+        title: "Exam Pool Up to Date",
+        description: targetSubject 
+          ? `All matching questions from the bank for "${targetSubject}" are already linked.`
+          : "All matching questions from the Question Bank are already linked to this exam paper."
+      });
+      return;
+    }
+
+    const updatedIds = [...(formData.questionIds || []), ...newQuestionIdsToAdd];
+    setFormData({ ...formData, questionIds: updatedIds });
+
+    toast({
+      title: "Question Bank Synced",
+      description: `Successfully fetched and linked ${newQuestionIdsToAdd.length} new question(s) from the Question Bank!`,
+    });
+  };
+
+  const handleQuickSetQuestionCount = (targetCount: number) => {
+    if (!formData) return;
+    const currentCount = formData.questionIds?.length || 0;
+    
+    let updatedFormData = { ...formData, numberOfQuestionsToDisplay: targetCount };
+
+    if (currentCount < targetCount && questions) {
+      const currentIds = new Set<string>(formData.questionIds || []);
+      const subjectsToMatch = (formData.subject || "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      const isTheory = formData.examType === "Theory";
+
+      const unlinkedMatching = questions.filter(q => {
+        const matchClass = !formData.classLevel || q.classLevel === formData.classLevel;
+        const matchType = isTheory
+          ? (q.examType === "Theory" || q.questionType === "theory")
+          : (q.examType === "Objectives" || q.questionType === "objectives" || !q.examType);
+        const qSubj = (q.subject || "General").trim().toLowerCase();
+        const matchSubj = subjectsToMatch.length === 0 || subjectsToMatch.some((s: string) => qSubj.includes(s) || s.includes(qSubj));
+        return matchClass && matchType && matchSubj && !currentIds.has(q.id);
+      });
+
+      if (unlinkedMatching.length > 0) {
+        const needed = targetCount - currentCount;
+        const autoAddedIds = unlinkedMatching.slice(0, needed).map(q => q.id);
+        updatedFormData.questionIds = [...(formData.questionIds || []), ...autoAddedIds];
+        toast({
+          title: `Question Pool Expanded to ${targetCount}`,
+          description: `Auto-linked ${autoAddedIds.length} matching question(s) from the Question Bank.`
+        });
+      } else {
+        toast({
+          title: `Question Display Count Set to ${targetCount}`,
+          description: `Currently ${currentCount} questions are linked in the pool.`
+        });
+      }
+    } else {
+      toast({
+        title: `Question Display Count Updated`,
+        description: `Students will receive a random subset of ${targetCount} questions.`
+      });
+    }
+
+    setFormData(updatedFormData);
   };
 
   const updateExamMutation = useMutation({
@@ -378,39 +464,92 @@ export default function AdminExamDetails() {
                   ? "Determined by theory structure for Theory exams."
                   : "If set, students will be given a random subset of this many questions from the total selected."}
               </p>
+              {formData.examType !== "Theory" && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
+                  <span className="text-[10px] font-extrabold uppercase text-slate-400 mr-1">Quick Presets:</span>
+                  {[10, 20, 30, 40, 50].map((preset) => (
+                    <Button
+                      key={preset}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleQuickSetQuestionCount(preset)}
+                      className={`h-7 px-2.5 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800 ${
+                        formData.numberOfQuestionsToDisplay === preset
+                          ? "bg-indigo-600 text-white border-indigo-600 dark:bg-indigo-600"
+                          : "hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300"
+                      }`}
+                    >
+                      {preset} Qs
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormData({ ...formData, numberOfQuestionsToDisplay: undefined })}
+                    className="h-7 px-2.5 text-xs font-bold rounded-lg border-slate-200 dark:border-slate-800 hover:bg-slate-100"
+                  >
+                    Show All ({formData.questionIds?.length || 0})
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Custom Subject Limits */}
             {formData.examType !== "Theory" && formData.subject && formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).length > 1 && (
               <div className="space-y-3 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200/40 animate-in fade-in duration-300">
-                <Label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Question Limits per Subject</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Question Limits & Auto-Sync per Subject</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSyncQuestionBank()}
+                    className="h-7 text-xs font-bold text-indigo-650 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Sync All Subjects
+                  </Button>
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).map((subj: string) => (
-                    <div key={subj} className="flex items-center gap-2">
-                      <Label htmlFor={`subject-limit-${subj}`} className="text-xs font-bold text-slate-600 dark:text-slate-400 min-w-[120px] truncate">{subj}:</Label>
-                      <Input
-                        id={`subject-limit-${subj}`}
-                        type="number"
-                        min="1"
-                        placeholder="All"
-                        value={formData.subjectConfig?.[subj] ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value ? parseInt(e.target.value) : 0;
-                          const newConfig = { ...(formData.subjectConfig || {}) };
-                          if (val > 0) {
-                            newConfig[subj] = val;
-                          } else {
-                            delete newConfig[subj];
-                          }
-                          setFormData({ ...formData, subjectConfig: newConfig });
-                        }}
-                        className="h-8.5 text-xs font-bold w-24 rounded-lg border-slate-200 dark:border-slate-800 bg-white"
-                      />
+                    <div key={subj} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`subject-limit-${subj}`} className="text-xs font-bold text-slate-600 dark:text-slate-400 min-w-[90px] truncate">{subj}:</Label>
+                        <Input
+                          id={`subject-limit-${subj}`}
+                          type="number"
+                          min="1"
+                          placeholder="All"
+                          value={formData.subjectConfig?.[subj] ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value ? parseInt(e.target.value) : 0;
+                            const newConfig = { ...(formData.subjectConfig || {}) };
+                            if (val > 0) {
+                              newConfig[subj] = val;
+                            } else {
+                              delete newConfig[subj];
+                            }
+                            setFormData({ ...formData, subjectConfig: newConfig });
+                          }}
+                          className="h-8 text-xs font-bold w-20 rounded-lg border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSyncQuestionBank(subj)}
+                        className="h-7 px-2 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 rounded-md flex items-center gap-1 shrink-0"
+                        title={`Sync new ${subj} questions from bank`}
+                      >
+                        <RefreshCw className="h-3 w-3" /> Sync {subj}
+                      </Button>
                     </div>
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Set the exact number of random questions to draw from the pool for each subject. Leave blank or 0 to include all selected questions.
+                  Set the exact number of random questions to draw from the pool for each subject. Click <strong>Sync</strong> to automatically fetch new questions added to the bank for that subject.
                 </p>
               </div>
             )}
@@ -461,19 +600,31 @@ export default function AdminExamDetails() {
             {/* Direct Question Bank Linker Card */}
             <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-md">
               <CardHeader className="bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/40 py-4 px-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <CardTitle className="text-base font-extrabold text-slate-800 dark:text-slate-200">
+                    <CardTitle className="text-base font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                      <BookOpen className="h-4.5 w-4.5 text-indigo-600" />
                       Link Questions from Question Bank
                     </CardTitle>
                     <CardDescription className="text-xs font-semibold text-slate-400 mt-0.5">
                       Select objective or theory questions to compose this exam paper pool.
                     </CardDescription>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 self-start sm:self-center">
-                    <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-sm py-1 px-3">
-                      {formData.questionIds?.length || 0} Questions Linked
-                    </Badge>
+
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        onClick={() => handleSyncQuestionBank()}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl shadow-md shadow-indigo-600/20 flex items-center gap-2 transition-all active:scale-95"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Sync & Fetch New Questions
+                      </Button>
+                      <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-sm py-1.5 px-3">
+                        {formData.questionIds?.length || 0} Questions Linked
+                      </Badge>
+                    </div>
+
                     {formData.subject && formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).length > 1 && (
                       <div className="flex flex-wrap gap-1 justify-end max-w-xs">
                         {formData.subject.split(",").map((s: string) => s.trim()).filter(Boolean).map((subj: string) => {

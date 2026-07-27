@@ -316,7 +316,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                             {reportType === 'score-sheet'
                                                 ? (scoreFormatSetting === 'percentage' 
                                                     ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : res.score}%`
-                                                    : `${res.score}` // Render base normal score if points setting is chosen
+                                                    : (res.total !== undefined && res.total > 0 ? `${res.score} / ${res.total}` : `${res.score}`)
                                                   )
                                                 : (scoreFormatSetting === 'percentage'
                                                     ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : ((res.score / (res.total || 1)) * 100).toFixed(0)}%`

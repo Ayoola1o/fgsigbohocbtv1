@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, BookOpen, CheckCircle, LogOut, Lock, Sparkles, Award, ShieldAlert, User, ArrowRight } from "lucide-react";
 import type { Exam, Student, Result } from "@shared/schema";
 import { getExams, getSubjectDepartment } from "@/lib/firebase-api";
+import { useScoreFormat } from "@/hooks/use-score-format";
 
 export default function StudentPortal() {
   const [, setLocation] = useLocation();
   const [student, setStudent] = useState<Student | null>(null);
+  const { formatScore } = useScoreFormat();
 
   // Custom settings states
   const [showResultButton, setShowResultButton] = useState<boolean>(true);
@@ -383,7 +385,7 @@ export default function StudentPortal() {
                                 {showResultButton ? "Completed Score" : "Submission Status"}
                               </span>
                               {showResultButton && examResult ? (
-                                <span className="text-base font-black">{examResult.percentage}%</span>
+                                <span className="text-base font-black">{formatScore(examResult.score, examResult.totalPoints, examResult.percentage)}</span>
                               ) : (
                                 <span className="text-xs font-bold bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded text-emerald-700 dark:text-emerald-400">Submitted</span>
                               )}

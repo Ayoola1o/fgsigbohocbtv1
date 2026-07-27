@@ -466,6 +466,17 @@ export default function AdminExams() {
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
+                          <Link href={`/admin/exams/${exam.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              data-testid={`button-edit-${exam.id}`}
+                              className="h-8.5 w-8.5 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 dark:text-amber-400"
+                              title="Edit Exam Settings & Link Questions"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </Link>
                           <Button
                             variant="ghost"
                             size="icon"
