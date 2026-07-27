@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Award, TrendingUp, Sparkles, Clock, ChevronRight, User, BarChart3 } from "lucide-react";
+import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Award, TrendingUp, Sparkles, Clock, ChevronRight, User, BarChart3, FileSpreadsheet } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
 import type { Result, Exam, Student } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -403,6 +403,115 @@ export default function AdminResults() {
     }
   };
 
+  const handlePrintSubjectMultiExamBroadsheet = async () => {
+    if (!filteredResults || filteredResults.length === 0) {
+      toast({ title: "Action Required", description: "No results matched the current filters. Please adjust filters to generate a broadsheet.", variant: "destructive" });
+      return;
+    }
+
+    const examTitlesSet = new Set<string>();
+    filteredResults.forEach(r => {
+      examTitlesSet.add(getExamTitle(r.examId));
+    });
+    const matrixHeaders = Array.from(examTitlesSet);
+
+    const studentGroupMap: Record<string, {
+      studentId: string;
+      name: string;
+      class: string;
+      scores: Record<string, { score: number; total: number; percentage: number }>;
+      cumulativeTotalScore: number;
+      cumulativeTotalPoints: number;
+      cumulativePercentage: number;
+      passed: boolean;
+    }> = {};
+
+    filteredResults.forEach(r => {
+      const student = students?.find(s => 
+        s.studentId?.trim().toLowerCase() === r.studentId?.trim().toLowerCase() ||
+        s.id?.trim().toLowerCase() === r.studentId?.trim().toLowerCase()
+      );
+      const studentId = r.studentId || "-";
+      if (!studentGroupMap[studentId]) {
+        studentGroupMap[studentId] = {
+          studentId,
+          name: r.studentName,
+          class: student?.classLevel || filterClassLevel || "-",
+          scores: {},
+          cumulativeTotalScore: 0,
+          cumulativeTotalPoints: 0,
+          cumulativePercentage: 0,
+          passed: true
+        };
+      }
+
+      const examTitle = getExamTitle(r.examId);
+      studentGroupMap[studentId].scores[examTitle] = {
+        score: r.score,
+        total: r.totalPoints,
+        percentage: r.percentage
+      };
+    });
+
+    const matrixRows = Object.values(studentGroupMap).map(row => {
+      const scoresList = Object.values(row.scores);
+      const totalScore = scoresList.reduce((acc, curr) => acc + curr.score, 0);
+      const totalPoints = scoresList.reduce((acc, curr) => acc + curr.total, 0);
+      const avgPercentage = scoresList.length > 0
+        ? scoresList.reduce((acc, curr) => acc + curr.percentage, 0) / scoresList.length
+        : 0;
+
+      return {
+        ...row,
+        cumulativeTotalScore: totalScore,
+        cumulativeTotalPoints: totalPoints,
+        cumulativePercentage: avgPercentage,
+        passed: avgPercentage >= 40
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
+      return;
+    }
+    writePrintWindowDocument(printWindow, "Consolidated Subject Broadsheet");
+
+    try {
+      const container = await waitForPrintRoot(printWindow, 7000);
+      cloneCurrentStylesIntoPrintWindow(printWindow);
+
+      const root = createRoot(container);
+      root.render(
+        <PrintReportTemplate
+          reportType="consolidated-broadsheet"
+          schoolInfo={{
+            name: "FAITH IMMACULATE ACADEMY",
+            address: "IGBOHO, OYO STATE",
+            motto: "KNOWLEDGE AND GODLINESS",
+            logoText: "FIA",
+            logoUrl: "/logo.png"
+          }}
+          metadata={{
+            class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
+            exam: searchQuery ? `Query: ${searchQuery}` : (filterExamId !== "ALL" ? getExamTitle(filterExamId) : "Multi-Exam Assessment"),
+            date: new Date().toLocaleDateString(),
+            session: "2025/2026 ACADEMIC SESSION"
+          }}
+          matrixHeaders={matrixHeaders}
+          matrixRows={matrixRows}
+          onPrint={() => {
+            setTimeout(() => printWindow.print(), 500);
+          }}
+        />
+      );
+    } catch (err) {
+      console.error("handlePrintSubjectMultiExamBroadsheet: Could not prepare print document:", err);
+      toast({ title: "Print Error", description: "Could not prepare print document.", variant: "destructive" });
+      printWindow.close();
+    }
+  };
+
   const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
 
   const handleSelectAll = (checked: boolean) => {
@@ -726,9 +835,17 @@ export default function AdminResults() {
           <div className="flex flex-wrap items-center gap-3">
             <Button
               onClick={() => handlePrintBroadsheet()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 h-10 rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-4.5 h-10 rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.02] flex items-center gap-2 text-xs"
+              title="Print standard exam score sheet"
             >
-              <Printer className="mr-1.5 h-4 w-4" /> Export All Results
+              <Printer className="h-4 w-4" /> Print Score Sheet
+            </Button>
+            <Button
+              onClick={() => handlePrintSubjectMultiExamBroadsheet()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4.5 h-10 rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] flex items-center gap-2 text-xs"
+              title="Print consolidated class broadsheet across multiple subject exams"
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Print Multi-Exam Subject Broadsheet
             </Button>
           </div>
         </div>
@@ -994,13 +1111,13 @@ export default function AdminResults() {
                               <TableCell className="max-w-[200px] py-4">
                                 <div
                                   className="cursor-pointer flex items-center gap-3"
-                                  onClick={() => setLocation(`/admin/results/student/${result.studentId}`)}
+                                  onClick={() => setLocation(`/admin/results/${result.id}`)}
                                 >
                                   <div className="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-650 dark:group-hover:bg-indigo-950 dark:group-hover:text-indigo-400 transition-colors">
                                     <User className="h-4.5 w-4.5" />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="font-extrabold text-sm text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-455 transition-colors hover:underline truncate" title={result.studentName}>
+                                    <p className="font-extrabold text-sm text-slate-800 dark:text-slate-200 group-hover:text-indigo-650 dark:group-hover:text-indigo-455 transition-colors hover:underline truncate" title={`Inspect ${result.studentName}'s Question Scorecard`}>
                                       {result.studentName}
                                     </p>
                                     <p className="text-[11px] text-slate-455 font-mono truncate mt-0.5">
@@ -1121,14 +1238,25 @@ export default function AdminResults() {
                                 </div>
                               </TableCell>
                               <TableCell className="text-right print:hidden py-4">
-                                <div className="flex justify-end gap-1.5">
-                                  <Link href={`/admin/results/student/${result.studentId}`}>
+                                <div className="flex justify-end gap-1">
+                                  <Link href={`/admin/results/${result.id}`}>
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 
                                       className="h-8.5 w-8.5 rounded-lg text-indigo-650 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+                                      title="Inspect Exam Paper Questions & Answers"
                                     >
                                       <Eye className="h-4.5 w-4.5" />
+                                    </Button>
+                                  </Link>
+                                  <Link href={`/admin/results/student/${result.studentId}`}>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8.5 w-8.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                                      title="View Candidate Academic Profile"
+                                    >
+                                      <User className="h-4 w-4" />
                                     </Button>
                                   </Link>
                                   <Button
@@ -1136,6 +1264,7 @@ export default function AdminResults() {
                                     size="icon"
                                     className="h-8.5 w-8.5 rounded-lg text-slate-455 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
                                     onClick={() => handlePrint(result)}
+                                    title="Print Official Scorecard"
                                   >
                                     <Printer className="h-4.5 w-4.5" />
                                   </Button>

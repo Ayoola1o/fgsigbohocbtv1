@@ -3,7 +3,7 @@ import { Printer, FileText, Users, Calendar, Award, GraduationCap } from 'lucide
 import { Button } from "@/components/ui/button";
 
 interface PrintReportTemplateProps {
-    reportType: 'score-sheet' | 'result-report' | 'exam-paper' | 'consolidated-portfolio';
+    reportType: 'score-sheet' | 'result-report' | 'exam-paper' | 'consolidated-portfolio' | 'consolidated-broadsheet';
     schoolInfo: {
         name: string;
         address: string;
@@ -17,7 +17,7 @@ interface PrintReportTemplateProps {
         date: string;
         session: string;
     };
-    results: Array<{
+    results?: Array<{
         id: string;
         name: string; // For exam-paper, this is the question text
         class: string;
@@ -28,6 +28,17 @@ interface PrintReportTemplateProps {
         passed?: boolean;
         options?: string[]; // Added for exam-paper options
     }>;
+    matrixHeaders?: string[];
+    matrixRows?: Array<{
+        studentId: string;
+        name: string;
+        class: string;
+        scores: Record<string, { score: number; total: number; percentage: number }>;
+        cumulativeTotalScore: number;
+        cumulativeTotalPoints: number;
+        cumulativePercentage: number;
+        passed: boolean;
+    }>;
     onPrint?: () => void;
     showPrintButton?: boolean;
 }
@@ -36,7 +47,9 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     reportType,
     schoolInfo,
     metadata,
-    results,
+    results = [],
+    matrixHeaders = [],
+    matrixRows = [],
     onPrint,
     showPrintButton = true
 }) => {
@@ -274,6 +287,49 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                 </div>
                             )}
                         </div>
+                    ) : reportType === 'consolidated-broadsheet' ? (
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="bg-gray-100">
+                                    <th className="border border-gray-400 px-2 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider w-8">S/N</th>
+                                    <th className="border border-gray-400 px-2 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider">Candidate Name</th>
+                                    <th className="border border-gray-400 px-2 sm:px-3 py-2 text-left text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20">ID No.</th>
+                                    {matrixHeaders.map((hdr, hIdx) => (
+                                        <th key={hIdx} className="border border-gray-400 px-2 py-2 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider">
+                                            {hdr}
+                                        </th>
+                                    ))}
+                                    <th className="border border-gray-400 px-2 sm:px-3 py-2 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-24">Average (%)</th>
+                                    <th className="border border-gray-400 px-2 sm:px-3 py-2 text-center text-[10px] sm:text-xs font-bold uppercase tracking-wider w-20">Remark</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {matrixRows.map((row, index) => (
+                                    <tr key={index} className="hover:bg-gray-50">
+                                        <td className="border border-gray-300 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-center font-mono">{index + 1}</td>
+                                        <td className="border border-gray-300 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase">{row.name}</td>
+                                        <td className="border border-gray-300 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-mono text-gray-600">{row.studentId}</td>
+                                        {matrixHeaders.map((hdr, hIdx) => {
+                                            const scoreObj = row.scores[hdr];
+                                            if (!scoreObj) return <td key={hIdx} className="border border-gray-300 px-2 py-1.5 text-[10px] sm:text-xs text-center text-gray-400 font-mono">-</td>;
+                                            return (
+                                                <td key={hIdx} className={`border border-gray-300 px-2 py-1.5 text-[10px] sm:text-xs text-center font-bold ${scoreObj.percentage >= 40 ? 'text-green-700' : 'text-red-600'}`}>
+                                                    {scoreFormatSetting === 'percentage' 
+                                                        ? `${scoreObj.percentage.toFixed(0)}%` 
+                                                        : `${scoreObj.score}/${scoreObj.total}`}
+                                                </td>
+                                            );
+                                        })}
+                                        <td className={`border border-gray-300 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-center font-black ${row.cumulativePercentage >= 40 ? 'text-green-700' : 'text-red-600'}`}>
+                                            {row.cumulativePercentage.toFixed(1)}%
+                                        </td>
+                                        <td className={`border border-gray-300 px-2 sm:px-3 py-1.5 text-[9px] sm:text-[10px] text-center font-bold uppercase ${row.passed ? 'text-green-700' : 'text-red-600'}`}>
+                                            {row.passed ? 'Pass' : 'Fail'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     ) : (
                         <table className="w-full border-collapse">
                             <thead>
