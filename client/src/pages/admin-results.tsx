@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -152,18 +152,76 @@ export default function AdminResults() {
       return examMatch && searchMatch && classLevelMatch && departmentMatch && dateMatch;
     }
   );
+  const [viewMode, setViewMode] = useState<"combined" | "by-subject">("combined");
+
   const sortedResults = [...(filteredResults || [])].sort(
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
   );
+
+  const flattenedSubjectResults = useMemo(() => {
+    if (!filteredResults || viewMode === "combined") return sortedResults;
+
+    const items: any[] = [];
+    filteredResults.forEach((result) => {
+      const exam = exams?.find(e => e.id === result.examId);
+      if (!exam || !questions) {
+        items.push({
+          ...result,
+          displaySubject: getExamTitle(result.examId),
+          originalResultId: result.id
+        });
+        return;
+      }
+
+      const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+      const subjects = Array.from(new Set(examQuestions.map(q => q.subject || "General")));
+
+      if (subjects.length <= 1) {
+        items.push({
+          ...result,
+          displaySubject: getExamTitle(result.examId),
+          originalResultId: result.id
+        });
+      } else {
+        subjects.forEach(subj => {
+          const subjQuestions = examQuestions.filter(q => (q.subject || "General") === subj);
+          let correct = 0;
+          subjQuestions.forEach(q => {
+            if (result.correctAnswers?.[q.id]) correct++;
+          });
+          const totalPoints = subjQuestions.length;
+          const percentage = totalPoints > 0 ? (correct / totalPoints) * 100 : 0;
+          const passed = percentage >= (exam.passingScore || 50);
+
+          items.push({
+            ...result,
+            id: `${result.id}-${subj}`,
+            originalResultId: result.id,
+            displaySubject: `${subj} (${getExamTitle(result.examId)})`,
+            subjectAlone: subj,
+            score: correct,
+            totalPoints,
+            percentage,
+            passed
+          });
+        });
+      }
+    });
+
+    return items.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+  }, [filteredResults, exams, questions, viewMode, sortedResults]);
+
+  const activeResultsList = viewMode === "by-subject" ? flattenedSubjectResults : sortedResults;
+
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
-  const totalPages = Math.ceil(sortedResults.length / pageSize);
+  const totalPages = Math.ceil(activeResultsList.length / pageSize);
   const activePage = Math.min(currentPage, Math.max(1, totalPages));
-  const displayedResults = sortedResults.slice((activePage - 1) * pageSize, activePage * pageSize);
+  const displayedResults = activeResultsList.slice((activePage - 1) * pageSize, activePage * pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterExamId, filterClassLevel, filterDepartment, dateRange]);
+  }, [searchQuery, filterExamId, filterClassLevel, filterDepartment, dateRange, viewMode]);
 
   // Department Average Score Data (uplift.md Section 5)
   const departmentBarData = [
@@ -516,7 +574,7 @@ export default function AdminResults() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked && displayedResults) {
-      setSelectedResultIds(new Set(displayedResults.map(r => r.id)));
+      setSelectedResultIds(new Set(displayedResults.map((r: any) => r.id)));
     } else {
       setSelectedResultIds(new Set());
     }
@@ -987,20 +1045,54 @@ export default function AdminResults() {
               </div>
 
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-100 dark:border-slate-800/80 pt-4.5">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => {
-                    setSearchQuery("");
-                    setFilterExamId("ALL");
-                    setFilterClassLevel("ALL");
-                    setFilterDepartment("ALL");
-                    setDateRange({ from: undefined, to: undefined });
-                  }}
-                  className="rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/60"
-                >
-                  Clear Filters
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setSearchQuery("");
+                      setFilterExamId("ALL");
+                      setFilterClassLevel("ALL");
+                      setFilterDepartment("ALL");
+                      setDateRange({ from: undefined, to: undefined });
+                    }}
+                    className="rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                  >
+                    Clear Filters
+                  </Button>
+
+                  {/* View Mode Switcher */}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                    <Button
+                      type="button"
+                      variant={viewMode === "combined" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("combined")}
+                      className={cn(
+                        "h-7 text-[11px] font-extrabold rounded-lg px-3 transition-all",
+                        viewMode === "combined"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      )}
+                    >
+                      Combined Exams
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={viewMode === "by-subject" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("by-subject")}
+                      className={cn(
+                        "h-7 text-[11px] font-extrabold rounded-lg px-3 transition-all",
+                        viewMode === "by-subject"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                      )}
+                    >
+                      Subject Breakdown View
+                    </Button>
+                  </div>
+                </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                   {selectedResultIds.size > 0 && (
@@ -1085,7 +1177,7 @@ export default function AdminResults() {
                     </TableHeader>
                     <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-805/40">
                       {displayedResults
-                        .map((result) => {
+                        .map((result: any) => {
                           const student = students?.find(s => 
                             s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
                             s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
@@ -1111,7 +1203,7 @@ export default function AdminResults() {
                               <TableCell className="max-w-[200px] py-4">
                                 <div
                                   className="cursor-pointer flex items-center gap-3"
-                                  onClick={() => setLocation(`/admin/results/${result.id}`)}
+                                  onClick={() => setLocation(`/admin/results/${result.originalResultId || result.id}`)}
                                 >
                                   <div className="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-650 dark:group-hover:bg-indigo-950 dark:group-hover:text-indigo-400 transition-colors">
                                     <User className="h-4.5 w-4.5" />
@@ -1134,8 +1226,8 @@ export default function AdminResults() {
                                   </Badge>
                                 ) : student?.department || '-'}
                               </TableCell>
-                              <TableCell className="font-semibold text-xs text-slate-800 dark:text-slate-300 max-w-[150px] truncate py-4" title={getExamTitle(result.examId)}>
-                                {getExamTitle(result.examId)}
+                              <TableCell className="font-semibold text-xs text-slate-800 dark:text-slate-300 max-w-[180px] truncate py-4" title={result.displaySubject || getExamTitle(result.examId)}>
+                                {result.displaySubject || getExamTitle(result.examId)}
                               </TableCell>
 
                               {/* Subject Breakdown column */}
@@ -1239,7 +1331,7 @@ export default function AdminResults() {
                               </TableCell>
                               <TableCell className="text-right print:hidden py-4">
                                 <div className="flex justify-end gap-1">
-                                  <Link href={`/admin/results/${result.id}`}>
+                                  <Link href={`/admin/results/${result.originalResultId || result.id}`}>
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 

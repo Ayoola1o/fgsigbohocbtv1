@@ -18,12 +18,14 @@ import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import type { Result, Question, Exam, Student } from "@shared/schema";
 import { getResult, getExam, getQuestionsByIds, getStudents } from "@/lib/firebase-api";
 import { useScoreFormat } from "@/hooks/use-score-format";
+import { cn } from "@/lib/utils";
 
 export default function ExamResult() {
   const { formatScore } = useScoreFormat();
   const params = useParams<{ resultId: string }>();
   const [isAdminResult] = useRoute("/admin/results/:resultId");
   const resultId = params.resultId;
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("ALL");
 
   const { data: result, isLoading: resultLoading } = useQuery<Result>({
     queryKey: ["/api/results", resultId],
@@ -370,25 +372,74 @@ export default function ExamResult() {
         </Card>
 
         {/* Subject Wise Performance breakdown */}
-        {subjectBreakdown && subjectBreakdown.length > 1 && (
+        {subjectBreakdown && subjectBreakdown.length > 0 && (
           <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden animate-in fade-in duration-300">
-            <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-805/85">
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-205 flex items-center gap-2">
-                <BookOpen className="h-4.5 w-4.5 text-indigo-500" />
-                Subject-Wise Performance Breakdown
-              </h3>
+            <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-805/85 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-205 flex items-center gap-2">
+                  <BookOpen className="h-4.5 w-4.5 text-indigo-500" />
+                  Subject-Wise Score Breakdown
+                </h3>
+                <p className="text-[11px] text-slate-450 font-medium mt-0.5">
+                  Click any subject card below to view its specific questions & answers
+                </p>
+              </div>
+              {selectedSubjectFilter !== "ALL" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedSubjectFilter("ALL")}
+                  className="h-7 text-[10px] font-extrabold rounded-lg border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300"
+                >
+                  Show All Subjects
+                </Button>
+              )}
             </div>
             <CardContent className="p-6">
               <div className="grid gap-4 sm:grid-cols-2">
+                {/* All Subjects Card */}
+                <div
+                  onClick={() => setSelectedSubjectFilter("ALL")}
+                  className={cn(
+                    "p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group",
+                    selectedSubjectFilter === "ALL"
+                      ? "border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-2 ring-indigo-500/40 shadow-md scale-[1.01]"
+                      : "border-slate-150/60 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-955/20 hover:border-indigo-300"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2.5">
+                    <div>
+                      <span className="block text-sm font-black text-slate-800 dark:text-slate-200">All Subjects Combined</span>
+                      <span className="block text-xs font-extrabold text-indigo-650 dark:text-indigo-400 mt-0.5">
+                        {correctCount} / {totalQuestions} Correct ({result.percentage.toFixed(0)}%)
+                      </span>
+                    </div>
+                    <Badge className={selectedSubjectFilter === "ALL" ? "bg-indigo-600 text-white font-bold" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}>
+                      {selectedSubjectFilter === "ALL" ? "Active View" : "All"}
+                    </Badge>
+                  </div>
+                  <Progress value={result.percentage} className="h-1.5 rounded-full mt-2" />
+                </div>
+
                 {subjectBreakdown.map((b) => {
                   const subjectPassed = b.percentage >= (exam?.passingScore || 50);
+                  const isSelected = selectedSubjectFilter.toLowerCase() === b.subject.toLowerCase();
                   return (
-                    <div key={b.subject} className="p-4 rounded-2xl border border-slate-150/60 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-955/20 flex flex-col justify-between">
+                    <div
+                      key={b.subject}
+                      onClick={() => setSelectedSubjectFilter(isSelected ? "ALL" : b.subject)}
+                      className={cn(
+                        "p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group",
+                        isSelected
+                          ? "border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-2 ring-indigo-500/40 shadow-md scale-[1.01]"
+                          : "border-slate-150/60 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-955/20 hover:border-indigo-300"
+                      )}
+                    >
                       <div className="flex items-start justify-between gap-3 mb-2.5">
                         <div className="truncate">
                           <span className="block text-sm font-black text-slate-800 dark:text-slate-200 truncate">{b.subject}</span>
-                          <span className="block text-[10px] text-slate-455 font-bold mt-0.5">
-                            {b.correct} of {b.questions} solved correctly
+                          <span className="block text-xs font-black text-slate-700 dark:text-slate-300 mt-1">
+                            Score: <strong className="text-indigo-600 dark:text-indigo-400">{b.correct} / {b.questions}</strong> ({b.percentage.toFixed(0)}%)
                           </span>
                         </div>
                         <Badge 
@@ -403,10 +454,11 @@ export default function ExamResult() {
                       </div>
                       <div className="space-y-1">
                         <Progress value={b.percentage} className={`h-1.5 rounded-full ${subjectPassed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-rose-500"}`} />
-                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 mt-1">
-                          <span>0%</span>
-                          <span>PASS THRESHOLD: {exam?.passingScore || 50}%</span>
-                          <span>100%</span>
+                        <div className="flex justify-between items-center text-[9px] font-extrabold text-slate-450 mt-1.5">
+                          <span className={isSelected ? "text-indigo-600 dark:text-indigo-400 font-black" : ""}>
+                            {isSelected ? "Viewing Questions ✓" : "Click to view questions →"}
+                          </span>
+                          <span>PASS: {exam?.passingScore || 50}%</span>
                         </div>
                       </div>
                     </div>
@@ -466,21 +518,57 @@ export default function ExamResult() {
         </Card>
 
         {/* Question Review */}
-        <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
-          <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-805/85">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-205 flex items-center gap-2">
-              <HelpCircle className="h-4.5 w-4.5 text-indigo-500" />
-              Examination Session review log
-            </h3>
-          </div>
-          <CardContent className="p-6">
-            {questions && questions.length > 0 ? (
-              <Accordion type="single" collapsible className="w-full divide-y divide-slate-100 dark:divide-slate-805/45">
-                {questions.map((question, idx) => {
-                  const isCorrect = result.correctAnswers[question.id];
-                  const studentAnswer = result.answers[question.id];
+        {(() => {
+          const displayedQuestions = questions ? (
+            selectedSubjectFilter === "ALL"
+              ? questions
+              : questions.filter(q => (q.subject || "General").toLowerCase() === selectedSubjectFilter.toLowerCase())
+          ) : [];
 
-                  return (
+          return (
+            <Card className="mb-8 border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
+              <div className="bg-slate-50/50 dark:bg-slate-950/40 px-6 py-4.5 border-b border-slate-100 dark:border-slate-805/85 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-205 flex items-center gap-2">
+                  <HelpCircle className="h-4.5 w-4.5 text-indigo-500" />
+                  Examination Session Review Log
+                  <Badge variant="outline" className="border-indigo-200 text-indigo-700 font-extrabold text-[10px] uppercase ml-1">
+                    {selectedSubjectFilter === "ALL" ? "All Subjects" : selectedSubjectFilter} ({displayedQuestions.length} Qs)
+                  </Badge>
+                </h3>
+
+                {/* Filter pills */}
+                {subjectBreakdown && subjectBreakdown.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      variant={selectedSubjectFilter === "ALL" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedSubjectFilter("ALL")}
+                      className="h-7 text-[10px] font-bold rounded-lg px-2.5"
+                    >
+                      All ({questions?.length || 0})
+                    </Button>
+                    {subjectBreakdown.map(b => (
+                      <Button
+                        key={b.subject}
+                        variant={selectedSubjectFilter.toLowerCase() === b.subject.toLowerCase() ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedSubjectFilter(b.subject)}
+                        className="h-7 text-[10px] font-bold rounded-lg px-2.5"
+                      >
+                        {b.subject} ({b.questions})
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <CardContent className="p-6">
+                {displayedQuestions && displayedQuestions.length > 0 ? (
+                  <Accordion type="single" collapsible className="w-full divide-y divide-slate-100 dark:divide-slate-805/45">
+                    {displayedQuestions.map((question, idx) => {
+                      const isCorrect = result.correctAnswers[question.id];
+                      const studentAnswer = result.answers[question.id];
+
+                      return (
                     <AccordionItem key={question.id} value={question.id} className="border-none py-1 group">
                       <AccordionTrigger className="hover:no-underline py-4">
                         <div className="flex items-center gap-3 text-left">
@@ -563,6 +651,8 @@ export default function ExamResult() {
             )}
           </CardContent>
         </Card>
+      );
+    })()}
 
         {/* Clean Center Action Bar */}
         <div className="flex justify-center mt-10">
