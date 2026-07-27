@@ -15,6 +15,7 @@ import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/com
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { createRoot } from "react-dom/client";
 import { Printer, RefreshCw, Sparkles, Plus, Check, Layers, Settings2, BookOpen, ArrowRight } from "lucide-react";
+import { SubjectTagInput } from "@/components/SubjectTagInput";
 
 export default function AdminExamDetails() {
   const { id } = useParams();
@@ -349,25 +350,32 @@ export default function AdminExamDetails() {
               />
             </div>
 
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject *</Label>
-                <Input
-                  id="subject"
-                  value={formData.subject}
-                  onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                  placeholder="e.g., Physics"
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject(s) *</Label>
+              <SubjectTagInput
+                value={formData.subject}
+                onChange={newSubj => setFormData({ ...formData, subject: newSubj })}
+                availableQuestions={questions}
+                placeholder="Select or type subject tag..."
+              />
+            </div>
 
+            <div className="grid gap-6 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="classLevel">Class Level *</Label>
                 <select
                   id="classLevel"
                   value={formData.classLevel}
-                  onChange={e => setFormData({ ...formData, classLevel: e.target.value, department: ["SS1", "SS2", "SS3"].includes(e.target.value) ? formData.department : "" })}
-                  className="w-full border rounded-md px-3 py-2 bg-background"
+                  onChange={e => {
+                    const newClass = e.target.value;
+                    const isSenior = ["SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].includes(newClass);
+                    setFormData({
+                      ...formData,
+                      classLevel: newClass,
+                      department: isSenior ? (formData.department || "General") : ""
+                    });
+                  }}
+                  className="w-full border rounded-md px-3 py-2 bg-background font-semibold text-xs h-10"
                   required
                 >
                   <option value="JSS1">JSS1</option>
@@ -389,7 +397,7 @@ export default function AdminExamDetails() {
                   id="term"
                   value={formData.term}
                   onChange={e => setFormData({ ...formData, term: e.target.value })}
-                  className="w-full border rounded-md px-3 py-2 bg-background"
+                  className="w-full border rounded-md px-3 py-2 bg-background font-semibold text-xs h-10"
                   required
                 >
                   <option value="First Term">First Term</option>
@@ -398,26 +406,26 @@ export default function AdminExamDetails() {
                   <option value="Others">Others</option>
                 </select>
               </div>
-            </div>
 
-            {["SS1", "SS2", "SS3"].includes(formData.classLevel) && (
-              <div className="space-y-2">
-                <Label htmlFor="department">Department *</Label>
-                <select
-                  id="department"
-                  value={formData.department || ""}
-                  onChange={e => setFormData({ ...formData, department: e.target.value })}
-                  className="w-full border rounded-md px-3 py-2 bg-background"
-                  required
-                >
-                  <option value="">Select Department</option>
-                  <option value="Science">Science</option>
-                  <option value="Commercial">Commercial</option>
-                  <option value="Art">Art</option>
-                  <option value="Others">Others</option>
-                </select>
-              </div>
-            )}
+              {["SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].includes(formData.classLevel) && (
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department (Senior Secondary) *</Label>
+                  <select
+                    id="department"
+                    value={formData.department || "General"}
+                    onChange={e => setFormData({ ...formData, department: e.target.value })}
+                    className="w-full border rounded-md px-3 py-2 bg-background font-semibold text-xs h-10"
+                    required
+                  >
+                    <option value="General">General</option>
+                    <option value="Science">Science</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Art">Art</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+              )}
+            </div>
 
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">

@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { SubjectTagInput } from "@/components/SubjectTagInput";
 import { 
   Plus, 
   Clock, 
@@ -798,7 +799,7 @@ function ExamForm({
           </div>
         </div>
 
-        {["SS1", "SS2", "SS3"].includes(formData.classLevel) && (
+        {["SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].includes(formData.classLevel) && (
           <div className="space-y-2 animate-in fade-in duration-300">
             <Label className="text-xs font-bold text-slate-500 dark:text-slate-400">Target SS Department(s) *</Label>
             <div className="flex flex-wrap gap-2 p-2.5 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -874,8 +875,20 @@ function ExamForm({
         <div className="grid gap-4 md:grid-cols-2">
           {/* Subject selections */}
           <div className="space-y-1">
-            <Label className="text-xs font-bold text-slate-500 dark:text-slate-400">Subject Filters *</Label>
-            <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2 bg-slate-50/30 dark:bg-slate-950/30">
+            <Label className="text-xs font-bold text-slate-500 dark:text-slate-400">Subject Tags & Filters *</Label>
+            <SubjectTagInput
+              value={formData.subject}
+              onChange={(newSubj) => {
+                const selectedList = newSubj ? newSubj.split(",").map(s => s.trim()).filter(Boolean) : [];
+                const newConfig: Record<string, number> = {};
+                selectedList.forEach(s => {
+                  newConfig[s] = formData.subjectConfig?.[s] || 10;
+                });
+                setFormData({ ...formData, subject: newSubj, questionIds: [], subjectConfig: newConfig });
+              }}
+              availableQuestions={questions}
+            />
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 max-h-36 overflow-y-auto space-y-2 bg-slate-50/30 dark:bg-slate-950/30 mt-2">
               {Array.from(new Set(questions.filter(q => q.classLevel === formData.classLevel).map(q => q.subject))).map(subject => {
                 const selectedList = formData.subject ? formData.subject.split(",").map(s => s.trim()).filter(Boolean) : [];
                 const isChecked = selectedList.includes(subject);
