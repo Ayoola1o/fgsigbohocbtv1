@@ -11,12 +11,15 @@ import { SystemSettings } from "@shared/schema";
 
 // Direct Eager Imports for Student Core Flow
 import Home from "@/pages/home";
-import StudentPortal from "@/pages/student-portal";
-import StudentLogin from "@/pages/student-login";
-import ExamStart from "@/pages/exam-start";
-import ExamSession from "@/pages/exam-session";
-import ExamResult from "@/pages/exam-result";
 import NotFound from "@/pages/not-found";
+
+// Lazy Loaded Chunks for Student Flow
+const StudentPortal = lazy(() => import("@/pages/student-portal"));
+const StudentLogin = lazy(() => import("@/pages/student-login"));
+const ExamStart = lazy(() => import("@/pages/exam-start"));
+const ExamSession = lazy(() => import("@/pages/exam-session"));
+const ExamResult = lazy(() => import("@/pages/exam-result"));
+
 
 // Lazy Loaded Chunks for Admin Navigation
 const AdminLoginPage = lazy(() => import("@/pages/admin-login"));

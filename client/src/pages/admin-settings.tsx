@@ -474,6 +474,21 @@ export default function AdminSettings() {
                   <CardDescription className="text-xs">Adjust how candidate result sheets are customized dynamically.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-105 dark:border-slate-800/40 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all duration-300">
+                    <div className="space-y-1 pr-4">
+                      <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Score Format Presentation</span>
+                      <span className="text-xs text-slate-500 block">Choose whether student report card scores compile as a Percentage (e.g. 75%) or Raw points achieved (e.g. 15 / 20).</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={`text-xs font-bold ${formData.scoreFormat === "points" ? "text-indigo-650" : "text-slate-400"}`}>Points</span>
+                      <Switch 
+                        checked={formData.scoreFormat === "percentage"}
+                        onCheckedChange={(checked) => updateField("scoreFormat", checked ? "percentage" : "points")}
+                      />
+                      <span className={`text-xs font-bold ${formData.scoreFormat === "percentage" ? "text-indigo-650" : "text-slate-400"}`}>Percent</span>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-105 dark:border-slate-800/40 hover:bg-slate-50/40 dark:hover:bg-slate-950/20 transition-all">
                     <div className="space-y-1 pr-4">
                       <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Render Slogan & Slogan Headers</span>

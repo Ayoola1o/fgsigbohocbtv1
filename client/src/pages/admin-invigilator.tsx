@@ -33,7 +33,7 @@ import {
   AlertOctagon,
   Hourglass
 } from "lucide-react";
-import { getDocs, collection, updateDoc, doc } from "firebase/firestore";
+import { getDocs, collection, updateDoc, doc, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -92,16 +92,25 @@ export default function AdminInvigilatorPage() {
 
   const todayStr = new Date().toDateString();
 
-  // Fetch all active exam sessions
+  // Fetch active exam sessions (only today's by default, or all if selected)
   const { data: sessions = [], isLoading, refetch } = useQuery<InvigilatorSession[]>({
-    queryKey: ["invigilatorExamSessions"],
+    queryKey: ["invigilatorExamSessions", dateFilter],
     queryFn: async () => {
-      const snapshot = await getDocs(collection(db, "exam_sessions"));
+      let q;
+      if (dateFilter === "today") {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        q = query(collection(db, "exam_sessions"), where("startedAt", ">=", todayStart));
+      } else {
+        q = collection(db, "exam_sessions");
+      }
+      const snapshot = await getDocs(q);
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as InvigilatorSession);
       return list;
     },
     refetchInterval: 5000,
   });
+
 
   // Fetch exams lookup
   const { data: exams = [] } = useQuery<Exam[]>({
