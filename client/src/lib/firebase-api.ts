@@ -561,6 +561,10 @@ export const deleteResult = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, "results", id));
 };
 
+export const deleteExamSession = async (sessionId: string): Promise<void> => {
+    await deleteDoc(doc(db, "exam_sessions", sessionId));
+};
+
 export const deleteExamSessionsForStudent = async (studentId: string, examId: string): Promise<void> => {
     const q = query(
         collection(db, "exam_sessions"),

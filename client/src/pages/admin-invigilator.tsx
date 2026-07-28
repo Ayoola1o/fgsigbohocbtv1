@@ -26,13 +26,15 @@ import {
   Send,
   PlusCircle,
   RefreshCw,
-  Radio
+  Radio,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import { getDocs, collection, updateDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { submitExamSession } from "@/lib/firebase-api";
+import { submitExamSession, deleteExamSession } from "@/lib/firebase-api";
 import type { ExamSession, Exam } from "@shared/schema";
 
 interface InvigilatorSession extends ExamSession {
@@ -44,8 +46,10 @@ export default function AdminInvigilatorPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [examFilter, setExamFilter] = useState<string>("all");
+  const [extraTimeMinutes, setExtraTimeMinutes] = useState<number>(5);
   const [selectedSessionForAction, setSelectedSessionForAction] = useState<InvigilatorSession | null>(null);
-  const [actionType, setActionType] = useState<"addTime" | "forceSubmit" | null>(null);
+  const [actionType, setActionType] = useState<"addTime" | "forceSubmit" | "deleteSession" | "purgeCompleted" | "forceSubmitAll" | null>(null);
 
   // Fetch all active exam sessions
   const { data: sessions = [], isLoading, refetch } = useQuery<InvigilatorSession[]>({
@@ -82,21 +86,35 @@ export default function AdminInvigilatorPage() {
     });
   }, [sessions, examMap]);
 
-  // Filtered sessions
+  // Filtered and Sorted sessions (Latest ongoing exams on top)
   const filteredSessions = useMemo(() => {
-    return enrichedSessions.filter(s => {
-      const matchesSearch =
-        s.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.examTitle && s.examTitle.toLowerCase().includes(searchTerm.toLowerCase()));
+    return enrichedSessions
+      .filter(s => {
+        const matchesSearch =
+          s.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          s.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (s.examTitle && s.examTitle.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      let matchesStatus = true;
-      if (statusFilter === "active") matchesStatus = !s.isCompleted;
-      if (statusFilter === "completed") matchesStatus = !!s.isCompleted;
+        let matchesStatus = true;
+        if (statusFilter === "active") matchesStatus = !s.isCompleted;
+        if (statusFilter === "completed") matchesStatus = !!s.isCompleted;
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [enrichedSessions, searchTerm, statusFilter]);
+        let matchesExam = true;
+        if (examFilter !== "all") matchesExam = s.examId === examFilter;
+
+        return matchesSearch && matchesStatus && matchesExam;
+      })
+      .sort((a, b) => {
+        // 1. Active / Live ongoing sessions come first
+        if (!a.isCompleted && b.isCompleted) return -1;
+        if (a.isCompleted && !b.isCompleted) return 1;
+
+        // 2. Sort newest startedAt first
+        const timeA = new Date(a.startedAt || 0).getTime();
+        const timeB = new Date(b.startedAt || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [enrichedSessions, searchTerm, statusFilter, examFilter]);
 
   // Stats
   const activeCount = enrichedSessions.filter(s => !s.isCompleted).length;
@@ -118,8 +136,8 @@ export default function AdminInvigilatorPage() {
     },
     onSuccess: () => {
       toast({
-        title: "Extra Time Added",
-        description: "Candidate exam timer has been extended by 5 minutes.",
+        title: "Extra Time Granted",
+        description: `Candidate exam timer extended by ${extraTimeMinutes} minutes.`,
       });
       queryClient.invalidateQueries({ queryKey: ["invigilatorExamSessions"] });
       setSelectedSessionForAction(null);
@@ -154,6 +172,47 @@ export default function AdminInvigilatorPage() {
         description: err instanceof Error ? err.message : "Failed to submit exam",
         variant: "destructive"
       });
+    }
+  });
+
+  // Delete / Purge single session mutation
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      return deleteExamSession(sessionId);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Session Purged",
+        description: "Session record deleted from live invigilator monitor.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["invigilatorExamSessions"] });
+      setSelectedSessionForAction(null);
+      setActionType(null);
+    },
+    onError: (err) => {
+      toast({
+        title: "Delete Error",
+        description: err instanceof Error ? err.message : "Failed to delete session",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Bulk Purge Completed mutation
+  const purgeCompletedMutation = useMutation({
+    mutationFn: async () => {
+      const completedSessions = sessions.filter(s => s.isCompleted);
+      for (const s of completedSessions) {
+        await deleteExamSession(s.id);
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: "Completed Sessions Purged",
+        description: "All submitted session records cleared from invigilator feed.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["invigilatorExamSessions"] });
+      setActionType(null);
     }
   });
 
@@ -250,17 +309,47 @@ export default function AdminInvigilatorPage() {
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+          {/* Exam Filter Dropdown */}
+          <Select value={examFilter} onValueChange={setExamFilter}>
+            <SelectTrigger className="w-44 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold">
+              <SelectValue placeholder="All Exams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Exams</SelectItem>
+              {exams.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Status Filter Dropdown */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <SelectTrigger className="w-36 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Sessions</SelectItem>
+              <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active Only</SelectItem>
               <SelectItem value="completed">Completed Only</SelectItem>
             </SelectContent>
           </Select>
+
+          {completedCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActionType("purgeCompleted");
+              }}
+              className="rounded-xl border-rose-200 text-rose-600 dark:border-rose-900 dark:text-rose-400 hover:bg-rose-50 text-xs font-bold h-9"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Purge Completed ({completedCount})
+            </Button>
+          )}
         </div>
       </div>
 
@@ -285,12 +374,15 @@ export default function AdminInvigilatorPage() {
             const totalCount = session.totalQuestionsCount || 1;
             const percent = Math.round((answeredCount / totalCount) * 100);
 
+            // Calculate elapsed time for active sessions
+            const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / (1000 * 60)));
+
             return (
               <Card
                 key={session.id}
-                className={`border transition-all shadow-md rounded-2xl overflow-hidden ${
+                className={`border transition-all shadow-md rounded-2xl overflow-hidden relative ${
                   session.isCompleted
-                    ? "border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 opacity-80"
+                    ? "border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 opacity-85"
                     : "border-indigo-100 dark:border-indigo-900/40 bg-white dark:bg-slate-900 hover:shadow-lg"
                 }`}
               >
@@ -302,12 +394,17 @@ export default function AdminInvigilatorPage() {
                           className={`font-extrabold text-[9px] uppercase px-2 py-0.5 rounded-md ${
                             session.isCompleted
                               ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse"
                           }`}
                         >
                           {session.isCompleted ? "Submitted" : "Live Active"}
                         </Badge>
                         <span className="text-[10px] font-mono font-bold text-slate-400">{session.studentId}</span>
+                        {!session.isCompleted && (
+                          <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md">
+                            Running: {elapsedMinutes} mins
+                          </span>
+                        )}
                       </div>
                       <CardTitle className="text-base font-black text-slate-850 dark:text-white mt-1.5">
                         {session.studentName}
@@ -317,34 +414,59 @@ export default function AdminInvigilatorPage() {
                       </CardDescription>
                     </div>
 
-                    {!session.isCompleted && (
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedSessionForAction(session);
-                            setActionType("addTime");
-                          }}
-                          className="h-8 text-[11px] font-bold border-indigo-200 dark:border-indigo-900 text-indigo-650 dark:text-indigo-400 hover:bg-indigo-50"
-                        >
-                          <PlusCircle className="mr-1 h-3.5 w-3.5" />
-                          +5 Min
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            setSelectedSessionForAction(session);
-                            setActionType("forceSubmit");
-                          }}
-                          className="h-8 text-[11px] font-bold px-3"
-                        >
-                          <Send className="mr-1 h-3 w-3" />
-                          Submit
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {!session.isCompleted && (
+                        <>
+                          {/* Extra Time Grant Dropdown / Preset */}
+                          <Select
+                            value={extraTimeMinutes.toString()}
+                            onValueChange={(val) => {
+                              const mins = parseInt(val);
+                              setExtraTimeMinutes(mins);
+                              addTimeMutation.mutate({ sessionId: session.id, extraMinutes: mins });
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-20 text-[10px] font-extrabold border-indigo-200 dark:border-indigo-900 text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 rounded-lg">
+                              <SelectValue placeholder="+5 Min" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl">
+                              <SelectItem value="5">+5 Mins</SelectItem>
+                              <SelectItem value="10">+10 Mins</SelectItem>
+                              <SelectItem value="15">+15 Mins</SelectItem>
+                              <SelectItem value="30">+30 Mins</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setSelectedSessionForAction(session);
+                              setActionType("forceSubmit");
+                            }}
+                            className="h-8 text-[11px] font-bold px-2.5 rounded-lg"
+                            title="Force Submit Exam"
+                          >
+                            <Send className="mr-1 h-3 w-3" />
+                            Submit
+                          </Button>
+                        </>
+                      )}
+
+                      {/* Delete / Purge Session Button */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedSessionForAction(session);
+                          setActionType("deleteSession");
+                        }}
+                        className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
+                        title="Delete Session Record"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
 
@@ -377,16 +499,26 @@ export default function AdminInvigilatorPage() {
       )}
 
       {/* Confirmation Modal */}
-      <AlertDialog open={!!selectedSessionForAction} onOpenChange={() => setSelectedSessionForAction(null)}>
+      <AlertDialog open={!!selectedSessionForAction || actionType === "purgeCompleted"} onOpenChange={() => {
+        setSelectedSessionForAction(null);
+        setActionType(null);
+      }}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-black">
-              {actionType === "addTime" && "Grant Extra Time"}
-              {actionType === "forceSubmit" && "Force Submit Exam Session"}
+            <AlertDialogTitle className="text-lg font-black flex items-center gap-2">
+              {actionType === "deleteSession" && <Trash2 className="h-5 w-5 text-rose-600" />}
+              {actionType === "purgeCompleted" && <Trash2 className="h-5 w-5 text-rose-600" />}
+              {actionType === "forceSubmit" && <Send className="h-5 w-5 text-indigo-600" />}
+              
+              {actionType === "deleteSession" && "Delete Live Session Record?"}
+              {actionType === "purgeCompleted" && `Purge ${completedCount} Completed Sessions?`}
+              {actionType === "forceSubmit" && "Force Submit Candidate Exam?"}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs font-medium text-slate-500">
-              {actionType === "addTime" &&
-                `Are you sure you want to add 5 minutes extra time for candidate ${selectedSessionForAction?.studentName}?`}
+            <AlertDialogDescription className="text-xs font-medium text-slate-500 leading-relaxed">
+              {actionType === "deleteSession" &&
+                `Are you sure you want to delete session record for candidate "${selectedSessionForAction?.studentName}" (${selectedSessionForAction?.studentId})? This will purge any bug or stale data reflecting on the monitor feed.`}
+              {actionType === "purgeCompleted" &&
+                `Are you sure you want to delete all ${completedCount} completed session records from the invigilator monitor?`}
               {actionType === "forceSubmit" &&
                 `Are you sure you want to force submit candidate ${selectedSessionForAction?.studentName}'s exam sheet? This action will finalize their grading.`}
             </AlertDialogDescription>
@@ -395,13 +527,15 @@ export default function AdminInvigilatorPage() {
             <AlertDialogCancel className="rounded-xl font-bold">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (actionType === "addTime" && selectedSessionForAction) {
-                  addTimeMutation.mutate({ sessionId: selectedSessionForAction.id, extraMinutes: 5 });
-                } else if (actionType === "forceSubmit" && selectedSessionForAction) {
+                if (actionType === "forceSubmit" && selectedSessionForAction) {
                   forceSubmitMutation.mutate(selectedSessionForAction);
+                } else if (actionType === "deleteSession" && selectedSessionForAction) {
+                  deleteSessionMutation.mutate(selectedSessionForAction.id);
+                } else if (actionType === "purgeCompleted") {
+                  purgeCompletedMutation.mutate();
                 }
               }}
-              className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold rounded-xl"
+              className={actionType === "deleteSession" || actionType === "purgeCompleted" ? "bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl" : "bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold rounded-xl"}
             >
               Confirm Action
             </AlertDialogAction>

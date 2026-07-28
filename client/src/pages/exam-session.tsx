@@ -39,6 +39,7 @@ import {
   updateExamSession,
   submitExamSession
 } from "@/lib/firebase-api";
+import { cn } from "@/lib/utils";
 
 interface TheorySlot {
   id: string;
@@ -258,14 +259,21 @@ export default function ExamSessionPage() {
 
 
   const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
-    queryKey: ["sessionQuestions", session?.id],
+    queryKey: ["sessionQuestions", session?.id, exam?.id],
     queryFn: async () => {
-      if (!session?.sessionQuestionIds || session.sessionQuestionIds.length === 0) {
+      let idsToFetch = session?.sessionQuestionIds || [];
+      if (exam?.questionIds && exam.questionIds.length > idsToFetch.length) {
+        const displayLimit = exam.numberOfQuestionsToDisplay;
+        if (!displayLimit || displayLimit >= exam.questionIds.length) {
+          idsToFetch = exam.questionIds;
+        }
+      }
+      if (!idsToFetch || idsToFetch.length === 0) {
         return [];
       }
-      return getStudentQuestionsByIds(session.sessionQuestionIds);
+      return getStudentQuestionsByIds(idsToFetch);
     },
-    enabled: !!session?.sessionQuestionIds && session.sessionQuestionIds.length > 0,
+    enabled: !!session && !!exam,
   });
 
   // Extract unique subjects from the loaded questions list
@@ -621,195 +629,120 @@ export default function ExamSessionPage() {
   const isTimerWarning = timeRemaining < (warningMinutes * 60);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16 font-sans">
-      {/* Premium Top Sticky Progress Navbar */}
-      <div className="sticky top-0 z-40 border-b border-slate-150/70 bg-white/90 dark:bg-slate-900/90 dark:border-slate-805/80 backdrop-blur-md">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-lg bg-indigo-100 dark:bg-indigo-955/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 animate-pulse">
-                <Sparkles className="h-3.5 w-3.5" />
-              </div>
-              <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Live Exam Session</span>
-            </div>
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 pb-16 font-sans">
+      {/* Top Header Bar */}
+      <div className="bg-[#1e293b] text-white px-6 py-3.5 flex items-center justify-between shadow-md border-b border-slate-700">
+        <div className="flex items-center gap-3.5">
+          <div className="h-10 w-10 rounded-full border-2 border-amber-400/80 bg-slate-900 flex items-center justify-center font-serif text-amber-300 text-xs font-black shadow-inner">
+            FIA
+          </div>
+          <div>
+            <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-white leading-tight">
+              Fia (Faith Immaculate Academy)
+            </h1>
+            <p className="text-[10px] font-bold text-slate-300 tracking-widest uppercase">
+              COMPUTER-BASED TEST PORTAL
+            </p>
+          </div>
+        </div>
 
-            {/* Network Connection Status Badge */}
-            <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border transition-colors ${
+        <div className="flex items-center gap-3">
+          <div className="bg-slate-800 border border-slate-700 rounded-full px-3.5 py-1.5 flex items-center gap-2 text-xs font-semibold text-white shadow-inner">
+            <div className="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center text-[11px] font-bold text-white">
+              {studentUser.name ? studentUser.name.charAt(0).toUpperCase() : "S"}
+            </div>
+            <span>Student: <strong className="font-extrabold">{studentUser.name}</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Exam Info Sub-Header Bar */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-3 shadow-sm">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-sm font-black text-slate-800 dark:text-slate-100">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span>Exam: {exam.title}</span>
+            <span className="text-slate-300 dark:text-slate-700">|</span>
+            <span className="text-slate-600 dark:text-slate-400 font-semibold">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span className="text-slate-300 dark:text-slate-700">|</span>
+            <span className="text-slate-600 dark:text-slate-400 font-semibold">{new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
               isOnline 
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/40"
-                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900/40"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400"
+                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400"
             }`}>
               {isOnline ? (
                 <>
-                  <Wifi className="h-3 w-3 text-emerald-500" />
+                  <Wifi className="h-3.5 w-3.5 text-emerald-500" />
                   <span>Online (Auto-Sync)</span>
                 </>
               ) : (
                 <>
-                  <WifiOff className="h-3 w-3 text-amber-500 animate-pulse" />
+                  <WifiOff className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
                   <span>Offline (Saved Locally)</span>
                 </>
               )}
             </div>
           </div>
-
-          <div className="flex items-center gap-4">
-            <Button
-              onClick={() => setShowSubmitDialog(true)}
-              className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold shadow-md hover:scale-[1.01] transition-transform rounded-xl px-5.5 h-9.5 flex items-center gap-1.5 text-xs"
-              data-testid="button-submit-exam"
-            >
-              <Send className="h-3.5 w-3.5" />
-              Submit CBT
-            </Button>
-          </div>
-        </div>
-
-        {/* Real-time progress indicator */}
-        <div className="bg-slate-50/50 dark:bg-slate-950/30 px-4 py-2 border-t border-slate-100 dark:border-slate-805/30">
-          <div className="container mx-auto max-w-4xl flex items-center justify-between gap-4">
-            <Progress value={progress} className="h-1.5 flex-1 rounded-full bg-slate-150 dark:bg-slate-800" />
-            <span className="text-[11px] font-bold text-slate-455 shrink-0">
-              {answeredCount} of {totalSteps} Completed
-            </span>
-          </div>
         </div>
       </div>
 
-      {/* NOE Name of Exam & TN Time Countdown stacked */}
-      <div className="container mx-auto px-4 pt-8">
-        <div className="flex flex-col items-center justify-center text-center bg-white dark:bg-slate-900 border border-slate-150/70 dark:border-slate-805 p-6 rounded-3xl shadow-lg mb-8 relative min-h-[140px]">
-          <div className="flex flex-col items-center">
-            <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold uppercase py-0.5 px-2.5 rounded-lg border border-indigo-100/20 dark:border-indigo-900/20 text-[10px] tracking-wider mb-2">
-              Active Examination
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-855 dark:text-slate-100 tracking-tight leading-tight">
-              {exam.title}
-            </h2>
+      {/* Horizontal Subject Selection Tabs (For Multi-Subject Exams) */}
+      {subjects.length > 1 && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-5">
+          <div className="flex items-center gap-2 bg-slate-200/80 dark:bg-slate-850 p-1.5 rounded-2xl w-fit border border-slate-300/70 dark:border-slate-750 shadow-inner">
+            <span className="text-[10px] font-black uppercase text-slate-500 px-2">Subjects:</span>
+            {subjects.map((subj) => {
+              const isActive = subj === activeSubject;
+              const stats = getSubjectStats(subj);
+              return (
+                <button
+                  key={subj}
+                  type="button"
+                  onClick={() => {
+                    const firstIdx = questions.findIndex((q) => (q.subject || "General") === subj);
+                    if (firstIdx !== -1) handleNavigate(firstIdx);
+                  }}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2",
+                    isActive
+                      ? "bg-indigo-650 text-white shadow-md"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-300/60 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <span>{subj}</span>
+                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded-md font-bold", isActive ? "bg-white/20 text-white" : "bg-slate-300 text-slate-700 dark:bg-slate-900 dark:text-slate-300")}>
+                    {stats.answered}/{stats.total}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        </div>
+      )}
+
+      {/* Main Two-Column CBT Layout Body */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* TN - Time New Position */}
-          <div className={`mt-4 md:mt-0 md:absolute md:right-6 md:top-1/2 md:-translate-y-1/2 flex flex-col items-center justify-center border p-4.5 rounded-2xl shadow-sm min-w-[140px] transition-all duration-300 ${
-            isTimerWarning 
-              ? "bg-rose-50/75 border-rose-300 dark:bg-rose-955/20 dark:border-rose-900/50 animate-pulse" 
-              : "bg-slate-50 dark:bg-slate-950/40 border-slate-200/40 dark:border-slate-805/40"
-          }`}>
-            <Clock className={`h-8 w-8 shrink-0 ${isTimerWarning ? "text-rose-600 dark:text-rose-455 animate-pulse" : "text-indigo-500"}`} />
-            <span
-              className={`text-xl font-black tabular-nums mt-2 tracking-tight ${
-                isTimerWarning ? "text-rose-600 dark:text-rose-455 font-black" : "text-slate-800 dark:text-slate-205"
-              }`}
-              data-testid="text-timer"
-            >
-              {formatTime(timeRemaining)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="container mx-auto px-4 pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Sidebar (Student Profile & Subjects) */}
-          <div className="lg:col-span-3 space-y-4 animate-in fade-in slide-in-from-left-4 duration-300">
-            {/* Section 1: Student Profile */}
-            <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-100/30 dark:shadow-none overflow-hidden p-5 flex flex-col items-center text-center">
-              <div className="mb-4">
-                {studentUser.sex === "F" ? (
-                  <svg className="w-20 h-20 rounded-full border border-pink-200 bg-pink-50" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="32" cy="32" r="32" fill="#FCE7F3"/>
-                    <path d="M32 40C24 40 16 44 16 52V56H48V52C48 44 40 40 32 40Z" fill="#DB2777"/>
-                    <circle cx="32" cy="24" r="12" fill="#F3F4F6"/>
-                    <path d="M20 18C22 10 42 10 44 18C46 24 42 30 32 28C22 30 18 24 20 18Z" fill="#1F2937"/>
-                  </svg>
-                ) : (
-                  <svg className="w-20 h-20 rounded-full border border-indigo-200 bg-indigo-50" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="32" cy="32" r="32" fill="#E0E7FF"/>
-                    <path d="M32 40C24 40 16 44 16 52V56H48V52C48 44 40 40 32 40Z" fill="#4F46E5"/>
-                    <circle cx="32" cy="24" r="12" fill="#F3F4F6"/>
-                    <path d="M26 18C28 14 36 14 38 18C39 20 37 24 32 24C27 24 25 20 26 18Z" fill="#1F2937"/>
-                  </svg>
-                )}
-              </div>
-              <h3 className="text-base font-black text-slate-850 dark:text-white leading-tight mb-1 truncate max-w-full">
-                {studentUser.name}
-              </h3>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2.5">
-                ID: {studentUser.studentId}
-              </p>
-              <div className="flex flex-wrap gap-1.5 justify-center mt-1">
-                <Badge variant="outline" className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg bg-slate-50 dark:bg-slate-950 border-slate-200/60 text-slate-650 dark:text-slate-400">
-                  Class: {studentUser.classLevel}
-                </Badge>
-                {studentUser.classLevel && ["SS1", "SS2", "SS3", "WAEC", "NECO", "GCE WAEC", "GCE NECO"].some(lvl => studentUser.classLevel.toUpperCase().includes(lvl)) && studentUser.department && (
-                  <Badge variant="outline" className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200/50 text-indigo-700 dark:text-indigo-400">
-                    Dept: {studentUser.department}
-                  </Badge>
-                )}
-              </div>
-            </Card>
-
-            {/* Section 2: Subject Sections (Only show if multiple subjects exist for Objectives exam) */}
-            {exam.examType === "Objectives" && subjects.length > 1 && (
-              <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-100/30 dark:shadow-none overflow-hidden animate-in fade-in duration-300">
-                <div className="bg-slate-50/50 dark:bg-slate-950/40 px-5 py-4 border-b border-slate-100 dark:border-slate-850">
-                  <h3 className="text-xs font-black text-slate-800 dark:text-slate-205 uppercase tracking-wider flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-indigo-500" />
-                    Subject Sections
-                  </h3>
+          {/* Left Column: Question Area (~7 cols out of 12) */}
+          <div className="lg:col-span-7">
+            <div className="border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden">
+              {/* Question Area Blue Header */}
+              <div className={`px-6 py-3.5 text-white flex items-center justify-between font-bold text-sm transition-colors ${
+                isTimerWarning ? "bg-rose-700" : "bg-[#475569] dark:bg-slate-800"
+              }`}>
+                <span className="font-black tracking-wide text-base">Question Area</span>
+                <div className="flex items-center gap-2 font-mono font-black text-base">
+                  <Clock className="h-4.5 w-4.5 text-amber-300" />
+                  <span>Time Remaining: {formatTime(timeRemaining)}</span>
                 </div>
-                <CardContent className="p-3 space-y-1.5">
-                  {subjects.map((subj) => {
-                    const isActive = subj === activeSubject;
-                    const stats = getSubjectStats(subj);
-                    const isDone = stats.answered === stats.total;
+              </div>
 
-                    return (
-                      <button
-                        key={subj}
-                        onClick={() => {
-                          const firstIdx = questions.findIndex((q) => (q.subject || "General") === subj);
-                          if (firstIdx !== -1) {
-                            handleNavigate(firstIdx);
-                          }
-                        }}
-                        className={`w-full flex items-center justify-between p-3 rounded-2xl text-left transition-all ${
-                          isActive
-                            ? "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-extrabold shadow-md shadow-indigo-650/10"
-                            : "text-slate-650 dark:text-slate-350 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 font-semibold"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 truncate">
-                          {isDone ? (
-                            <CheckCircle className={`h-4.5 w-4.5 shrink-0 ${isActive ? "text-white" : "text-emerald-500"}`} />
-                          ) : (
-                            <div className={`h-2 w-2 rounded-full shrink-0 ${isActive ? "bg-white" : "bg-indigo-500"}`} />
-                          )}
-                          <span className="truncate text-sm">{subj}</span>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            isActive
-                              ? "bg-white/10 text-white border-white/20"
-                              : "bg-slate-100 dark:bg-slate-950 border-slate-250 dark:border-slate-800 text-slate-550"
-                          }`}
-                        >
-                          {stats.answered}/{stats.total}
-                        </Badge>
-                      </button>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Main Content (lg:col-span-9) */}
-          <div className="lg:col-span-9 space-y-8 animate-in fade-in duration-300">
-            {/* Active Question Display Card */}
-            <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-slate-100/50 dark:shadow-none overflow-hidden relative">
-              <CardContent className="p-6 sm:p-10">
+              {/* Question Details Body */}
+              <div className="p-6 space-y-5">
                 {exam.examType === "Theory" ? (
                   currentQuestion ? (
                     <TheoryQuestionView
@@ -827,153 +760,73 @@ export default function ExamSessionPage() {
                   )
                 ) : (
                   <>
-                    <div className="mb-8 flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="mb-3.5 flex items-center gap-2">
-                          <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-955/40 dark:text-indigo-400 font-extrabold uppercase py-0.5 px-2.5 rounded-lg border border-indigo-100/20 dark:border-indigo-900/20 text-[10px]">
-                            Item No. {activeSubjectLocalIndex + 1}
-                          </Badge>
-                          {currentQuestion && (
-                            <Badge variant="outline" className="border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-455 py-0.5 px-2.5 rounded-lg">
-                              {(currentQuestion as Question).points} Point{(currentQuestion as Question).points !== 1 ? 's' : ''}
-                            </Badge>
-                          )}
-                          {currentQuestion && (currentQuestion as Question).subject && (
-                            <Badge variant="secondary" className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/30 py-0.5 px-2.5 rounded-lg dark:bg-indigo-955/30 dark:text-indigo-400">
-                              {(currentQuestion as Question).subject}
-                            </Badge>
-                          )}
-                        </div>
-                        
-                        <h2
-                          className="text-lg sm:text-2xl font-black text-slate-805 dark:text-slate-150 leading-relaxed max-w-3xl"
-                          data-testid={`text-question-${currentQuestionIndex}`}
-                        >
-                          {(currentQuestion as Question)?.questionText}
-                        </h2>
-                        <div className="flex items-center gap-2">
-                          {/* TTS Audio Read-Aloud Button */}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-                              if (isSpeaking) {
-                                window.speechSynthesis.cancel();
-                                setIsSpeaking(false);
-                                return;
-                              }
-                              const q = currentQuestion as Question;
-                              if (!q || !q.questionText) return;
-
-                              let textToSpeak = `Question ${activeSubjectLocalIndex + 1}: ${q.questionText}. `;
-                              if (q.options && q.options.length > 0) {
-                                textToSpeak += "Options are: " + q.options.map((opt, idx) => `Option ${String.fromCharCode(65 + idx)}: ${opt}`).join(". ");
-                              }
-
-                              const utterance = new SpeechSynthesisUtterance(textToSpeak);
-                              utterance.onend = () => setIsSpeaking(false);
-                              utterance.onerror = () => setIsSpeaking(false);
-                              setIsSpeaking(true);
-                              window.speechSynthesis.speak(utterance);
-                            }}
-                            className={`rounded-xl h-10 px-3 border text-xs font-bold transition-all ${
-                              isSpeaking
-                                ? "bg-indigo-50 border-indigo-300 text-indigo-650 dark:bg-indigo-950/40 dark:text-indigo-400 animate-pulse"
-                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 text-slate-600 dark:text-slate-400"
-                            }`}
-                            title="Read question aloud"
-                          >
-                            <Volume2 className={`h-4 w-4 mr-1.5 ${isSpeaking ? "text-indigo-600 animate-bounce" : ""}`} />
-                            {isSpeaking ? "Stop" : "Read Aloud"}
-                          </Button>
-
-                          {/* Scientific Calculator Trigger (If enabled or allowed) */}
-                          {exam.enableCalculator && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowCalculator((prev) => !prev)}
-                              className="rounded-xl h-10 px-3 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
-                            >
-                              <Calculator className="h-4 w-4 mr-1.5 text-indigo-500" />
-                              Calculator
-                            </Button>
-                          )}
-
-                          {/* Formula Sheet Trigger (If enabled or allowed) */}
-                          {exam.enableFormulaSheet && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowFormulaSheet((prev) => !prev)}
-                              className="rounded-xl h-10 px-3 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
-                            >
-                              <FileCode className="h-4 w-4 mr-1.5 text-pink-500" />
-                              Formulas
-                            </Button>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => toggleFlag(currentQuestionIndex)}
-                            className={`rounded-xl h-10 w-10 shrink-0 border transition-all ${
-                              flaggedQuestions.has(currentQuestionIndex)
-                                ? "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-955/20 dark:border-rose-900/30"
-                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900 text-slate-400"
-                            }`}
-                            data-testid="button-flag-question"
-                          >
-                            <Flag className={`h-4.5 w-4.5 ${flaggedQuestions.has(currentQuestionIndex) ? "fill-rose-500 text-rose-500" : ""}`} />
-                          </Button>
-                        </div>
-                      </div>
+                    {/* Question Header Metadata */}
+                    <div className="space-y-1">
+                      <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
+                        Question {activeSubjectLocalIndex + 1} of {activeSubjectQuestions.length || totalSteps}
+                      </h3>
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        Subject: {(currentQuestion as Question)?.subject || activeSubject || "General"}
+                      </p>
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        Question Type: {(currentQuestion as Question)?.questionType === "true-false" ? "True / False" : (currentQuestion as Question)?.questionType === "short-answer" ? "Short Answer" : "Multiple Choice"}
+                      </p>
                     </div>
+
+                    <hr className="border-slate-200 dark:border-slate-800 my-4" />
+
+                    {/* Question Text */}
+                    <h2
+                      className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 leading-relaxed"
+                      data-testid={`text-question-${currentQuestionIndex}`}
+                    >
+                      {(currentQuestion as Question)?.questionText}
+                    </h2>
 
                     {/* Optional Image Diagram */}
                     {(currentQuestion as Question)?.imageUrl && (
-                      <div className="mb-8 flex justify-center bg-slate-50 dark:bg-slate-950/40 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-805/40">
+                      <div className="my-4 flex justify-center bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200">
                         <img
                           src={(currentQuestion as Question).imageUrl!}
                           alt="Question Diagram"
-                          className="max-h-[350px] w-auto max-w-full rounded-xl object-contain shadow-sm border border-slate-200/50"
+                          className="max-h-[300px] w-auto max-w-full rounded-lg object-contain"
                         />
                       </div>
                     )}
 
                     {/* Input Select Options */}
-                    <div className="space-y-4.5">
+                    <div className="pt-2 space-y-3">
                       {(currentQuestion as Question)?.questionType === "multiple-choice" && (currentQuestion as Question).options && (
                         <RadioGroup
                           value={answers[(currentQuestion as Question).id] || ""}
                           onValueChange={(value) => handleAnswerChange((currentQuestion as Question).id, value)}
-                          className="grid gap-3.5"
+                          className="grid gap-3"
                         >
                           {(currentQuestion as Question).options!.map((option, idx) => {
+                            const optionLetter = String.fromCharCode(65 + idx);
                             const isSelected = answers[(currentQuestion as Question).id] === option;
                             return (
                               <div
                                 key={idx}
                                 onClick={() => handleAnswerChange((currentQuestion as Question).id, option)}
-                                className={`flex items-center space-x-3.5 rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 ${
+                                className={`flex items-start space-x-3 rounded-xl border p-3.5 cursor-pointer transition-all ${
                                   isSelected 
-                                    ? "border-indigo-650 bg-indigo-50/15 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm" 
-                                    : "border-slate-150/70 hover:border-slate-300 hover:bg-slate-50/50 dark:border-slate-805 dark:hover:bg-slate-850/50"
+                                    ? "border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30 ring-1 ring-indigo-500" 
+                                    : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850"
                                 }`}
                               >
                                 <RadioGroupItem
                                   value={option}
                                   id={`option-${idx}`}
-                                  className="border-slate-350 dark:border-slate-700 text-indigo-600 dark:text-indigo-500 shrink-0"
+                                  className="mt-0.5 border-slate-400 text-indigo-600 shrink-0"
                                   data-testid={`radio-option-${idx}`}
                                   checked={isSelected}
                                 />
                                 <Label
                                   htmlFor={`option-${idx}`}
-                                  className="flex-1 cursor-pointer text-[15px] font-semibold text-slate-750 dark:text-slate-250 leading-snug"
+                                  className="flex-1 cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug"
                                 >
-                                  {option}
+                                  <strong className="font-extrabold mr-1.5">{optionLetter})</strong> {option}
                                 </Label>
                               </div>
                             );
@@ -985,32 +838,33 @@ export default function ExamSessionPage() {
                         <RadioGroup
                           value={answers[(currentQuestion as Question).id] || ""}
                           onValueChange={(value) => handleAnswerChange((currentQuestion as Question).id, value)}
-                          className="grid gap-3.5 sm:grid-cols-2"
+                          className="grid gap-3 sm:grid-cols-2"
                         >
-                          {["True", "False"].map((option) => {
+                          {["True", "False"].map((option, idx) => {
+                            const optionLetter = String.fromCharCode(65 + idx);
                             const isSelected = answers[(currentQuestion as Question).id] === option;
                             return (
                               <div
                                 key={option}
                                 onClick={() => handleAnswerChange((currentQuestion as Question).id, option)}
-                                className={`flex items-center space-x-3.5 rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 ${
+                                className={`flex items-center space-x-3 rounded-xl border p-3.5 cursor-pointer transition-all ${
                                   isSelected 
-                                    ? "border-indigo-650 bg-indigo-50/15 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm" 
-                                    : "border-slate-150/70 hover:border-slate-300 hover:bg-slate-50/50 dark:border-slate-805 dark:hover:bg-slate-850/50"
+                                    ? "border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/30 ring-1 ring-indigo-500" 
+                                    : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850"
                                 }`}
                               >
                                 <RadioGroupItem
                                   value={option}
                                   id={`option-${option}`}
-                                  className="border-slate-350 dark:border-slate-700 text-indigo-600 dark:text-indigo-500 shrink-0"
+                                  className="border-slate-400 text-indigo-600 shrink-0"
                                   data-testid={`radio-${option.toLowerCase()}`}
                                   checked={isSelected}
                                 />
                                 <Label
                                   htmlFor={`option-${option}`}
-                                  className="flex-1 cursor-pointer text-base font-extrabold text-slate-750 dark:text-slate-250"
+                                  className="flex-1 cursor-pointer text-sm font-bold text-slate-800 dark:text-slate-200"
                                 >
-                                  {option}
+                                  <strong className="font-extrabold mr-1.5">{optionLetter})</strong> {option}
                                 </Label>
                               </div>
                             );
@@ -1020,111 +874,190 @@ export default function ExamSessionPage() {
 
                       {(currentQuestion as Question)?.questionType === "short-answer" && (
                         <Textarea
-                          placeholder="Type your structured descriptive response here..."
+                          placeholder="Type your answer response here..."
                           value={answers[(currentQuestion as Question).id] || ""}
                           onChange={(e) => handleAnswerChange((currentQuestion as Question).id, e.target.value)}
-                          className="min-h-32 text-base rounded-2xl border-slate-150/70 dark:border-slate-805 bg-slate-50/20 dark:bg-slate-900/20 focus:border-indigo-500 font-semibold p-4"
+                          className="min-h-32 text-sm rounded-xl border-slate-300 dark:border-slate-800 font-medium p-4"
                           data-testid="textarea-answer"
                         />
                       )}
                     </div>
+
+                    {/* Tools Toolbar (TTS, Calculator, Formula) */}
+                    <div className="pt-2 flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+                          if (isSpeaking) {
+                            window.speechSynthesis.cancel();
+                            setIsSpeaking(false);
+                            return;
+                          }
+                          const q = currentQuestion as Question;
+                          if (!q || !q.questionText) return;
+
+                          let textToSpeak = `Question ${activeSubjectLocalIndex + 1}: ${q.questionText}. `;
+                          if (q.options && q.options.length > 0) {
+                            textToSpeak += "Options are: " + q.options.map((opt, idx) => `Option ${String.fromCharCode(65 + idx)}: ${opt}`).join(". ");
+                          }
+
+                          const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                          utterance.onend = () => setIsSpeaking(false);
+                          utterance.onerror = () => setIsSpeaking(false);
+                          setIsSpeaking(true);
+                          window.speechSynthesis.speak(utterance);
+                        }}
+                        className={`rounded-lg h-8 px-2.5 text-xs font-bold ${
+                          isSpeaking ? "bg-indigo-50 border-indigo-300 text-indigo-650" : "text-slate-600"
+                        }`}
+                      >
+                        <Volume2 className="h-3.5 w-3.5 mr-1" />
+                        {isSpeaking ? "Stop" : "Read Aloud"}
+                      </Button>
+
+                      {exam.enableCalculator && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowCalculator((prev) => !prev)}
+                          className="rounded-lg h-8 px-2.5 text-xs font-bold text-slate-600"
+                        >
+                          <Calculator className="h-3.5 w-3.5 mr-1 text-indigo-500" />
+                          Calc
+                        </Button>
+                      )}
+
+                      {exam.enableFormulaSheet && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowFormulaSheet((prev) => !prev)}
+                          className="rounded-lg h-8 px-2.5 text-xs font-bold text-slate-600"
+                        >
+                          <FileCode className="h-3.5 w-3.5 mr-1 text-pink-500" />
+                          Formulas
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Core Controls Navigation */}
-            <div className="flex items-center justify-between gap-4">
-              <Button
-                variant="outline"
-                onClick={() => handleNavigate(currentQuestionIndex - 1)}
-                disabled={currentQuestionIndex === 0}
-                className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-655 dark:text-slate-350 hover:bg-slate-100 font-bold h-11 px-6 transition-all"
-                data-testid="button-previous"
-              >
-                <ChevronLeft className="mr-1.5 h-5 w-5" />
-                Previous
-              </Button>
-              
-              <Button
-                variant="outline"
-                onClick={() => handleNavigate(currentQuestionIndex + 1)}
-                disabled={currentQuestionIndex === totalSteps - 1}
-                className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 text-slate-705 dark:text-slate-300 hover:bg-slate-100 font-extrabold h-11 px-6 max-w-xs transition-all flex items-center justify-center gap-1.5"
-                data-testid="button-next"
-              >
-                Next
-                <ChevronRight className="h-5 w-5" />
-              </Button>
+              {/* Bottom Question Area Action Buttons */}
+              <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                <Button
+                  onClick={() => {
+                    if (currentQuestionIndex < totalSteps - 1) {
+                      handleNavigate(currentQuestionIndex + 1);
+                    }
+                  }}
+                  disabled={currentQuestionIndex === totalSteps - 1}
+                  className="bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-extrabold px-6 h-10 rounded-xl shadow-md text-xs"
+                >
+                  Save and Next
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => toggleFlag(currentQuestionIndex)}
+                  className={`rounded-xl h-10 px-4 text-xs font-bold border transition-all ${
+                    flaggedQuestions.has(currentQuestionIndex)
+                      ? "bg-amber-50 border-amber-300 text-amber-700"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <Flag className={`h-4 w-4 mr-1.5 ${flaggedQuestions.has(currentQuestionIndex) ? "fill-amber-500 text-amber-500" : ""}`} />
+                  Flag Question
+                </Button>
+              </div>
             </div>
+          </div>
 
-            {/* Matrix Grid Navigator Panel */}
-            <Card className="border border-slate-150/70 dark:border-slate-805 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden">
-              <CardContent className="p-6">
-                <h3 className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-                  <HelpCircle className="h-3.5 w-3.5 text-indigo-500" /> CBT Index Map Navigator
-                </h3>
-                
-                <div className="grid grid-cols-6 sm:grid-cols-10 gap-2.5">
+          {/* Right Column: Test Navigator (~5 cols out of 12) */}
+          <div className="lg:col-span-5">
+            <div className="border border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden">
+              {/* Test Navigator Header */}
+              <div className="bg-[#475569] dark:bg-slate-800 text-white px-6 py-3.5 font-black text-base">
+                Test Navigator
+              </div>
+
+              {/* Navigator Buttons Grid (7 per row) */}
+              <div className="p-6">
+                <div className="grid grid-cols-7 gap-2">
                   {(exam.examType === "Theory" ? (exam.theoryConfig?.structure || []) : activeSubjectQuestions.length > 0 ? activeSubjectQuestions : questions.map((q, idx) => ({ q, idx }))).map(({ q, idx }: any, localIdx: number) => {
                     const isCurrent = idx === currentQuestionIndex;
                     const isAnswered = exam.examType === "Theory"
                       ? (exam.theoryConfig?.structure?.[idx]?.questionId && answers[exam.theoryConfig.structure[idx].questionId!])
                       : answers[q.id];
-                    const isViewed = viewedQuestionIndices.has(idx);
-                    
+                    const isFlagged = flaggedQuestions.has(idx);
+
                     return (
                       <Button
                         key={idx}
-                        variant={isCurrent ? "default" : "outline"}
+                        type="button"
                         size="sm"
                         onClick={() => handleNavigate(idx)}
-                        className={`relative h-10 w-10 p-0 font-extrabold rounded-xl transition-all ${
+                        className={cn(
+                          "relative h-10 w-full p-0 font-extrabold rounded-lg text-sm transition-all border",
                           isCurrent
-                            ? "bg-indigo-650 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/10 scale-105"
+                            ? "bg-[#2563eb] text-white border-[#1d4ed8] ring-2 ring-blue-400 font-black shadow-md scale-105"
+                            : isFlagged
+                            ? "bg-[#f59e0b] text-white border-[#d97706]"
                             : isAnswered
-                            ? "bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:border-emerald-700"
-                            : isViewed
-                            ? "bg-amber-500 border-amber-600 text-white hover:bg-amber-600 dark:bg-amber-500 dark:border-amber-600"
-                            : "border-slate-150/70 dark:border-slate-805 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350 bg-white dark:bg-slate-900"
-                        }`}
+                            ? "bg-[#2e7d32] text-white border-[#1b5e20]"
+                            : "bg-[#cbd5e1] text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 hover:bg-slate-300"
+                        )}
                         data-testid={`button-nav-${idx}`}
                       >
                         {localIdx + 1}
-                        {flaggedQuestions.has(idx) && (
-                          <div className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center border border-white dark:border-slate-900">
-                            <Flag className="h-2 w-2 fill-white" />
+                        {isFlagged && (
+                          <div className="absolute -right-1 -top-1">
+                            <Flag className="h-3 w-3 fill-amber-300 text-amber-400" />
                           </div>
                         )}
                       </Button>
                     );
                   })}
                 </div>
+              </div>
 
-                {/* Navigator Legend */}
-                <div className="mt-5.5 pt-4.5 border-t border-slate-100 dark:border-slate-805/45 flex flex-wrap gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-3.5 w-3.5 rounded-md bg-emerald-550 border border-emerald-600 dark:bg-emerald-600" />
-                    <span>Answered (Green)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-3.5 w-3.5 rounded-md bg-amber-500 border border-amber-600 dark:bg-amber-500" />
-                    <span>Viewed but Unanswered (Yellow)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-3.5 w-3.5 rounded-md border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-900" />
-                    <span>Unviewed / Remaining</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-3.5 w-3.5 rounded-md bg-rose-500 flex items-center justify-center text-white">
-                      <Flag className="h-2 w-2 fill-white" />
-                    </div>
-                    <span>Flagged items</span>
-                  </div>
+              {/* Bottom Test Navigator Navigation Controls */}
+              <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleNavigate(currentQuestionIndex - 1)}
+                    disabled={currentQuestionIndex === 0}
+                    className="flex-1 rounded-xl border-slate-300 font-extrabold text-xs h-10"
+                    data-testid="button-previous"
+                  >
+                    Previous
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => handleNavigate(currentQuestionIndex + 1)}
+                    disabled={currentQuestionIndex === totalSteps - 1}
+                    className="flex-1 rounded-xl border-slate-300 font-extrabold text-xs h-10"
+                    data-testid="button-next"
+                  >
+                    Next
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
+
+                <Button
+                  onClick={() => setShowSubmitDialog(true)}
+                  className="w-full bg-[#15803d] hover:bg-[#166534] text-white font-black rounded-xl h-11 shadow-md text-xs tracking-wide uppercase"
+                  data-testid="button-review-submit"
+                >
+                  Review and Submit
+                </Button>
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
 
