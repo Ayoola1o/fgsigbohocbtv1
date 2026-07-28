@@ -48,23 +48,25 @@ export default function ExamResult() {
   });
 
   const { data: questions } = useQuery<Question[]>({
-    queryKey: ["/api/exams", result?.examId, "questions"],
+    queryKey: ["/api/exams", result?.examId, "questions", result?.id],
     queryFn: async () => {
-      // Prioritize questions from result.correctAnswers as it reflects the actual questions graded
       const gradedQuestionIds = result?.correctAnswers ? Object.keys(result.correctAnswers) : [];
-      // Fallback to result.answers if correctAnswers is empty (e.g. legacy or not graded yet)
       const answeredQuestionIds = result?.answers ? Object.keys(result.answers) : [];
 
-      const targetIds = gradedQuestionIds.length > 0 ? gradedQuestionIds : answeredQuestionIds;
+      const combinedSet = new Set<string>([
+        ...(exam?.questionIds || []),
+        ...gradedQuestionIds,
+        ...answeredQuestionIds,
+      ]);
+
+      const targetIds = Array.from(combinedSet);
 
       if (targetIds.length === 0) {
-        // Absolute fallback if result has no question info (rare/legacy) - fetch default exam questions
-        if (exam?.questionIds) return getQuestionsByIds(exam.questionIds);
         return [];
       }
       return getQuestionsByIds(targetIds);
     },
-    enabled: !!result,
+    enabled: !!result && !!exam,
   });
 
   const { data: students } = useQuery<Student[]>({
