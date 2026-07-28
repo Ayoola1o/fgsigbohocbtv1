@@ -81,38 +81,54 @@ export default function ExamResult() {
     s.id?.trim().toLowerCase() === result?.studentId?.trim().toLowerCase()
   );
 
-  // Calculate subject breakdown for diagnostics and printing matching exam set limits
+  // Calculate subject breakdown with case-insensitive subject normalization
   const subjectBreakdown = useMemo(() => {
     if (!questions || !result) return [];
-    const subjects = Array.from(new Set(questions.map(q => q.subject || "General")));
 
-    // Total questions set by admin for the exam
-    let examSetTotal = exam?.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
-      ? exam.numberOfQuestionsToDisplay
-      : (exam?.questionIds?.length || result.totalPoints || (result as any).totalQuestions || 0);
+    // Map normalized (lowercase) subject name -> Display Subject Name & Questions
+    const subjectMap = new Map<string, { displayName: string; questions: Question[] }>();
 
-    if (examSetTotal <= 0 && exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
-      examSetTotal = Object.values(exam.subjectConfig as Record<string, number>).reduce((a, b) => a + Number(b || 0), 0);
-    }
+    questions.forEach(q => {
+      const rawSubj = (q.subject || "General").trim();
+      const normSubj = rawSubj.toLowerCase();
+      if (!subjectMap.has(normSubj)) {
+        const formatted = rawSubj.toUpperCase() === rawSubj ? rawSubj : (rawSubj.charAt(0).toUpperCase() + rawSubj.slice(1).toLowerCase());
+        subjectMap.set(normSubj, { displayName: formatted, questions: [] });
+      }
+      subjectMap.get(normSubj)!.questions.push(q);
+    });
 
-    return subjects.map(subject => {
-      const subjectQuestions = questions.filter(q => (q.subject || "General") === subject);
+    const sessionTotalQuestions = questions.length;
+
+    return Array.from(subjectMap.entries()).map(([normSubj, group]) => {
+      const subjectQuestions = group.questions;
       let correct = 0;
       subjectQuestions.forEach(q => {
         if (result.correctAnswers && result.correctAnswers[q.id]) correct++;
       });
 
       let totalSubjectQuestions = subjectQuestions.length;
-      if (exam?.subjectConfig && exam.subjectConfig[subject]) {
-        totalSubjectQuestions = Number(exam.subjectConfig[subject]);
-      } else if (examSetTotal > 0 && subjects.length === 1) {
-        totalSubjectQuestions = Math.max(subjectQuestions.length, examSetTotal);
+
+      // Check if admin specified a custom count in subjectConfig
+      if (exam?.subjectConfig) {
+        const configKey = Object.keys(exam.subjectConfig).find(k => k.trim().toLowerCase() === normSubj);
+        if (configKey && exam.subjectConfig[configKey]) {
+          totalSubjectQuestions = Number(exam.subjectConfig[configKey]);
+        }
+      }
+
+      // Single subject paper: Total subject questions MUST equal total session questions
+      if (subjectMap.size === 1) {
+        totalSubjectQuestions = Math.max(subjectQuestions.length, sessionTotalQuestions, result.totalPoints || 0);
       }
 
       const actualPct = totalSubjectQuestions > 0 ? (correct / totalSubjectQuestions) * 100 : 0;
+
       return {
-        subject,
+        subject: group.displayName,
+        normSubject: normSubj,
         questions: totalSubjectQuestions,
+        actualQuestionCount: subjectQuestions.length,
         correct,
         percentage: actualPct
       };
@@ -227,10 +243,12 @@ export default function ExamResult() {
       }
     }, 600);
   };
-  const examSetQuestionCount = (
-    exam?.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
-      ? exam.numberOfQuestionsToDisplay
-      : (result?.totalPoints || (result as any)?.totalQuestions || questions?.length || Object.keys(result?.correctAnswers || {}).length || 0)
+  const examSetQuestionCount = Math.max(
+    questions?.length || 0,
+    result?.totalPoints || 0,
+    (result as any)?.totalQuestions || 0,
+    exam?.numberOfQuestionsToDisplay || 0,
+    Object.keys(result?.correctAnswers || {}).length
   );
 
   const totalQuestions = examSetQuestionCount;
