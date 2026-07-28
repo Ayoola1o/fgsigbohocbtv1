@@ -1161,18 +1161,16 @@ export default function AdminResults() {
                             className="h-4.5 w-4.5 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
                           />
                         </TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[200px]">Student / Candidate</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-16">Class</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-20">Dept</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[150px]">Examination</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Subject Breakdown</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Points</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden print:table-cell">Score (%)</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Score %</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden">Status</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden xl:table-cell print:hidden">Submission</TableHead>
-                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 text-right hidden lg:table-cell print:hidden">Date Completed</TableHead>
-                        <TableHead className="text-right font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden w-28">Actions</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[200px]">STUDENT / CANDIDATE</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-16">CLASS</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 w-20">DEPT</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 max-w-[170px]">EXAMINATION</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5">SUBJECT BREAKDOWN</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5">SCORE %</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5">STATUS</TableHead>
+                        <TableHead className="font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden xl:table-cell">SUBMISSION</TableHead>
+                        <TableHead className="text-right font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 hidden lg:table-cell">DATE COMPLETED</TableHead>
+                        <TableHead className="text-right font-bold text-xs text-slate-400 uppercase tracking-wider py-3.5 print:hidden w-24">ACTIONS</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody className="divide-y divide-slate-100/50 dark:divide-slate-805/40">
@@ -1182,6 +1180,11 @@ export default function AdminResults() {
                             s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
                             s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
                           );
+                          const exam = exams?.find(e => e.id === result.examId);
+                          const displayTotal = exam?.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
+                            ? exam.numberOfQuestionsToDisplay
+                            : (result.totalPoints || result.totalQuestions || 1);
+
                           return (
                             <TableRow 
                               key={result.id} 
@@ -1200,6 +1203,8 @@ export default function AdminResults() {
                                   className="h-4 w-4 rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
                                 />
                               </TableCell>
+                              
+                              {/* Student / Candidate */}
                               <TableCell className="max-w-[200px] py-4">
                                 <div
                                   className="cursor-pointer flex items-center gap-3"
@@ -1218,48 +1223,78 @@ export default function AdminResults() {
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="font-semibold text-xs text-slate-550 py-4">{student?.classLevel || '-'}</TableCell>
+
+                              {/* Class */}
+                              <TableCell className="font-semibold text-xs text-slate-550 py-4">
+                                {student?.classLevel || result.classLevel || '-'}
+                              </TableCell>
+
+                              {/* Dept */}
                               <TableCell className="font-semibold text-xs text-slate-550 py-4">
                                 {student?.department && student.department !== 'General' ? (
                                   <Badge variant="outline" className="border-slate-200 text-slate-500 text-[10px] py-0 px-1.5 font-bold">
                                     {student.department}
                                   </Badge>
-                                ) : student?.department || '-'}
+                                ) : (student?.department || result.department || '-')}
                               </TableCell>
-                              <TableCell className="font-semibold text-xs text-slate-800 dark:text-slate-300 max-w-[180px] truncate py-4" title={result.displaySubject || getExamTitle(result.examId)}>
-                                {result.displaySubject || getExamTitle(result.examId)}
+
+                              {/* Examination */}
+                              <TableCell className="font-semibold text-xs text-slate-800 dark:text-slate-300 max-w-[170px] truncate py-4" title={result.displaySubject || exam?.title || getExamTitle(result.examId)}>
+                                {result.displaySubject || exam?.title || getExamTitle(result.examId)}
                               </TableCell>
 
                               {/* Subject Breakdown column */}
-                              <TableCell className="print:hidden py-4">
+                              <TableCell className="py-4">
                                 {(() => {
-                                  const exam = exams?.find(e => e.id === result.examId);
-                                  if (!exam || !questions) return <span className="text-slate-400">-</span>;
-                                  const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
-                                  const subjects = Array.from(new Set(examQuestions.map(q => q.subject || "General")));
-                                  if (subjects.length <= 1) return <span className="text-slate-400">-</span>;
+                                  let subjList: string[] = [];
+                                  if (exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+                                    subjList = Object.keys(exam.subjectConfig);
+                                  } else if (exam?.subject) {
+                                    subjList = exam.subject.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                  } else if (result.subject) {
+                                    subjList = [result.subject];
+                                  } else {
+                                    subjList = ["General"];
+                                  }
+
+                                  if (subjList.length === 0) subjList = ["General"];
 
                                   return (
                                     <div className="flex flex-wrap gap-1 max-w-[220px]">
-                                      {subjects.map(subj => {
-                                        const subjQuestions = examQuestions.filter(q => (q.subject || "General") === subj);
+                                      {subjList.map(subj => {
                                         let correct = 0;
-                                        subjQuestions.forEach(q => {
-                                          if (result.correctAnswers?.[q.id]) correct++;
-                                        });
-                                        const passed = subjQuestions.length > 0 ? (correct / subjQuestions.length) >= 0.5 : false;
+                                        let totalSubjCount = Math.max(1, Math.floor(displayTotal / subjList.length));
+
+                                        if (exam?.subjectConfig && exam.subjectConfig[subj]) {
+                                          totalSubjCount = Number(exam.subjectConfig[subj]);
+                                        } else if (subjList.length === 1) {
+                                          totalSubjCount = displayTotal;
+                                        }
+
+                                        if (questions && questions.length > 0) {
+                                          const subjQuestions = questions.filter(q => (q.subject || "General").trim().toLowerCase() === subj.toLowerCase());
+                                          subjQuestions.forEach(q => {
+                                            if (result.correctAnswers?.[q.id]) correct++;
+                                          });
+                                        } else {
+                                          correct = result.score || 0;
+                                        }
+
+                                        const pct = totalSubjCount > 0 ? Math.round((correct / totalSubjCount) * 100) : 0;
+                                        const isPassed = pct >= (exam?.passingScore || 50);
+
                                         return (
                                           <Badge 
                                             key={subj} 
                                             variant="outline" 
                                             className={cn(
-                                              "text-[9px] py-0 px-1 font-semibold whitespace-nowrap",
-                                              passed 
-                                                ? "border-emerald-200/50 bg-emerald-50/50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
-                                                : "border-rose-200/50 bg-rose-50/50 text-rose-700 dark:bg-rose-955/20 dark:text-rose-450"
+                                              "text-[9px] py-0.5 px-1.5 font-bold whitespace-nowrap rounded-md",
+                                              isPassed 
+                                                ? "border-emerald-200/60 bg-emerald-50/60 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                                                : "border-rose-200/60 bg-rose-50/60 text-rose-700 dark:bg-rose-955/30 dark:text-rose-450"
                                             )}
                                           >
-                                            {subj}: {correct}/{subjQuestions.length}
+                                            {subj}: {correct}/{totalSubjCount}
                                           </Badge>
                                         );
                                       })}
@@ -1268,19 +1303,8 @@ export default function AdminResults() {
                                 })()}
                               </TableCell>
 
-                              {/* Score Column: Visible on Screen, Hidden on Print */}
-                              <TableCell className="print:hidden py-4">
-                                <span className="font-bold text-slate-800 dark:text-slate-200">{result.score}</span>
-                                <span className="text-slate-400 text-xs"> / {result.totalPoints}</span>
-                              </TableCell>
-
-                              {/* Score (%) Column: Hidden on Screen, Visible on Print */}
-                              <TableCell className="hidden print:table-cell py-4">
-                                <span className="font-black text-sm">{result.percentage}%</span>
-                              </TableCell>
-
-                              {/* Percentage / Score Presentation Column */}
-                              <TableCell className="print:hidden py-4">
+                              {/* Score % Presentation Column */}
+                              <TableCell className="py-4">
                                 <span
                                   className={`font-black text-sm ${
                                     result.passed 
@@ -1288,11 +1312,12 @@ export default function AdminResults() {
                                       : "text-rose-600 dark:text-rose-455"
                                   }`}
                                 >
-                                  {formatScore(result.score, result.totalPoints, result.percentage)}
+                                  {formatScore(result.score, displayTotal, result.percentage)}
                                 </span>
                               </TableCell>
 
-                              <TableCell className="print:hidden py-4">
+                              {/* Status */}
+                              <TableCell className="py-4">
                                 {result.passed ? (
                                   <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-455 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 font-bold border rounded-lg py-0.5 px-2 text-[10px] uppercase">
                                     <CheckCircle className="mr-1 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -1305,20 +1330,26 @@ export default function AdminResults() {
                                   </Badge>
                                 )}
                               </TableCell>
-                              <TableCell className="print:hidden hidden xl:table-cell py-4">
+
+                              {/* Submission */}
+                              <TableCell className="hidden xl:table-cell py-4">
                                 <Badge
                                   variant="outline"
                                   className={cn(
                                     "border-transparent font-black text-[10px] uppercase shadow-none rounded-lg py-0.5 px-2",
                                     result.submissionType === 'student'
                                       ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                                      : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400"
+                                      : result.submissionType === 'auto'
+                                      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400"
+                                      : "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400"
                                   )}
                                 >
-                                  {result.submissionType === 'student' ? 'Student Portal' : 'Manual / Staff'}
+                                  {result.submissionType === 'student' ? 'Student Portal' : result.submissionType === 'auto' ? 'Auto System' : 'Admin Override'}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right print:hidden hidden lg:table-cell py-4">
+
+                              {/* Date Completed */}
+                              <TableCell className="text-right hidden lg:table-cell py-4">
                                 <div className="inline-flex flex-col items-end text-xs font-semibold text-slate-700 dark:text-slate-350">
                                   <span className="flex items-center gap-1">
                                     <Clock className="h-3 w-3 text-slate-400" />
