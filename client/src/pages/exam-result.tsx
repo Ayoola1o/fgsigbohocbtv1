@@ -53,13 +53,15 @@ export default function ExamResult() {
       const gradedQuestionIds = result?.correctAnswers ? Object.keys(result.correctAnswers) : [];
       const answeredQuestionIds = result?.answers ? Object.keys(result.answers) : [];
 
-      const combinedSet = new Set<string>([
-        ...(exam?.questionIds || []),
-        ...gradedQuestionIds,
-        ...answeredQuestionIds,
-      ]);
+      let targetIds = Array.from(new Set([...gradedQuestionIds, ...answeredQuestionIds]));
 
-      const targetIds = Array.from(combinedSet);
+      // Fallback if result document has no stored question IDs: use exam linked questions capped to display limit
+      if (targetIds.length === 0 && exam?.questionIds) {
+        const limit = exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
+          ? exam.numberOfQuestionsToDisplay
+          : exam.questionIds.length;
+        targetIds = exam.questionIds.slice(0, limit);
+      }
 
       if (targetIds.length === 0) {
         return [];
@@ -79,26 +81,43 @@ export default function ExamResult() {
     s.id?.trim().toLowerCase() === result?.studentId?.trim().toLowerCase()
   );
 
-  // Calculate subject breakdown for diagnostics and printing
+  // Calculate subject breakdown for diagnostics and printing matching exam set limits
   const subjectBreakdown = useMemo(() => {
     if (!questions || !result) return [];
     const subjects = Array.from(new Set(questions.map(q => q.subject || "General")));
+
+    // Total questions set by admin for the exam
+    let examSetTotal = exam?.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
+      ? exam.numberOfQuestionsToDisplay
+      : (result.totalPoints || (result as any).totalQuestions || 0);
+
+    if (examSetTotal <= 0 && exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+      examSetTotal = Object.values(exam.subjectConfig as Record<string, number>).reduce((a, b) => a + Number(b || 0), 0);
+    }
+
     return subjects.map(subject => {
       const subjectQuestions = questions.filter(q => (q.subject || "General") === subject);
       let correct = 0;
       subjectQuestions.forEach(q => {
-        if (result.correctAnswers[q.id]) correct++;
+        if (result.correctAnswers && result.correctAnswers[q.id]) correct++;
       });
-      const pct = subjectQuestions.length > 0 ? (correct / subjectQuestions.length) * 150 : 0; // scaled logic or exact percent
-      const actualPct = subjectQuestions.length > 0 ? (correct / subjectQuestions.length) * 100 : 0;
+
+      let totalSubjectQuestions = subjectQuestions.length;
+      if (exam?.subjectConfig && exam.subjectConfig[subject]) {
+        totalSubjectQuestions = Number(exam.subjectConfig[subject]);
+      } else if (examSetTotal > 0 && subjects.length === 1) {
+        totalSubjectQuestions = Math.max(subjectQuestions.length, examSetTotal);
+      }
+
+      const actualPct = totalSubjectQuestions > 0 ? (correct / totalSubjectQuestions) * 100 : 0;
       return {
         subject,
-        questions: subjectQuestions.length,
+        questions: totalSubjectQuestions,
         correct,
         percentage: actualPct
       };
     });
-  }, [questions, result]);
+  }, [questions, result, exam]);
 
   const strengths = useMemo(() => subjectBreakdown.filter(b => b.percentage >= 70).map(b => b.subject), [subjectBreakdown]);
   const weaknesses = useMemo(() => subjectBreakdown.filter(b => b.percentage < 55).map(b => b.subject), [subjectBreakdown]);
@@ -208,18 +227,14 @@ export default function ExamResult() {
       }
     }, 600);
   };
-  const totalQuestions = Math.max(
-    questions?.length || 0,
-    exam?.questionIds?.length || 0,
-    result?.totalPoints || 0,
-    Object.keys(result?.correctAnswers || {}).length
+  const examSetQuestionCount = (
+    exam?.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
+      ? exam.numberOfQuestionsToDisplay
+      : (result?.totalPoints || (result as any)?.totalQuestions || questions?.length || Object.keys(result?.correctAnswers || {}).length || 0)
   );
 
-  const displayTotalPoints = Math.max(
-    result?.totalPoints || 0,
-    questions?.length || 0,
-    exam?.questionIds?.length || 0
-  );
+  const totalQuestions = examSetQuestionCount;
+  const displayTotalPoints = examSetQuestionCount;
 
   const backLink = isAdminResult ? "/admin/results" : "/student-portal";
   const backText = isAdminResult ? "Back to Results" : "Back to Exams";
