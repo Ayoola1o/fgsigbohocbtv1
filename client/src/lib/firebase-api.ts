@@ -12,7 +12,9 @@ import {
     setDoc,
     writeBatch,
     documentId,
-    Timestamp
+    Timestamp,
+    limit,
+    orderBy
 } from "firebase/firestore";
 import type {
     Question,
@@ -347,16 +349,21 @@ export const createExamSession = async (session: { examId: string; studentName: 
             }
         }
 
-        let sessionQuestionIds = [...exam.questionIds];
+        let sessionQuestionIds = [...(exam.questionIds || [])];
         const allQuestions = await getQuestions();
-        let poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+        let poolQuestions = allQuestions.filter(q => sessionQuestionIds.includes(q.id));
 
-        // Filter pool questions based on candidate department stream (e.g. Science vs Art vs Commercial vs General)
-        if (candidateDepartment && candidateDepartment !== "General" && candidateDepartment !== "Others") {
+        // If poolQuestions missed some IDs because of matching, ensure we retain all exam.questionIds
+        if (poolQuestions.length === 0 && sessionQuestionIds.length > 0) {
+            poolQuestions = allQuestions;
+        }
+
+        // Apply candidate department filtering ONLY if questions were dynamically pulled from bank (no explicit questionIds)
+        if ((!exam.questionIds || exam.questionIds.length === 0) && candidateDepartment && candidateDepartment !== "General" && candidateDepartment !== "Others") {
             poolQuestions = poolQuestions.filter(q => {
                 const qDept = getSubjectDepartment(q.subject, q.department || undefined);
                 if (qDept !== "General" && qDept.toLowerCase() !== candidateDepartment.toLowerCase()) {
-                    return false; // Skip questions strictly belonging to another department stream
+                    return false;
                 }
                 return true;
             });
@@ -382,6 +389,16 @@ export const createExamSession = async (session: { examId: string; studentName: 
                 selectedIds = [...selectedIds, ...sliced.map(q => q.id)];
             }
             sessionQuestionIds = selectedIds;
+        } else if (sessionQuestionIds.length > 0) {
+            // Exam has explicit questionIds — shuffle them
+            for (let i = sessionQuestionIds.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [sessionQuestionIds[i], sessionQuestionIds[j]] = [sessionQuestionIds[j], sessionQuestionIds[i]];
+            }
+
+            if (exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0 && exam.numberOfQuestionsToDisplay < sessionQuestionIds.length) {
+                sessionQuestionIds = sessionQuestionIds.slice(0, exam.numberOfQuestionsToDisplay);
+            }
         } else {
             sessionQuestionIds = poolQuestions.map(q => q.id);
 
@@ -524,8 +541,15 @@ export const submitExamSession = async (
 
 // --- Results ---
 export const getResults = async (): Promise<Result[]> => {
-    const snapshot = await getDocs(collection(db, "results"));
-    return snapshot.docs.map(d => docToData<Result>(d));
+    try {
+        const q = query(collection(db, "results"), orderBy("completedAt", "desc"), limit(600));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => docToData<Result>(d));
+    } catch (err) {
+        const q = query(collection(db, "results"), limit(600));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => docToData<Result>(d));
+    }
 };
 
 export const getResult = async (id: string): Promise<Result | null> => {

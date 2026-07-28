@@ -262,6 +262,36 @@ export default function ExamResult() {
           </p>
         </div>
 
+        {/* Subject Score Summary Banner */}
+        {subjectBreakdown && subjectBreakdown.length > 0 && (
+          <div className="mb-8 p-5 bg-gradient-to-r from-indigo-900 via-indigo-950 to-indigo-900 text-white rounded-3xl shadow-lg border border-indigo-800/60">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-indigo-300" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-indigo-200">
+                  Subject Breakdown Summary
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold text-indigo-300">
+                {subjectBreakdown.length} Subject{subjectBreakdown.length > 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              {subjectBreakdown.map((b) => (
+                <div
+                  key={b.subject}
+                  className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/15 flex items-center gap-2.5 shadow-sm"
+                >
+                  <span className="font-extrabold text-xs text-white">{b.subject}</span>
+                  <span className="text-xs font-mono font-black text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-0.5 rounded-xl">
+                    {b.correct} / {b.questions} ({b.percentage.toFixed(0)}%)
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Score Cards Deck */}
         <div className="mb-8 grid gap-6 sm:grid-cols-3">
           
