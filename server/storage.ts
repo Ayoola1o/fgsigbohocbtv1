@@ -10,7 +10,9 @@ import {
   type InsertUser,
   type User,
   type Student,
-  type InsertStudent
+  type InsertStudent,
+  type SystemSettings,
+  defaultSystemSettings
 } from "../shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs";
@@ -58,6 +60,10 @@ export interface IStorage {
   createStudents(students: InsertStudent[]): Promise<Student[]>;
   updateStudent(id: string, data: Partial<Student>): Promise<Student | undefined>;
   deleteStudent(id: string): Promise<void>;
+
+  // System Settings
+  getSystemSettings(): Promise<SystemSettings>;
+  saveSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings>;
 }
 
 export class MemStorage implements IStorage {
@@ -67,6 +73,7 @@ export class MemStorage implements IStorage {
   private results: Map<string, Result>;
   private users: Map<string, User>;
   private students: Map<string, Student>;
+  private systemSettings: SystemSettings;
 
   constructor() {
     this.questions = new Map();
@@ -103,6 +110,20 @@ export class MemStorage implements IStorage {
       }
     } catch (e) {
       // ignore load errors
+    }
+
+    // Load persisted settings
+    try {
+      const settingsFile = path.join(dataDir, "settings.json");
+      if (fs.existsSync(settingsFile)) {
+        const txt = fs.readFileSync(settingsFile, "utf8");
+        const parsed = JSON.parse(txt);
+        this.systemSettings = { ...defaultSystemSettings, ...parsed } as SystemSettings;
+      } else {
+        this.systemSettings = { ...defaultSystemSettings };
+      }
+    } catch (e) {
+      this.systemSettings = { ...defaultSystemSettings };
     }
 
     // Seed default admin user immediately
@@ -225,6 +246,7 @@ export class MemStorage implements IStorage {
       examType: (insertExam as any).examType ?? "Objectives",
       theoryConfig: (insertExam as any).theoryConfig ?? null,
       subjectConfig: (insertExam as any).subjectConfig ?? null,
+      subjectSlots: (insertExam as any).subjectSlots ?? null,
       isActive: true,
       enableCalculator: insertExam.enableCalculator ?? false,
       enableFormulaSheet: insertExam.enableFormulaSheet ?? false,
@@ -419,6 +441,39 @@ export class MemStorage implements IStorage {
       // if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
       const file = path.join(dataDir, "students.json");
       fs.writeFileSync(file, JSON.stringify(Array.from(this.students.values()), null, 2), "utf8");
+    } catch (e) {
+      // ignore write errors
+    }
+  }
+
+  // System Settings Methods
+  async getSystemSettings(): Promise<SystemSettings> {
+    return this.systemSettings;
+  }
+
+  async saveSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
+    this.systemSettings = { ...this.systemSettings, ...settings };
+    this.saveSettingsToDisk();
+    return this.systemSettings;
+  }
+
+  private saveSettingsToDisk() {
+    try {
+      const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+      let dataDir = isProd
+        ? path.join("/tmp")
+        : path.join(process.cwd(), "server", "data");
+
+      if (!fs.existsSync(dataDir)) {
+        try {
+          fs.mkdirSync(dataDir, { recursive: true });
+        } catch (e) {
+          dataDir = "/tmp";
+          if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        }
+      }
+      const file = path.join(dataDir, "settings.json");
+      fs.writeFileSync(file, JSON.stringify(this.systemSettings, null, 2), "utf8");
     } catch (e) {
       // ignore write errors
     }

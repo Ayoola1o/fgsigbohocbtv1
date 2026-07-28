@@ -109,8 +109,18 @@ export default function ExamResult() {
 
       let totalSubjectQuestions = subjectQuestions.length;
 
-      // Check if admin specified a custom count in subjectConfig
-      if (exam?.subjectConfig) {
+      // Check if admin specified a custom count in subjectSlots or subjectConfig
+      if (exam?.subjectSlots && Array.isArray(exam.subjectSlots)) {
+        const slot = (exam.subjectSlots as any[]).find((sl: any) => 
+          sl.subject?.toLowerCase() === normSubj ||
+          (sl.departmentMappings?.some((m: any) => 
+            m.subjects?.some((sub: string) => sub.toLowerCase() === normSubj)
+          ))
+        );
+        if (slot) {
+          totalSubjectQuestions = Number(slot.questionCount) || totalSubjectQuestions;
+        }
+      } else if (exam?.subjectConfig) {
         const configKey = Object.keys(exam.subjectConfig).find(k => k.trim().toLowerCase() === normSubj);
         if (configKey && exam.subjectConfig[configKey]) {
           totalSubjectQuestions = Number(exam.subjectConfig[configKey]);

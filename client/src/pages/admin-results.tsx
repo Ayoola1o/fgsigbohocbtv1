@@ -31,10 +31,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { getResults } from "@/lib/firebase-api";
+import { getResults, deleteResult, deleteResultsBulk } from "@/lib/firebase-api";
+import { useQueryClient } from "@tanstack/react-query";
 import { useScoreFormat } from "@/hooks/use-score-format";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Trash2, Download, RefreshCw, AlertTriangle, Layers, ArrowUpDown, SlidersHorizontal, Lock, Unlock, FileText, CheckSquare, Square } from "lucide-react";
 
 export default function AdminResults() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const { formatScore } = useScoreFormat();
   const [, setLocation] = useLocation();
@@ -42,10 +53,64 @@ export default function AdminResults() {
   const [filterExamId, setFilterExamId] = useState<string>("ALL");
   const [filterClassLevel, setFilterClassLevel] = useState<string>("ALL");
   const [filterDepartment, setFilterDepartment] = useState<string>("ALL");
+  const [filterStatus, setFilterStatus] = useState<string>("ALL"); // "ALL", "PASS", "FAIL"
+  const [filterExamType, setFilterExamType] = useState<string>("ALL"); // "ALL", "single", "multi"
+  const [filterScoreRange, setFilterScoreRange] = useState<string>("ALL"); // "ALL", "<40", "40-60", ">60"
+  const [sortBy, setSortBy] = useState<string>("date-desc"); // "date-desc", "date-asc", "name-asc", "name-desc", "score-desc", "score-asc", "class"
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
   });
+
+  // Modal State
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [purgeKeyword, setPurgeKeyword] = useState("test");
+  const [purgeStep, setPurgeStep] = useState<"preview" | "confirm">("preview");
+  const [isPurging, setIsPurging] = useState(false);
+
+  const [isMultiExamPrintModalOpen, setIsMultiExamPrintModalOpen] = useState(false);
+  const [selectedMultiExamId, setSelectedMultiExamId] = useState<string>("");
+  const [selectedMultiSubject, setSelectedMultiSubject] = useState<string>("");
+  const [selectedMultiClass, setSelectedMultiClass] = useState<string>("ALL");
+
+  // Published state
+  const [publishedResultIds, setPublishedResultIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("fia_published_result_ids");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const togglePublishResult = (id: string) => {
+    const next = new Set(publishedResultIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPublishedResultIds(next);
+    localStorage.setItem("fia_published_result_ids", JSON.stringify(Array.from(next)));
+    toast({
+      title: next.has(id) ? "Result Published" : "Result Held",
+      description: next.has(id) ? "Candidate can now view result in portal." : "Result withheld from candidate view.",
+    });
+  };
+
+  const publishSelected = (publish: boolean) => {
+    const next = new Set(publishedResultIds);
+    selectedResultIds.forEach(id => {
+      if (publish) next.add(id);
+      else next.delete(id);
+    });
+    setPublishedResultIds(next);
+    localStorage.setItem("fia_published_result_ids", JSON.stringify(Array.from(next)));
+    toast({
+      title: publish ? "Selected Results Published" : "Selected Results Withheld",
+      description: `${selectedResultIds.size} records updated.`,
+    });
+  };
 
   const writePrintWindowDocument = (printWindow: Window, title: string, extraHeadHtml = "") => {
     printWindow.document.open();
@@ -133,30 +198,54 @@ export default function AdminResults() {
 
   const filteredResults = results?.filter(
     (result) => {
-      const examMatch = filterExamId === "ALL" || result.examId === filterExamId;
-      const searchMatch = result.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        result.studentId.toLowerCase().includes(searchQuery.toLowerCase());
-
+      const exam = exams?.find(e => e.id === result.examId);
       const student = students?.find(s => 
         s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
         s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
       );
-      const classLevelMatch = filterClassLevel === "ALL" || student?.classLevel === filterClassLevel;
-      const departmentMatch = filterDepartment === "ALL" || student?.department === filterDepartment;
 
+      const examMatch = filterExamId === "ALL" || result.examId === filterExamId;
+      const searchMatch = result.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        result.studentId.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const classLevelMatch = filterClassLevel === "ALL" || student?.classLevel === filterClassLevel || (result as any).classLevel === filterClassLevel;
+      const departmentMatch = filterDepartment === "ALL" || student?.department === filterDepartment || (result as any).department === filterDepartment;
+      const statusMatch = filterStatus === "ALL" || (filterStatus === "PASS" ? result.passed : !result.passed);
+
+      // Exam type match
+      const isMultiExam = !!(exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 1);
+      const examTypeMatch = filterExamType === "ALL" || (filterExamType === "multi" ? isMultiExam : !isMultiExam);
+
+      // Score range match
+      let scoreRangeMatch = true;
+      if (filterScoreRange === "<40") scoreRangeMatch = result.percentage < 40;
+      else if (filterScoreRange === "40-60") scoreRangeMatch = result.percentage >= 40 && result.percentage <= 60;
+      else if (filterScoreRange === ">60") scoreRangeMatch = result.percentage > 60;
 
       const completedDate = new Date(result.completedAt);
       const dateMatch = (!dateRange.from || completedDate >= dateRange.from) &&
         (!dateRange.to || completedDate <= dateRange.to);
 
-      return examMatch && searchMatch && classLevelMatch && departmentMatch && dateMatch;
+      return examMatch && searchMatch && classLevelMatch && departmentMatch && statusMatch && examTypeMatch && scoreRangeMatch && dateMatch;
     }
   );
   const [viewMode, setViewMode] = useState<"combined" | "by-subject">("combined");
 
-  const sortedResults = [...(filteredResults || [])].sort(
-    (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
-  );
+  const sortedResults = useMemo(() => {
+    const list = [...(filteredResults || [])];
+    list.sort((a, b) => {
+      if (sortBy === "date-asc") return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
+      if (sortBy === "name-asc") return a.studentName.localeCompare(b.studentName);
+      if (sortBy === "name-desc") return b.studentName.localeCompare(a.studentName);
+      if (sortBy === "score-desc") return b.percentage - a.percentage;
+      if (sortBy === "score-asc") return a.percentage - b.percentage;
+      if (sortBy === "class") return ((a as any).classLevel || "").localeCompare((b as any).classLevel || "");
+      return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+    });
+    return list;
+  }, [filteredResults, sortBy]);
+
+
 
   const flattenedSubjectResults = useMemo(() => {
     if (!filteredResults || viewMode === "combined") return sortedResults;
@@ -173,7 +262,10 @@ export default function AdminResults() {
         return;
       }
 
-      const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
+      const sessionQIds = Object.keys(result.correctAnswers || result.answers || {});
+      const examQuestions = questions.filter(q => 
+        sessionQIds.length > 0 ? sessionQIds.includes(q.id) : exam.questionIds.includes(q.id)
+      );
       const subjects = Array.from(new Set(examQuestions.map(q => q.subject || "General")));
 
       if (subjects.length <= 1) {
@@ -189,7 +281,20 @@ export default function AdminResults() {
           subjQuestions.forEach(q => {
             if (result.correctAnswers?.[q.id]) correct++;
           });
-          const totalPoints = subjQuestions.length;
+          let totalPoints = subjQuestions.length;
+          if (Array.isArray((exam as any).subjectSlots)) {
+            const slot = (exam as any).subjectSlots.find((sl: any) => 
+              sl.subject?.toLowerCase() === subj.toLowerCase() ||
+              (sl.departmentMappings?.some((m: any) => 
+                m.subjects?.some((sub: string) => sub.toLowerCase() === subj.toLowerCase())
+              ))
+            );
+            if (slot) {
+              totalPoints = Number(slot.questionCount) || totalPoints;
+            }
+          } else if (exam.subjectConfig?.[subj]) {
+            totalPoints = Number(exam.subjectConfig[subj]);
+          }
           const percentage = totalPoints > 0 ? (correct / totalPoints) * 100 : 0;
           const passed = percentage >= (exam.passingScore || 50);
 
@@ -585,6 +690,243 @@ export default function AdminResults() {
     if (checked) next.add(id);
     else next.delete(id);
     setSelectedResultIds(next);
+  };
+
+  // Bulk Delete Handler
+  const handleConfirmBulkDelete = async () => {
+    if (selectedResultIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const idsToDelete = Array.from(selectedResultIds);
+      await deleteResultsBulk(idsToDelete);
+      queryClient.invalidateQueries({ queryKey: ["/api/results"] });
+      setSelectedResultIds(new Set());
+      setIsBulkDeleteModalOpen(false);
+
+      toast({
+        title: "Results Deleted",
+        description: `Successfully deleted ${idsToDelete.length} result record(s).`,
+      });
+    } catch (err) {
+      console.error("Bulk Delete Error:", err);
+      toast({
+        title: "Delete Error",
+        description: "Failed to delete selected results.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // CSV Export Handler
+  const handleExportCSV = () => {
+    const dataToExport = selectedResultIds.size > 0
+      ? sortedResults.filter(r => selectedResultIds.has(r.id))
+      : sortedResults;
+
+    if (!dataToExport || dataToExport.length === 0) {
+      toast({ title: "Export Warning", description: "No results available to export." });
+      return;
+    }
+
+    const headers = [
+      "Student ID",
+      "Candidate Name",
+      "Class Level",
+      "Department",
+      "Examination Title",
+      "Score",
+      "Total Points",
+      "Percentage (%)",
+      "Status",
+      "Submission Type",
+      "Date Completed"
+    ];
+
+    const csvRows = dataToExport.map(r => {
+      const student = students?.find(s =>
+        s.studentId?.trim().toLowerCase() === r.studentId?.trim().toLowerCase() ||
+        s.id?.trim().toLowerCase() === r.studentId?.trim().toLowerCase()
+      );
+      const exam = exams?.find(e => e.id === r.examId);
+
+      return [
+        `"${r.studentId || ''}"`,
+        `"${r.studentName || ''}"`,
+        `"${student?.classLevel || (r as any).classLevel || '-'}"`,
+        `"${student?.department || (r as any).department || '-'}"`,
+        `"${exam?.title || (r as any).displaySubject || getExamTitle(r.examId)}"`,
+        r.score,
+        r.totalPoints,
+        `${r.percentage}%`,
+        r.passed ? "PASSED" : "FAILED",
+        `"${r.submissionType === 'student' ? 'Student Portal' : 'Auto System'}"`,
+        `"${format(new Date(r.completedAt), 'yyyy-MM-dd HH:mm')}"`
+      ].join(",");
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...csvRows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `exam_results_export_${format(new Date(), 'yyyyMMdd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Export Successful",
+      description: `Exported ${dataToExport.length} result record(s) to CSV file.`,
+    });
+  };
+
+  // Purge Test Data Candidates Preview & Execution
+  const purgeCandidateList = useMemo(() => {
+    if (!results) return [];
+    const kw = purgeKeyword.trim().toLowerCase();
+    return results.filter(r => {
+      if (!kw) return false;
+      const nameMatch = r.studentName.toLowerCase().includes(kw);
+      const idMatch = r.studentId.toLowerCase().includes(kw);
+      const zeroMatch = kw === "zero" && r.percentage === 0;
+      return nameMatch || idMatch || zeroMatch;
+    });
+  }, [results, purgeKeyword]);
+
+  const handleExecutePurge = async () => {
+    if (purgeCandidateList.length === 0) return;
+    setIsPurging(true);
+    try {
+      const idsToPurge = purgeCandidateList.map(r => r.id);
+      await deleteResultsBulk(idsToPurge);
+      queryClient.invalidateQueries({ queryKey: ["/api/results"] });
+      setIsPurgeModalOpen(false);
+      setPurgeStep("preview");
+      toast({
+        title: "Test Data Purged",
+        description: `Successfully purged ${idsToPurge.length} test result record(s).`,
+      });
+    } catch (err) {
+      console.error("Purge error:", err);
+      toast({ title: "Purge Failed", description: "Could not purge test records.", variant: "destructive" });
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  // Multi-Subject Exam Subject-Level Print Handler (Domain-Specific)
+  const handlePrintMultiExamSubjectScores = async () => {
+    if (!selectedMultiExamId || !selectedMultiSubject) {
+      toast({ title: "Selection Required", description: "Please select both an exam and a subject to print." });
+      return;
+    }
+
+    const exam = exams?.find(e => e.id === selectedMultiExamId);
+    if (!exam || !questions || !results) return;
+
+    // Scope to: Multi-Exam -> Specific Subject -> Specific Class -> All Students
+    const matchingResults = results.filter(r => {
+      if (r.examId !== selectedMultiExamId) return false;
+      const student = students?.find(s =>
+        s.studentId?.trim().toLowerCase() === r.studentId?.trim().toLowerCase() ||
+        s.id?.trim().toLowerCase() === r.studentId?.trim().toLowerCase()
+      );
+      if (selectedMultiClass !== "ALL" && student?.classLevel !== selectedMultiClass) return false;
+      return true;
+    });
+
+    if (matchingResults.length === 0) {
+      toast({ title: "No Records Found", description: "No candidate results found matching this subject & class." });
+      return;
+    }
+
+    const subjectQuestions = questions.filter(q =>
+      exam.questionIds.includes(q.id) &&
+      (q.subject || "General").trim().toLowerCase() === selectedMultiSubject.toLowerCase()
+    );
+
+    let totalSubjCount = exam.subjectConfig?.[selectedMultiSubject]
+      ? Number(exam.subjectConfig[selectedMultiSubject])
+      : subjectQuestions.length || 1;
+
+    if (Array.isArray((exam as any).subjectSlots)) {
+      const slot = (exam as any).subjectSlots.find((sl: any) => 
+        sl.subject?.toLowerCase() === selectedMultiSubject.toLowerCase() ||
+        (sl.departmentMappings?.some((m: any) => 
+          m.subjects?.some((sub: string) => sub.toLowerCase() === selectedMultiSubject.toLowerCase())
+        ))
+      );
+      if (slot) {
+        totalSubjCount = Number(slot.questionCount) || totalSubjCount;
+      }
+    }
+
+    const printRows = matchingResults.filter(r => {
+      // Check if student actually took this subject by verifying they have answers for at least one question of this subject
+      const hasSubjectQuestions = subjectQuestions.some(q => 
+        (r.correctAnswers && q.id in r.correctAnswers) || 
+        (r.answers && q.id in r.answers)
+      );
+      return hasSubjectQuestions;
+    }).map(r => {
+      let correct = 0;
+      subjectQuestions.forEach(q => {
+        if (r.correctAnswers?.[q.id]) correct++;
+      });
+      const pct = Math.round((correct / totalSubjCount) * 100);
+
+      return {
+        id: r.studentId,
+        name: r.studentName,
+        class: selectedMultiClass !== "ALL" ? selectedMultiClass : ((r as any).classLevel || "All Classes"),
+        subject: selectedMultiSubject,
+        score: correct,
+        total: totalSubjCount,
+        percentage: pct,
+        passed: pct >= (exam.passingScore || 50)
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "Pop-up Blocked", description: "Please allow pop-ups for this site.", variant: "destructive" });
+      return;
+    }
+
+    writePrintWindowDocument(printWindow, `Multi-Exam Subject Report - ${selectedMultiSubject}`);
+
+    try {
+      const container = await waitForPrintRoot(printWindow, 7000);
+      cloneCurrentStylesIntoPrintWindow(printWindow);
+
+      const root = createRoot(container);
+      root.render(
+        <PrintReportTemplate
+          reportType="score-sheet"
+          schoolInfo={{
+            name: "FAITH IMMACULATE ACADEMY",
+            address: "IGBOHO, OYO STATE",
+            motto: "KNOWLEDGE AND GODLINESS",
+            logoText: "FIA",
+            logoUrl: "/logo.png"
+          }}
+          metadata={{
+            class: selectedMultiClass === "ALL" ? "All Classes" : selectedMultiClass,
+            exam: `${exam.title} — [Subject: ${selectedMultiSubject.toUpperCase()}]`,
+            date: format(new Date(), "dd MMM, yyyy"),
+            session: "2025/2026 ACADEMIC SESSION"
+          }}
+          results={printRows}
+          onPrint={() => setTimeout(() => printWindow.print(), 500)}
+        />
+      );
+      setIsMultiExamPrintModalOpen(false);
+    } catch (err) {
+      console.error("Multi-Exam Subject Print error:", err);
+      toast({ title: "Print Error", description: "Failed to render print document.", variant: "destructive" });
+      printWindow.close();
+    }
   };
 
   const handleBulkPrint = async () => {
@@ -1094,33 +1436,86 @@ export default function AdminResults() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
                   {selectedResultIds.size > 0 && (
-                    <Button 
-                      onClick={handleBulkPrint} 
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 h-9.5 rounded-xl text-xs shadow-lg shadow-indigo-500/10 transition-transform duration-200 hover:scale-[1.02]"
-                    >
-                      <Printer className="mr-2 h-4 w-4" />
-                      Print Selected ({selectedResultIds.size})
-                    </Button>
+                    <>
+                      <Button 
+                        onClick={() => setIsBulkDeleteModalOpen(true)} 
+                        variant="destructive"
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3.5 h-9 rounded-xl text-xs shadow-md transition-transform active:scale-95"
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Delete Selected ({selectedResultIds.size})
+                      </Button>
+
+                      <Button 
+                        onClick={() => publishSelected(true)} 
+                        variant="outline"
+                        className="border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-3.5 h-9 rounded-xl text-xs"
+                      >
+                        <Lock className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                        Publish ({selectedResultIds.size})
+                      </Button>
+
+                      <Button 
+                        onClick={handleBulkPrint} 
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 h-9 rounded-xl text-xs shadow-md"
+                      >
+                        <Printer className="mr-1.5 h-3.5 w-3.5" />
+                        Print Selected ({selectedResultIds.size})
+                      </Button>
+                    </>
                   )}
+
+                  <Button 
+                    onClick={handleExportCSV} 
+                    variant="outline" 
+                    className="border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-3.5 h-9 rounded-xl text-xs"
+                    title="Export currently filtered or selected result records to a CSV spreadsheet"
+                  >
+                    <Download className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                    Export CSV
+                  </Button>
+
+                  <Button 
+                    onClick={() => setIsMultiExamPrintModalOpen(true)} 
+                    variant="outline" 
+                    className="border-indigo-200 bg-indigo-50/60 text-indigo-700 hover:bg-indigo-100 font-bold px-3.5 h-9 rounded-xl text-xs"
+                    title="Print single-subject scores scoped inside a Multi-Subject Exam"
+                  >
+                    <Layers className="mr-1.5 h-3.5 w-3.5 text-indigo-600" />
+                    Print Subject in Multi-Exam
+                  </Button>
+
+                  <Button 
+                    onClick={() => {
+                      setPurgeStep("preview");
+                      setIsPurgeModalOpen(true);
+                    }} 
+                    variant="outline" 
+                    className="border-amber-200 bg-amber-50/60 text-amber-700 hover:bg-amber-100 font-bold px-3.5 h-9 rounded-xl text-xs"
+                    title="Identify and preview dummy candidate sessions or test records before permanent deletion"
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5 text-amber-600" />
+                    Purge Test Data
+                  </Button>
 
                   <Button 
                     onClick={handlePrintFullReport} 
                     variant="outline" 
-                    className="border-indigo-150 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-850 dark:border-indigo-900/60 dark:bg-indigo-950/20 dark:text-indigo-400 dark:hover:bg-indigo-950/40 px-4 h-9.5 rounded-xl text-xs font-bold"
+                    className="border-indigo-150 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3.5 h-9 rounded-xl text-xs font-bold"
                   >
-                    <Printer className="mr-2 h-4 w-4" />
+                    <Printer className="mr-1.5 h-3.5 w-3.5" />
                     Consolidated Report
                   </Button>
 
                   <Button 
                     variant="secondary" 
                     onClick={handlePrintBroadsheet}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-350 dark:hover:bg-slate-750 px-4 h-9.5 rounded-xl text-xs font-bold"
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 px-3.5 h-9 rounded-xl text-xs font-bold"
                   >
-                    <Printer className="mr-2 h-4 w-4" />
-                    Score Sheet (Broadsheet)
+                    <Printer className="mr-1.5 h-3.5 w-3.5" />
+                    Score Sheet
                   </Button>
                 </div>
               </div>
@@ -1247,14 +1642,22 @@ export default function AdminResults() {
                               <TableCell className="py-4">
                                 {(() => {
                                   let subjList: string[] = [];
-                                  if (exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
-                                    subjList = Object.keys(exam.subjectConfig);
-                                  } else if (exam?.subject) {
-                                    subjList = exam.subject.split(",").map((s: string) => s.trim()).filter(Boolean);
-                                  } else if (result.subject) {
-                                    subjList = [result.subject];
-                                  } else {
-                                    subjList = ["General"];
+                                  if (questions && (result.correctAnswers || result.answers)) {
+                                    const sessionQIds = Object.keys(result.correctAnswers || result.answers || {});
+                                    const studentQuestions = questions.filter(q => sessionQIds.includes(q.id));
+                                    subjList = Array.from(new Set(studentQuestions.map(q => (q.subject || "General").trim()))).filter(Boolean);
+                                  }
+
+                                  if (subjList.length === 0) {
+                                    if (exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+                                      subjList = Object.keys(exam.subjectConfig);
+                                    } else if (exam?.subject) {
+                                      subjList = exam.subject.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                    } else if (result.subject) {
+                                      subjList = [result.subject];
+                                    } else {
+                                      subjList = ["General"];
+                                    }
                                   }
 
                                   if (subjList.length === 0) subjList = ["General"];
@@ -1267,6 +1670,16 @@ export default function AdminResults() {
 
                                         if (exam?.subjectConfig && exam.subjectConfig[subj]) {
                                           totalSubjCount = Number(exam.subjectConfig[subj]);
+                                        } else if (Array.isArray((exam as any)?.subjectSlots)) {
+                                          const slot = (exam as any).subjectSlots.find((sl: any) => 
+                                            sl.subject?.toLowerCase() === subj.toLowerCase() ||
+                                            (sl.departmentMappings?.some((m: any) => 
+                                              m.subjects?.some((sub: string) => sub.toLowerCase() === subj.toLowerCase())
+                                            ))
+                                          );
+                                          if (slot) {
+                                            totalSubjCount = Number(slot.questionCount) || totalSubjCount;
+                                          }
                                         } else if (subjList.length === 1) {
                                           totalSubjCount = displayTotal;
                                         }
@@ -1542,6 +1955,231 @@ export default function AdminResults() {
           </div>
         </div>
       </div>
+
+      {/* 1. Bulk Delete Confirmation Modal */}
+      <Dialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
+        <DialogContent className="max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-2xl bg-rose-100 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center mb-2">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-xl font-black">Confirm Bulk Deletion</DialogTitle>
+            <DialogDescription className="text-sm font-medium text-slate-500 mt-1">
+              Are you sure you want to permanently delete <strong className="text-rose-600 font-extrabold">{selectedResultIds.size} selected result record(s)</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkDeleteModalOpen(false)}
+              className="rounded-xl font-bold border-slate-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmBulkDelete}
+              disabled={isDeleting}
+              className="rounded-xl font-bold bg-rose-600 hover:bg-rose-700"
+            >
+              {isDeleting ? "Deleting..." : `Delete ${selectedResultIds.size} Records`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. Purge Stale/Test Data Modal with Preview Step */}
+      <Dialog open={isPurgeModalOpen} onOpenChange={setIsPurgeModalOpen}>
+        <DialogContent className="max-w-2xl rounded-3xl p-6">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-2xl bg-amber-100 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mb-2">
+              <RefreshCw className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-xl font-black">Purge Test & Stale Result Data</DialogTitle>
+            <DialogDescription className="text-sm font-medium text-slate-500 mt-1">
+              Identify and preview dummy candidate sessions or test records before permanent deletion.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Search Keyword / Filter</label>
+                <Input
+                  placeholder="e.g. test, demo, dummy, zero"
+                  value={purgeKeyword}
+                  onChange={(e) => {
+                    setPurgeKeyword(e.target.value);
+                    setPurgeStep("preview");
+                  }}
+                  className="rounded-xl font-medium"
+                />
+              </div>
+              <div className="flex items-end">
+                <span className="text-xs font-bold text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 p-2.5 rounded-xl border border-amber-200/60 w-full text-center">
+                  Matching Preview: <strong>{purgeCandidateList.length} Record(s)</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Preview List Table */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden max-h-56 overflow-y-auto">
+              {purgeCandidateList.length > 0 ? (
+                <Table>
+                  <TableHeader className="bg-slate-50 dark:bg-slate-950">
+                    <TableRow>
+                      <TableHead className="font-bold text-xs">Candidate Name</TableHead>
+                      <TableHead className="font-bold text-xs">Student ID</TableHead>
+                      <TableHead className="font-bold text-xs">Score</TableHead>
+                      <TableHead className="font-bold text-xs">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {purgeCandidateList.slice(0, 10).map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-bold text-xs">{r.studentName}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.studentId}</TableCell>
+                        <TableCell className="font-bold text-xs text-rose-600">{r.score} / {r.totalPoints} ({r.percentage}%)</TableCell>
+                        <TableCell className="text-[11px] text-slate-400">{format(new Date(r.completedAt), "dd MMM yyyy")}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400 font-medium">
+                  No candidate records match keyword "{purgeKeyword}". Try typing "test" or "demo".
+                </div>
+              )}
+            </div>
+            {purgeCandidateList.length > 10 && (
+              <p className="text-[11px] text-slate-400 text-right">Showing first 10 of {purgeCandidateList.length} preview records</p>
+            )}
+          </div>
+
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setIsPurgeModalOpen(false)} className="rounded-xl font-bold">
+              Cancel
+            </Button>
+            {purgeStep === "preview" ? (
+              <Button
+                onClick={() => setPurgeStep("confirm")}
+                disabled={purgeCandidateList.length === 0}
+                className="rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                Proceed to Confirm ({purgeCandidateList.length})
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={handleExecutePurge}
+                disabled={isPurging || purgeCandidateList.length === 0}
+                className="rounded-xl font-bold bg-rose-600 hover:bg-rose-700"
+              >
+                {isPurging ? "Purging..." : `Confirm Permanent Deletion (${purgeCandidateList.length})`}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3. Multi-Subject Exam Subject-Level Print Modal (Domain Specific) */}
+      <Dialog open={isMultiExamPrintModalOpen} onOpenChange={setIsMultiExamPrintModalOpen}>
+        <DialogContent className="max-w-lg rounded-3xl p-6">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center mb-2">
+              <Printer className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-xl font-black">Multi-Exam Subject-Level Print</DialogTitle>
+            <DialogDescription className="text-sm font-medium text-slate-500 mt-1">
+              Select a Multi-Subject Exam paper and isolate a single subject's score sheet for a class.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            {/* Multi-Exam Selection */}
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Select Multi-Subject Exam</label>
+              <Select
+                value={selectedMultiExamId}
+                onValueChange={(val) => {
+                  setSelectedMultiExamId(val);
+                  const ex = exams?.find(e => e.id === val);
+                  if (ex?.subjectConfig && Object.keys(ex.subjectConfig).length > 0) {
+                    setSelectedMultiSubject(Object.keys(ex.subjectConfig)[0]);
+                  } else if (ex?.subject) {
+                    const firstSubj = ex.subject.split(",")[0]?.trim();
+                    if (firstSubj) setSelectedMultiSubject(firstSubj);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-10 rounded-xl font-semibold">
+                  <SelectValue placeholder="Choose a Multi-Subject Exam..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {exams
+                    ?.filter(e => e.subjectConfig && Object.keys(e.subjectConfig).length > 1)
+                    .map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Subject Selection inside Multi-Exam */}
+            {selectedMultiExamId && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Select Subject to Print</label>
+                <Select value={selectedMultiSubject} onValueChange={setSelectedMultiSubject}>
+                  <SelectTrigger className="h-10 rounded-xl font-semibold">
+                    <SelectValue placeholder="Choose subject..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {(() => {
+                      const ex = exams?.find(e => e.id === selectedMultiExamId);
+                      let subjs: string[] = [];
+                      if (ex?.subjectConfig) subjs = Object.keys(ex.subjectConfig);
+                      else if (ex?.subject) subjs = ex.subject.split(",").map(s => s.trim()).filter(Boolean);
+                      return subjs.map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Class Filter */}
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Target Class Level</label>
+              <Select value={selectedMultiClass} onValueChange={setSelectedMultiClass}>
+                <SelectTrigger className="h-10 rounded-xl font-semibold">
+                  <SelectValue placeholder="All Classes" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="ALL">All Classes</SelectItem>
+                  {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"].map(cls => (
+                    <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setIsMultiExamPrintModalOpen(false)} className="rounded-xl font-bold">
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePrintMultiExamSubjectScores}
+              disabled={!selectedMultiExamId || !selectedMultiSubject}
+              className="rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Generate Printable Subject Sheet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

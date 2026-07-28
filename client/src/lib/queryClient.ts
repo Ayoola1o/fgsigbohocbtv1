@@ -138,6 +138,23 @@ export async function apiRequest<T = unknown>(
     return fb.toggleStudentExamBlock(match.id, data.examId, data.blockState) as T;
   }
 
+  // Settings
+  if (url === "/api/settings" && (method === "POST" || method === "PUT")) {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        return await res.json() as T;
+      }
+    } catch (err) {
+      console.warn("REST settings save failed, falling back to Firebase directly:", err);
+    }
+    return fb.saveSystemSettings(data) as T;
+  }
+
   throw new Error(`Unhandled API request: ${method} ${url}`);
 }
 
@@ -201,6 +218,19 @@ export const getQueryFn = <T>({ on401: unauthorizedBehavior }: { on401: Unauthor
     // Students
     if (url === "/api/students") {
       return fb.getStudents() as T;
+    }
+
+    // Settings
+    if (url === "/api/settings") {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          return await res.json() as T;
+        }
+      } catch (err) {
+        console.warn("REST settings fetch failed, falling back to Firebase directly:", err);
+      }
+      return fb.getSystemSettings() as T;
     }
 
     throw new Error(`Unhandled Query: ${url}`);

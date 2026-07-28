@@ -1,12 +1,13 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AdminLayout } from "@/components/admin-layout";
 import { Loader2 } from "lucide-react";
+import { SystemSettings } from "@shared/schema";
 
 // Direct Eager Imports for Student Core Flow
 import Home from "@/pages/home";
@@ -122,12 +123,46 @@ function Router() {
   );
 }
 
+function SettingsSynchronizer() {
+  const { data: settings } = useQuery<SystemSettings>({
+    queryKey: ["/api/settings"],
+    staleTime: 5 * 60 * 1000, // keep cached for 5 minutes
+  });
+
+  useEffect(() => {
+    if (!settings) return;
+
+    // Write all properties dynamically to localStorage with correct prefix
+    localStorage.setItem("fia_cbt_settings_score_format", settings.scoreFormat);
+    localStorage.setItem("fia_cbt_settings_remove_title", String(settings.omitExamTitles));
+    localStorage.setItem("fia_cbt_settings_report_signature", String(settings.reportSignature));
+    localStorage.setItem("fia_cbt_settings_school_motto", String(settings.schoolMotto));
+    localStorage.setItem("fia_cbt_settings_cheat_protection", String(settings.tabSwitchDetectionEnabled));
+    localStorage.setItem("fia_cbt_settings_passing_threshold", String(settings.passingThreshold));
+    localStorage.setItem("fia_cbt_settings_timer_warning", String(settings.timerWarning));
+    localStorage.setItem("fia_cbt_settings_show_result_button", String(settings.showResultButton));
+    localStorage.setItem("fia_cbt_settings_hide_completed", String(settings.hideCompleted));
+    localStorage.setItem("fia_cbt_settings_signature_principal", settings.signaturePrincipal || "");
+    localStorage.setItem("fia_cbt_settings_signature_teacher", settings.signatureTeacher || "");
+    localStorage.setItem("fia_cbt_settings_signature_officer", settings.signatureOfficer || "");
+    localStorage.setItem("fia_cbt_settings_analysis_mode", settings.analysisMode);
+    localStorage.setItem("fia_cbt_settings_concept_strength_threshold", String(settings.conceptStrengthThreshold));
+    localStorage.setItem("fia_cbt_settings_concept_focus_threshold", String(settings.conceptFocusThreshold));
+
+    // Dispatch storage event so reactive components update immediately
+    window.dispatchEvent(new Event("storage"));
+  }, [settings]);
+
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
+          <SettingsSynchronizer />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

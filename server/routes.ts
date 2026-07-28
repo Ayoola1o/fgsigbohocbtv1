@@ -1,12 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { getFirestoreResults, getFirestoreQuestions, getFirestoreExams } from "./firebase";
+import { getFirestoreResults, getFirestoreQuestions, getFirestoreExams, getFirestoreSettings, saveFirestoreSettings } from "./firebase";
 import {
   insertQuestionSchema,
   insertExamSchema,
   insertExamSessionSchema,
+  systemSettingsSchema,
   type Question,
+  type SystemSettings,
 } from "../shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -718,7 +720,66 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
       let sessionQuestionIds = [...exam.questionIds];
 
-      if (exam.subjectConfig && Object.keys(exam.subjectConfig as object).length > 0) {
+      const slots = (exam as any).subjectSlots as any[];
+      if (Array.isArray(slots) && slots.length > 0) {
+        // Dynamic subject slots configured
+        const allStudents = await storage.getStudents();
+        const student = allStudents.find(s => 
+          s.studentId.toLowerCase().trim() === validatedData.studentId.toLowerCase().trim() ||
+          s.name.toLowerCase().trim() === validatedData.studentName.toLowerCase().trim()
+        );
+
+        const studentDept = student?.department ? student.department.trim() : null;
+        const allQuestions = await storage.getQuestions();
+        const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+        let selectedIds: string[] = [];
+
+        for (const slot of slots) {
+          if (slot.type === "elective") {
+            if (!studentDept) {
+              return res.status(400).json({ 
+                error: `Student '${validatedData.studentName}' does not have a department assigned. Department is required for elective slot '${slot.name || "Elective Slot"}'. Please contact an administrator.` 
+              });
+            }
+
+            const mapping = slot.departmentMappings?.find((m: any) => 
+              m.department.toLowerCase().trim() === studentDept.toLowerCase() ||
+              (m.department.toLowerCase().startsWith("art") && studentDept.toLowerCase().startsWith("art"))
+            );
+
+            if (!mapping || !mapping.subjects || mapping.subjects.length === 0) {
+              return res.status(400).json({ 
+                error: `Department '${studentDept}' is not mapped for elective slot '${slot.name || "Elective Slot"}' in this exam. Please contact your invigilator.` 
+              });
+            }
+
+            // Pick questions for mapped subjects
+            const targetSubjects: string[] = mapping.subjects;
+            const countPerSubj = Math.ceil((slot.questionCount || 10) / targetSubjects.length);
+
+            for (const subj of targetSubjects) {
+              const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase().trim() === subj.toLowerCase().trim());
+              for (let i = subjQuestions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+              }
+              selectedIds = [...selectedIds, ...subjQuestions.slice(0, countPerSubj).map(q => q.id)];
+            }
+          } else {
+            // Common slot
+            const subj = slot.subject || "";
+            const limit = Number(slot.questionCount) || 10;
+            const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase().trim() === subj.toLowerCase().trim());
+            for (let i = subjQuestions.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+            }
+            selectedIds = [...selectedIds, ...subjQuestions.slice(0, limit).map(q => q.id)];
+          }
+        }
+
+        sessionQuestionIds = selectedIds;
+      } else if (exam.subjectConfig && Object.keys(exam.subjectConfig as object).length > 0) {
         const allQuestions = await storage.getQuestions();
         const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
         let selectedIds: string[] = [];
@@ -1342,6 +1403,68 @@ Return JSON with:
       console.error("Analytics computation error:", error);
       res.status(500).json({ 
         error: "Failed to compute analytics",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ─── Settings Configuration Routes ───
+  app.get("/api/settings", async (req, res) => {
+    try {
+      let settings: any = null;
+      try {
+        settings = await getFirestoreSettings();
+      } catch (firestoreError) {
+        console.warn("⚠️ [routes.ts] Firestore settings fetch failed. Falling back to local storage:", firestoreError);
+      }
+
+      if (!settings) {
+        settings = await storage.getSystemSettings();
+        // If firestore is active, let's proactively sync defaults
+        try {
+          await saveFirestoreSettings(settings);
+          console.log("🔥 [routes.ts] Proactively synced default settings to Firestore");
+        } catch (e) {
+          // ignore sync failure
+        }
+      }
+
+      res.json(settings);
+    } catch (error) {
+      console.error("Get settings error:", error);
+      res.status(500).json({
+        error: "Failed to fetch settings",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  app.post("/api/settings", async (req, res) => {
+    try {
+      const parsed = systemSettingsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid settings format",
+          details: parsed.error.format()
+        });
+      }
+
+      // Save to local storage (in-memory/json file)
+      const updated = await storage.saveSystemSettings(parsed.data);
+
+      // Sync to Firestore if active
+      try {
+        await saveFirestoreSettings(parsed.data);
+        console.log("🔥 [routes.ts] Successfully saved settings to Firestore");
+      } catch (firestoreError) {
+        console.warn("⚠️ [routes.ts] Firestore settings save failed:", firestoreError);
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Save settings error:", error);
+      res.status(500).json({
+        error: "Failed to save settings",
         details: error instanceof Error ? error.message : String(error)
       });
     }

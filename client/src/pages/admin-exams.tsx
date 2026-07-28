@@ -43,8 +43,9 @@ import {
   HelpCircle,
   FileSpreadsheet
 } from "lucide-react";
+import type { Exam, Question, SubjectSlot, SlotType, DepartmentSubjectMapping } from "@shared/schema";
+import { departments } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Exam, Question } from "@shared/schema";
 import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/components/theory-structure-editor";
 
 export default function AdminExams() {
@@ -587,7 +588,9 @@ function ExamForm({
       structure: [] as any[],
     },
     subjectConfig: {} as Record<string, number>,
+    subjectSlots: [] as SubjectSlot[],
   });
+  const [useSubjectSlots, setUseSubjectSlots] = useState(false);
   const [useSubjectSelectionLogic, setUseSubjectSelectionLogic] = useState(false);
   const [assignRandomQuestions, setAssignRandomQuestions] = useState(false);
   const [selectedExamTypes, setSelectedExamTypes] = useState<Record<string, boolean>>({
@@ -684,27 +687,125 @@ function ExamForm({
 
       dataToSubmit.questionIds = extractIds(dataToSubmit.theoryConfig.structure);
     } else {
-      const hasSubjectLimits = dataToSubmit.subjectConfig && Object.keys(dataToSubmit.subjectConfig).length > 1;
-      if (hasSubjectLimits) {
-        const totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
-        dataToSubmit.numberOfQuestionsToDisplay = totalSubjectQuestions;
-      }
-
-      if (!dataToSubmit.questionIds || dataToSubmit.questionIds.length === 0) {
-        if (availableQuestions.length > 0) {
-          dataToSubmit.questionIds = availableQuestions.map(q => q.id);
-        } else {
+      if (useSubjectSlots) {
+        if (!formData.subjectSlots || formData.subjectSlots.length === 0) {
           toast({
-            title: "No Questions Available",
-            description: "No matching questions were found in the bank for the selected subjects and departments.",
+            title: "Validation Error",
+            description: "Please configure at least one subject slot or disable dynamic subject slots.",
             variant: "destructive",
           });
           return;
         }
-      }
 
-      if (!dataToSubmit.numberOfQuestionsToDisplay || dataToSubmit.numberOfQuestionsToDisplay <= 0) {
-        delete dataToSubmit.numberOfQuestionsToDisplay;
+        // Validate slots
+        const allSubjects = new Set<string>();
+        for (const slot of formData.subjectSlots) {
+          if (!slot.name) {
+            toast({
+              title: "Validation Error",
+              description: "All subject slots must have a name.",
+              variant: "destructive",
+            });
+            return;
+          }
+          if (!slot.questionCount || Number(slot.questionCount) <= 0) {
+            toast({
+              title: "Validation Error",
+              description: `Slot '${slot.name}' must have a question count greater than 0.`,
+              variant: "destructive",
+            });
+            return;
+          }
+
+          if (slot.type === "common") {
+            if (!slot.subject) {
+              toast({
+                title: "Validation Error",
+                description: `Common slot '${slot.name}' must have a subject assigned.`,
+                variant: "destructive",
+              });
+              return;
+            }
+            allSubjects.add(slot.subject);
+          } else {
+            // Elective slot
+            for (const dept of departments) {
+              const mapping = slot.departmentMappings?.find(
+                (m) => m.department.toLowerCase() === dept.toLowerCase()
+              );
+              if (!mapping || !mapping.subjects || mapping.subjects.length === 0) {
+                toast({
+                  title: "Validation Error",
+                  description: `Elective slot '${slot.name}' is missing a subject mapping for department '${dept}'. All departments must be mapped.`,
+                  variant: "destructive",
+                });
+                return;
+              }
+              mapping.subjects.forEach((subj) => allSubjects.add(subj));
+            }
+          }
+        }
+
+        // Collate subjects
+        dataToSubmit.subject = Array.from(allSubjects).join(", ");
+        dataToSubmit.subjectConfig = {};
+        formData.subjectSlots.forEach(slot => {
+          if (slot.type === "common" && slot.subject) {
+            dataToSubmit.subjectConfig[slot.subject] = slot.questionCount;
+          }
+        });
+        
+        // Sum total question limits
+        const totalSlotQuestions = formData.subjectSlots.reduce(
+          (sum, slot) => sum + (Number(slot.questionCount) || 0),
+          0
+        );
+        dataToSubmit.numberOfQuestionsToDisplay = totalSlotQuestions;
+        dataToSubmit.subjectSlots = formData.subjectSlots;
+
+        // Auto-assign matching questions
+        const filteredQIds = questions
+          .filter(
+            (q) =>
+              q.classLevel === formData.classLevel &&
+              Array.from(allSubjects).some(
+                (s) => s.toLowerCase() === q.subject.toLowerCase()
+              )
+          )
+          .map((q) => q.id);
+
+        if (filteredQIds.length === 0) {
+          toast({
+            title: "No Questions Available",
+            description: "No matching questions were found in the bank for the slot subjects.",
+            variant: "destructive",
+          });
+          return;
+        }
+        dataToSubmit.questionIds = filteredQIds;
+      } else {
+        const hasSubjectLimits = dataToSubmit.subjectConfig && Object.keys(dataToSubmit.subjectConfig).length > 1;
+        if (hasSubjectLimits) {
+          const totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
+          dataToSubmit.numberOfQuestionsToDisplay = totalSubjectQuestions;
+        }
+
+        if (!dataToSubmit.questionIds || dataToSubmit.questionIds.length === 0) {
+          if (availableQuestions.length > 0) {
+            dataToSubmit.questionIds = availableQuestions.map(q => q.id);
+          } else {
+            toast({
+              title: "No Questions Available",
+              description: "No matching questions were found in the bank for the selected subjects and departments.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+
+        if (!dataToSubmit.numberOfQuestionsToDisplay || dataToSubmit.numberOfQuestionsToDisplay <= 0) {
+          delete dataToSubmit.numberOfQuestionsToDisplay;
+        }
       }
     }
 
@@ -1044,11 +1145,365 @@ function ExamForm({
             If configured, the server presents a randomized subset of this limit size to the student.
           </p>
         </div>
+        {/* Department-Based Dynamic Subject Slots Toggle & configurator */}
+        {formData.examType !== "Theory" && (
+          <div className="space-y-4 p-4 rounded-xl border border-slate-200/50 bg-slate-50/20 dark:border-slate-800 dark:bg-slate-950/20">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-350">Department-Based Dynamic Subject Slots</Label>
+                <p className="text-[10px] text-slate-400">Map different subjects to different student departments within this exam</p>
+              </div>
+              <Switch
+                checked={useSubjectSlots}
+                onCheckedChange={(checked) => {
+                  setUseSubjectSlots(checked);
+                  if (checked && formData.subjectSlots.length === 0) {
+                    setFormData(prev => ({
+                      ...prev,
+                      subjectSlots: [
+                        {
+                          id: "slot-" + Date.now() + "-1",
+                          name: "Mathematics (Common)",
+                          type: "common",
+                          subject: "Mathematics",
+                          questionCount: 20
+                        },
+                        {
+                          id: "slot-" + Date.now() + "-2",
+                          name: "Elective Slot 1",
+                          type: "elective",
+                          questionCount: 20,
+                          departmentMappings: departments.map(d => ({
+                            department: d,
+                            subjects: d === "Science" ? ["Chemistry"] : ["Government"]
+                          }))
+                        }
+                      ]
+                    }));
+                  }
+                }}
+              />
+            </div>
 
-        {/* Custom Subject Limits */}
-        {formData.examType !== "Theory" && formData.subject && formData.subject.split(",").map(s => s.trim()).filter(Boolean).length > 1 && (
+            {useSubjectSlots && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
+                  <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Exam Subject Slots</span>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[11px] font-bold rounded-lg border-slate-205"
+                      onClick={() => {
+                        const newSlot: SubjectSlot = {
+                          id: "slot-" + Date.now(),
+                          name: "Common Slot " + (formData.subjectSlots.length + 1),
+                          type: "common",
+                          subject: "",
+                          questionCount: 15
+                        };
+                        setFormData(prev => ({
+                          ...prev,
+                          subjectSlots: [...prev.subjectSlots, newSlot]
+                        }));
+                      }}
+                    >
+                      + Common Slot
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[11px] font-bold rounded-lg border-slate-205"
+                      onClick={() => {
+                        const newSlot: SubjectSlot = {
+                          id: "slot-" + Date.now(),
+                          name: "Elective Slot " + (formData.subjectSlots.length + 1),
+                          type: "elective",
+                          questionCount: 15,
+                          departmentMappings: departments.map(d => ({
+                            department: d,
+                            subjects: []
+                          }))
+                        };
+                        setFormData(prev => ({
+                          ...prev,
+                          subjectSlots: [...prev.subjectSlots, newSlot]
+                        }));
+                      }}
+                    >
+                      + Elective Slot
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {formData.subjectSlots.map((slot, index) => {
+                    const uniqueSubjects = Array.from(new Set(questions.filter(q => q.classLevel === formData.classLevel).map(q => q.subject))).filter(Boolean);
+                    return (
+                      <div key={slot.id} className="p-3 border border-slate-200/60 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900/40 relative space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Badge variant={slot.type === "common" ? "default" : "secondary"} className="text-[10px] uppercase font-black tracking-wide">
+                            Slot #{index + 1}: {slot.type === "common" ? "Common Subject" : "Department Elective"}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-955/20 rounded-lg absolute top-2 right-2 font-bold text-lg"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                subjectSlots: prev.subjectSlots.filter(s => s.id !== slot.id)
+                              }));
+                            }}
+                          >
+                            ×
+                          </Button>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Slot Label / Name</Label>
+                            <Input
+                              value={slot.name}
+                              onChange={(e) => {
+                                const newSlots = [...formData.subjectSlots];
+                                newSlots[index].name = e.target.value;
+                                setFormData(prev => ({ ...prev, subjectSlots: newSlots }));
+                              }}
+                              className="h-8 text-xs font-semibold"
+                              placeholder="e.g. Mathematics, Science Elective A"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Question Limit</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={slot.questionCount}
+                              onChange={(e) => {
+                                const newSlots = [...formData.subjectSlots];
+                                newSlots[index].questionCount = parseInt(e.target.value) || 0;
+                                setFormData(prev => ({ ...prev, subjectSlots: newSlots }));
+                              }}
+                              className="h-8 text-xs font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        {slot.type === "common" ? (
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Subject</Label>
+                            <select
+                              value={slot.subject || ""}
+                              onChange={(e) => {
+                                const newSlots = [...formData.subjectSlots];
+                                newSlots[index].subject = e.target.value;
+                                setFormData(prev => ({ ...prev, subjectSlots: newSlots }));
+                              }}
+                              className="w-full border rounded-lg h-8 text-xs px-2 bg-background font-semibold"
+                            >
+                              <option value="">Select subject...</option>
+                              {uniqueSubjects.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <div className="space-y-3 border-t border-slate-100 dark:border-slate-800/60 pt-2.5 mt-2">
+                            {(() => {
+                              const subjectMap = new Map<string, string[]>();
+                              (slot.departmentMappings || []).forEach(m => {
+                                (m.subjects || []).forEach(subj => {
+                                  if (!subjectMap.has(subj)) subjectMap.set(subj, []);
+                                  if (!subjectMap.get(subj)!.includes(m.department)) {
+                                    subjectMap.get(subj)!.push(m.department);
+                                  }
+                                });
+                              });
+                              const subjectOptions = Array.from(subjectMap.entries()).map(([subj, depts]) => ({ subject: subj, departments: depts }));
+
+                              const updateMappings = (newOptions: { subject: string; departments: string[] }[]) => {
+                                const newSlots = [...formData.subjectSlots];
+                                newSlots[index].departmentMappings = departments.map(dept => {
+                                  const assignedSubjects = newOptions
+                                    .filter(opt => opt.departments.some(d => d.toLowerCase() === dept.toLowerCase()))
+                                    .map(opt => opt.subject);
+                                  return { department: dept, subjects: assignedSubjects };
+                                });
+                                setFormData(prev => ({ ...prev, subjectSlots: newSlots }));
+                              };
+
+                              return (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 uppercase tracking-wider block">Elective Subjects & Assigned Departments</Label>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 rounded-md"
+                                      onClick={() => {
+                                        const unusedSubj = uniqueSubjects.find(s => !subjectOptions.some(o => o.subject === s)) || "";
+                                        updateMappings([...subjectOptions, { subject: unusedSubj, departments: [] }]);
+                                      }}
+                                    >
+                                      + Add Subject Option
+                                    </Button>
+                                  </div>
+
+                                  {subjectOptions.length === 0 && (
+                                    <div className="text-center py-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
+                                      <p className="text-[11px] text-slate-400 font-medium">No elective subjects added to this slot yet.</p>
+                                      <Button
+                                        type="button"
+                                        variant="link"
+                                        size="sm"
+                                        className="text-xs text-indigo-600 font-bold p-0 h-auto mt-1"
+                                        onClick={() => {
+                                          const unusedSubj = uniqueSubjects.find(s => !subjectOptions.some(o => o.subject === s)) || "";
+                                          updateMappings([...subjectOptions, { subject: unusedSubj, departments: [] }]);
+                                        }}
+                                      >
+                                        + Add First Subject Option
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-2.5">
+                                    {subjectOptions.map((opt, optIdx) => (
+                                      <div key={optIdx} className="p-2.5 bg-slate-50/70 dark:bg-slate-900/60 rounded-lg border border-slate-200/70 dark:border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2 flex-1">
+                                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Elective Subject:</Label>
+                                            <select
+                                              value={opt.subject}
+                                              onChange={(e) => {
+                                                const newSubj = e.target.value;
+                                                const newOptions = [...subjectOptions];
+                                                newOptions[optIdx].subject = newSubj;
+                                                updateMappings(newOptions);
+                                              }}
+                                              className="flex-1 border rounded-lg h-7.5 text-xs px-2 bg-background font-semibold"
+                                            >
+                                              <option value="">Select subject...</option>
+                                              {uniqueSubjects.map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 text-slate-400 hover:text-rose-600 rounded font-bold"
+                                            onClick={() => {
+                                              const newOptions = subjectOptions.filter((_, i) => i !== optIdx);
+                                              updateMappings(newOptions);
+                                            }}
+                                          >
+                                            ×
+                                          </Button>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <Label className="text-[9px] font-bold text-slate-400 uppercase">Departments taking this subject:</Label>
+                                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                            {departments.map(dept => {
+                                              const isSelected = opt.departments.some(d => d.toLowerCase() === dept.toLowerCase());
+                                              return (
+                                                <Badge
+                                                  key={dept}
+                                                  variant={isSelected ? "default" : "outline"}
+                                                  className={`cursor-pointer text-[10px] font-bold transition-all ${
+                                                    isSelected
+                                                      ? "bg-indigo-650 hover:bg-indigo-700 text-white"
+                                                      : "hover:bg-slate-100 text-slate-600 dark:text-slate-400"
+                                                  }`}
+                                                  onClick={() => {
+                                                    const newOptions = [...subjectOptions];
+                                                    if (isSelected) {
+                                                      newOptions[optIdx].departments = newOptions[optIdx].departments.filter(d => d.toLowerCase() !== dept.toLowerCase());
+                                                    } else {
+                                                      newOptions[optIdx].departments = [...newOptions[optIdx].departments, dept];
+                                                    }
+                                                    updateMappings(newOptions);
+                                                  }}
+                                                >
+                                                  {isSelected ? `✓ ${dept}` : `+ ${dept}`}
+                                                </Badge>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Live Preview Summary Card */}
+                <div className="p-3.5 bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-150/30 rounded-xl space-y-2">
+                  <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400 text-xs font-black uppercase tracking-wider">
+                    <Sparkles className="h-3.5 w-3.5 text-indigo-500 animate-pulse" />
+                    <span>Live Mapping Preview Summary</span>
+                  </div>
+                  <div className="space-y-2.5 text-[11px] font-medium leading-relaxed text-slate-600 dark:text-slate-350">
+                    {departments.map(dept => {
+                      const deptSubjects: { name: string; count: number; type: string }[] = [];
+                      formData.subjectSlots.forEach(slot => {
+                        if (slot.type === "common" && slot.subject) {
+                          deptSubjects.push({ name: slot.subject, count: slot.questionCount, type: "common" });
+                        } else if (slot.type === "elective") {
+                          const mapping = slot.departmentMappings?.find(m => m.department.toLowerCase() === dept.toLowerCase());
+                          if (mapping && mapping.subjects && mapping.subjects.length > 0) {
+                            mapping.subjects.forEach(s => {
+                              deptSubjects.push({ name: s, count: Math.ceil(slot.questionCount / mapping.subjects.length), type: "elective" });
+                            });
+                          }
+                        }
+                      });
+
+                      const totalQuestions = deptSubjects.reduce((sum, s) => sum + s.count, 0);
+
+                      return (
+                        <div key={dept} className="flex justify-between items-start border-b border-indigo-100/30 pb-2 last:border-0 last:pb-0">
+                          <div>
+                            <span className="font-extrabold text-indigo-900 dark:text-indigo-300 block">{dept} Stream</span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {deptSubjects.length > 0 
+                                ? deptSubjects.map(s => `${s.name} (${s.count} Qs, ${s.type})`).join(" + ")
+                                : "No slots mapped yet."
+                              }
+                            </span>
+                          </div>
+                          <Badge className="bg-indigo-650 hover:bg-indigo-650 font-extrabold text-[10px] text-white py-0 px-2 rounded-full">
+                            {totalQuestions} Qs
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Custom Subject Limits (Standard Multi-Subject Exam) */}
+        {!useSubjectSlots && formData.examType !== "Theory" && formData.subject && formData.subject.split(",").map(s => s.trim()).filter(Boolean).length > 1 && (
           <div className="space-y-3 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200/40 animate-in fade-in duration-300">
-            <Label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Question Limits per Subject</Label>
+            <Label className="text-xs font-black text-slate-700 dark:text-slate-350 uppercase tracking-wider block">Question Limits per Subject</Label>
             <div className="grid gap-4 sm:grid-cols-2">
               {formData.subject.split(",").map(s => s.trim()).filter(Boolean).map(subj => (
                 <div key={subj} className="flex items-center gap-2">

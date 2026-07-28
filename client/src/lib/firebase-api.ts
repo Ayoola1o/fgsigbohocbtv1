@@ -27,7 +27,8 @@ import type {
     ExamSession,
     InsertExamSession,
     Result,
-    InsertResult
+    InsertResult,
+    SystemSettings
 } from "@shared/schema";
 
 // Helper to convert Firestore doc to typed object
@@ -369,7 +370,50 @@ export const createExamSession = async (session: { examId: string; studentName: 
             });
         }
 
-        if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+        const slots = (exam as any).subjectSlots as any[];
+        if (Array.isArray(slots) && slots.length > 0) {
+            const studentDept = candidateDepartment ? candidateDepartment.trim() : null;
+            let selectedIds: string[] = [];
+
+            for (const slot of slots) {
+                if (slot.type === "elective") {
+                    if (!studentDept) {
+                        throw new Error(`Department is required for elective slot '${slot.name || "Elective Slot"}' but your profile does not have one assigned. Please contact an administrator.`);
+                    }
+
+                    const mapping = slot.departmentMappings?.find((m: any) => 
+                        m.department.toLowerCase().trim() === studentDept.toLowerCase() ||
+                        (m.department.toLowerCase().startsWith("art") && studentDept.toLowerCase().startsWith("art"))
+                    );
+
+                    if (!mapping || !mapping.subjects || mapping.subjects.length === 0) {
+                        throw new Error(`Your department '${studentDept}' is not mapped for elective slot '${slot.name || "Elective Slot"}' in this exam. Please contact your invigilator.`);
+                    }
+
+                    const targetSubjects: string[] = mapping.subjects;
+                    const countPerSubj = Math.ceil((slot.questionCount || 10) / targetSubjects.length);
+
+                    for (const subj of targetSubjects) {
+                        const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase().trim() === subj.toLowerCase().trim());
+                        for (let i = subjQuestions.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+                        }
+                        selectedIds = [...selectedIds, ...subjQuestions.slice(0, countPerSubj).map(q => q.id)];
+                    }
+                } else {
+                    const subj = slot.subject || "";
+                    const limit = Number(slot.questionCount) || 10;
+                    const subjQuestions = poolQuestions.filter(q => (q.subject || "").toLowerCase().trim() === subj.toLowerCase().trim());
+                    for (let i = subjQuestions.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+                    }
+                    selectedIds = [...selectedIds, ...subjQuestions.slice(0, limit).map(q => q.id)];
+                }
+            }
+            sessionQuestionIds = selectedIds;
+        } else if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
             let selectedIds: string[] = [];
 
             for (const [subj, count] of Object.entries(exam.subjectConfig as Record<string, number>)) {
@@ -583,6 +627,15 @@ export const deleteResult = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, "results", id));
 };
 
+export const deleteResultsBulk = async (ids: string[]): Promise<void> => {
+    if (!ids || ids.length === 0) return;
+    const batch = writeBatch(db);
+    ids.forEach(id => {
+        batch.delete(doc(db, "results", id));
+    });
+    await batch.commit();
+};
+
 export const deleteExamSession = async (sessionId: string): Promise<void> => {
     await deleteDoc(doc(db, "exam_sessions", sessionId));
 };
@@ -616,4 +669,19 @@ export const toggleStudentExamBlock = async (studentId: string, examId: string, 
         blockedExams = blockedExams.filter(id => id !== examId);
     }
     await updateDoc(studentDoc.ref, { blockedExams });
+};
+
+// --- System Settings ---
+export const getSystemSettings = async (): Promise<SystemSettings | null> => {
+    const d = await getDoc(doc(db, "settings", "global"));
+    return d.exists() ? docToData<SystemSettings>(d) : null;
+};
+
+export const saveSystemSettings = async (settings: Partial<SystemSettings>): Promise<SystemSettings> => {
+    const ref = doc(db, "settings", "global");
+    const cleaned = cleanData(settings);
+    await setDoc(ref, cleaned, { merge: true });
+    const updated = await getSystemSettings();
+    if (!updated) throw new Error("Failed to retrieve updated settings");
+    return updated;
 };

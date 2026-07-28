@@ -248,7 +248,10 @@ var MemStorage = class {
       examType: insertExam.examType ?? "Objectives",
       theoryConfig: insertExam.theoryConfig ?? null,
       subjectConfig: insertExam.subjectConfig ?? null,
+      subjectSlots: insertExam.subjectSlots ?? null,
       isActive: true,
+      enableCalculator: insertExam.enableCalculator ?? false,
+      enableFormulaSheet: insertExam.enableFormulaSheet ?? false,
       department: insertExam.department ?? null,
       createdAt: /* @__PURE__ */ new Date()
     };
@@ -478,7 +481,10 @@ var exams = pgTable("exams", {
   examType: text("exam_type").notNull().default("Objectives"),
   theoryConfig: jsonb("theory_config").$type(),
   subjectConfig: jsonb("subject_config").$type(),
+  subjectSlots: jsonb("subject_slots").$type(),
   isActive: boolean("is_active").notNull().default(true),
+  enableCalculator: boolean("enable_calculator").notNull().default(false),
+  enableFormulaSheet: boolean("enable_formula_sheet").notNull().default(false),
   department: text("department"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`)
 });
@@ -497,7 +503,10 @@ var insertExamSchema = createInsertSchema(exams).omit({
   examType: z.enum(examTypeOptions).default("Objectives"),
   department: z.enum(departments).optional(),
   theoryConfig: z.any().optional(),
-  subjectConfig: z.record(z.number()).optional()
+  subjectConfig: z.record(z.number()).optional(),
+  subjectSlots: z.any().optional(),
+  enableCalculator: z.boolean().optional(),
+  enableFormulaSheet: z.boolean().optional()
 });
 var examSessions = pgTable("exam_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -792,45 +801,60 @@ function calculatePsychometrics(workerData) {
   resultsByExamId.forEach((resultsList, eId) => {
     const examObj = examMap.get(eId);
     if (resultsList.length < 2) return;
-    for (let i = 0; i < resultsList.length; i++) {
-      for (let j = i + 1; j < resultsList.length; j++) {
-        const A = resultsList[i];
-        const B = resultsList[j];
-        const commonMissed = [];
-        if (A.correctAnswers && B.correctAnswers) {
-          Object.keys(A.answers || {}).forEach((qId) => {
-            if (A.correctAnswers[qId] === false && B.correctAnswers[qId] === false) {
-              commonMissed.push(qId);
-            }
-          });
+    const wrongAnswerMap = /* @__PURE__ */ new Map();
+    resultsList.forEach((r) => {
+      Object.entries(r.answers || {}).forEach(([qId, ans]) => {
+        if (r.correctAnswers?.[qId] === false && ans) {
+          const key = `${qId}:${ans.trim().toLowerCase()}`;
+          const list = wrongAnswerMap.get(key) || [];
+          list.push(r);
+          wrongAnswerMap.set(key, list);
         }
-        if (commonMissed.length >= 3) {
-          let identicalMisses = 0;
-          commonMissed.forEach((qId) => {
-            if (A.answers[qId] === B.answers[qId]) {
-              identicalMisses++;
-            }
-          });
-          const collusionIndex = Math.round(identicalMisses / commonMissed.length * 100) / 100;
-          if (collusionIndex >= 0.6) {
-            collusionPairs.push({
-              studentA: A.studentName,
-              studentIdA: A.studentId,
-              studentB: B.studentName,
-              studentIdB: B.studentId,
-              examTitle: examObj?.title || "Exam",
-              commonMissedCount: commonMissed.length,
-              identicalMisses,
-              index: collusionIndex
-            });
-            const maxA = studentMaxCollusion.get(A.studentId) || 0;
-            if (collusionIndex > maxA) studentMaxCollusion.set(A.studentId, collusionIndex);
-            const maxB = studentMaxCollusion.get(B.studentId) || 0;
-            if (collusionIndex > maxB) studentMaxCollusion.set(B.studentId, collusionIndex);
-          }
+      });
+    });
+    const pairMatches = /* @__PURE__ */ new Map();
+    wrongAnswerMap.forEach((candidates) => {
+      if (candidates.length < 2) return;
+      for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+          const A = candidates[i];
+          const B = candidates[j];
+          const key = A.studentId < B.studentId ? `${A.studentId}|${B.studentId}` : `${B.studentId}|${A.studentId}`;
+          const matchObj = pairMatches.get(key) || { A, B, identicalMisses: 0 };
+          matchObj.identicalMisses += 1;
+          pairMatches.set(key, matchObj);
         }
       }
-    }
+    });
+    pairMatches.forEach(({ A, B, identicalMisses }) => {
+      let commonMissedCount = 0;
+      if (A.correctAnswers && B.correctAnswers) {
+        Object.keys(A.answers || {}).forEach((qId) => {
+          if (A.correctAnswers[qId] === false && B.correctAnswers[qId] === false) {
+            commonMissedCount++;
+          }
+        });
+      }
+      if (commonMissedCount >= 3) {
+        const collusionIndex = Math.round(identicalMisses / commonMissedCount * 100) / 100;
+        if (collusionIndex >= 0.6) {
+          collusionPairs.push({
+            studentA: A.studentName,
+            studentIdA: A.studentId,
+            studentB: B.studentName,
+            studentIdB: B.studentId,
+            examTitle: examObj?.title || "Exam",
+            commonMissedCount,
+            identicalMisses,
+            index: collusionIndex
+          });
+          const maxA = studentMaxCollusion.get(A.studentId) || 0;
+          if (collusionIndex > maxA) studentMaxCollusion.set(A.studentId, collusionIndex);
+          const maxB = studentMaxCollusion.get(B.studentId) || 0;
+          if (collusionIndex > maxB) studentMaxCollusion.set(B.studentId, collusionIndex);
+        }
+      }
+    });
   });
   let integrityCriticalCount = 0;
   let integritySuspiciousCount = 0;
@@ -1651,7 +1675,54 @@ ${error.stack}` : String(error));
         return res.status(404).json({ error: "Exam not found" });
       }
       let sessionQuestionIds = [...exam.questionIds];
-      if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
+      const slots = exam.subjectSlots;
+      if (Array.isArray(slots) && slots.length > 0) {
+        const allStudents = await storage.getStudents();
+        const student = allStudents.find(
+          (s) => s.studentId.toLowerCase().trim() === validatedData.studentId.toLowerCase().trim() || s.name.toLowerCase().trim() === validatedData.studentName.toLowerCase().trim()
+        );
+        const studentDept = student?.department ? student.department.trim() : null;
+        const allQuestions = await storage.getQuestions();
+        const poolQuestions = allQuestions.filter((q) => exam.questionIds.includes(q.id));
+        let selectedIds = [];
+        for (const slot of slots) {
+          if (slot.type === "elective") {
+            if (!studentDept) {
+              return res.status(400).json({
+                error: `Student '${validatedData.studentName}' does not have a department assigned. Department is required for elective slot '${slot.name || "Elective Slot"}'. Please contact an administrator.`
+              });
+            }
+            const mapping = slot.departmentMappings?.find(
+              (m) => m.department.toLowerCase().trim() === studentDept.toLowerCase() || m.department.toLowerCase().startsWith("art") && studentDept.toLowerCase().startsWith("art")
+            );
+            if (!mapping || !mapping.subjects || mapping.subjects.length === 0) {
+              return res.status(400).json({
+                error: `Department '${studentDept}' is not mapped for elective slot '${slot.name || "Elective Slot"}' in this exam. Please contact your invigilator.`
+              });
+            }
+            const targetSubjects = mapping.subjects;
+            const countPerSubj = Math.ceil((slot.questionCount || 10) / targetSubjects.length);
+            for (const subj of targetSubjects) {
+              const subjQuestions = poolQuestions.filter((q) => (q.subject || "").toLowerCase().trim() === subj.toLowerCase().trim());
+              for (let i = subjQuestions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+              }
+              selectedIds = [...selectedIds, ...subjQuestions.slice(0, countPerSubj).map((q) => q.id)];
+            }
+          } else {
+            const subj = slot.subject || "";
+            const limit = Number(slot.questionCount) || 10;
+            const subjQuestions = poolQuestions.filter((q) => (q.subject || "").toLowerCase().trim() === subj.toLowerCase().trim());
+            for (let i = subjQuestions.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [subjQuestions[i], subjQuestions[j]] = [subjQuestions[j], subjQuestions[i]];
+            }
+            selectedIds = [...selectedIds, ...subjQuestions.slice(0, limit).map((q) => q.id)];
+          }
+        }
+        sessionQuestionIds = selectedIds;
+      } else if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
         const allQuestions = await storage.getQuestions();
         const poolQuestions = allQuestions.filter((q) => exam.questionIds.includes(q.id));
         let selectedIds = [];
@@ -1838,6 +1909,209 @@ ${error.stack}` : String(error));
       res.status(500).json({ error: "Failed to delete student" });
     }
   });
+  const analyticsResponseCache = /* @__PURE__ */ new Map();
+  app2.post("/api/ai/remedial", async (req, res) => {
+    try {
+      const { candidateName, examTitle, score, totalPoints, percentage, incorrectQuestions } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({
+          summary: `Candidate ${candidateName || "Student"} scored ${percentage || 0}% in ${examTitle || "the assessment"}.`,
+          strengths: ["Demonstrated commendable focus and basic topic understanding."],
+          remedialSteps: [
+            "Review key definitions and practice core drill problems daily.",
+            "Re-examine incorrectly answered topics in the detailed breakdown below."
+          ]
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `You are an educational AI cognitive coach for Faith Immaculate Academy. Analyze candidate performance:
+Candidate: ${candidateName || "Student"}
+Exam: ${examTitle || "CBT Assessment"}
+Score: ${score}/${totalPoints} (${percentage}%)
+Incorrect Question Topics: ${JSON.stringify(incorrectQuestions || [])}
+
+Provide structured JSON with:
+1. "summary": Encouraging 2-sentence feedback.
+2. "strengths": Array of 2 strength bullet points.
+3. "remedialSteps": Array of 3 actionable, specific study/revision steps for improvement.`;
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      const text2 = response.text || "{}";
+      const parsed = JSON.parse(text2);
+      res.json(parsed);
+    } catch (err) {
+      console.error("AI Remedial Generation Error:", err);
+      res.json({
+        summary: "Keep up the dedication to academic excellence!",
+        strengths: ["Active examination participation"],
+        remedialSteps: ["Review incorrect choices in the detailed breakdown below."]
+      });
+    }
+  });
+  app2.post("/api/ai/generate-questions", async (req, res) => {
+    try {
+      const { subject, classLevel, term, topic, count, examType } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      const numQuestions = Math.min(Math.max(Number(count) || 5, 1), 25);
+      const isObjectives = !examType || examType.toLowerCase().includes("objective") || examType.toLowerCase().includes("mcq");
+      if (!apiKey) {
+        const mockQuestions = Array.from({ length: numQuestions }, (_, i) => ({
+          subject: subject || "General Studies",
+          classLevel: classLevel || "JSS 1",
+          term: term || "First Term",
+          questionText: `[AI Generated Sample Q${i + 1}] Core principle of ${topic || subject || "the syllabus"}: What is the primary characteristic?`,
+          questionType: isObjectives ? "multiple_choice" : "theory",
+          options: isObjectives ? [
+            "A) Primary fundamental standard",
+            "B) Secondary observational factor",
+            "C) Variable experimental parameter",
+            "D) Derived structural component"
+          ] : null,
+          correctAnswer: isObjectives ? "A" : "Primary fundamental standard",
+          points: 1,
+          difficulty: i % 3 === 0 ? "Hard" : i % 2 === 0 ? "Medium" : "Easy"
+        }));
+        return res.json({ questions: mockQuestions });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate ${numQuestions} high-quality, syllabus-aligned ${isObjectives ? "multiple-choice objective" : "theory"} questions for Nigerian CBT curriculum.
+Subject: ${subject || "General Science"}
+Class Level: ${classLevel || "JSS 1"}
+Term: ${term || "First Term"}
+Topic Focus: ${topic || "Core Curriculum"}
+Format: Return strict JSON with a key "questions" containing an array of objects.
+
+Each question object must include:
+- "subject": "${subject}"
+- "classLevel": "${classLevel}"
+- "term": "${term}"
+- "questionText": Clear concise question text
+- "questionType": "${isObjectives ? "multiple_choice" : "theory"}"
+- "options": ${isObjectives ? '["A) Option text", "B) Option text", "C) Option text", "D) Option text"]' : "null"}
+- "correctAnswer": "${isObjectives ? "Designated correct letter A, B, C, or D" : "Expected model answer key"}"
+- "points": 1
+- "difficulty": "Easy", "Medium", or "Hard"`;
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      const text2 = response.text || "{}";
+      const parsed = JSON.parse(text2);
+      res.json(parsed);
+    } catch (err) {
+      console.error("AI Question Generation Error:", err);
+      res.status(500).json({ error: "Failed to generate AI questions", details: err.message });
+    }
+  });
+  app2.post("/api/ai/student-risk-analysis", async (req, res) => {
+    try {
+      const { studentName, classLevel, averageScore, recentScores, tabSwitches } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        const isAtRisk = (averageScore || 50) < 50 || (tabSwitches || 0) > 4;
+        return res.json({
+          riskLevel: isAtRisk ? "High Risk" : "Stable",
+          recommendation: isAtRisk ? `Candidate ${studentName || "Student"} is experiencing performance dips in recent CBT sessions. Assign 1-on-1 remedial drills.` : `Candidate ${studentName || "Student"} maintains steady academic trajectory across term assessments.`
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Analyze student risk for Faith Immaculate Academy:
+Student: ${studentName} (${classLevel})
+Cumulative Average: ${averageScore}%
+Recent Score Trend: ${JSON.stringify(recentScores || [])}
+Integrity Flags (Tab Switches): ${tabSwitches || 0}
+
+Return JSON with:
+1. "riskLevel": "Low Risk", "Moderate Risk", or "High Risk"
+2. "recommendation": 2-sentence actionable intervention strategy for teachers/parents.`;
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      const parsed = JSON.parse(response.text || "{}");
+      res.json(parsed);
+    } catch (err) {
+      res.json({ riskLevel: "Moderate Risk", recommendation: "Monitor candidate in upcoming term drills." });
+    }
+  });
+  app2.post("/api/ai/generate-comment", async (req, res) => {
+    try {
+      const { studentName, averageScore, classLevel, role, strengths, weaknesses } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      const isPrincipal = role === "principal";
+      if (!apiKey) {
+        return res.json({
+          comment: isPrincipal ? `${studentName} has demonstrated admirable academic commitment this term with an overall average of ${averageScore}%. Keep striving for excellence.` : `${studentName} shows good effort in class assessments. Continued focus on ${weaknesses?.[0] || "core subjects"} will yield even higher results next term.`
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate a professional, encouraging ${isPrincipal ? "Principal" : "Form Teacher"} report card remark for a student at Faith Immaculate Academy.
+Student Name: ${studentName}
+Class: ${classLevel}
+Term Score Average: ${averageScore}%
+Identified Strengths: ${JSON.stringify(strengths || [])}
+Focus Weaknesses: ${JSON.stringify(weaknesses || [])}
+
+Return JSON with a single key "comment" containing a warm 2-sentence formal remark.`;
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      const parsed = JSON.parse(response.text || "{}");
+      res.json(parsed);
+    } catch (err) {
+      res.json({ comment: `${req.body.studentName || "Student"} shows active participation. Keep striving for higher academic achievements.` });
+    }
+  });
+  app2.post("/api/ai/diagnose-curriculum", async (req, res) => {
+    try {
+      const { meanScore, stdDev, skewness, hardQuestionCount, easyQuestionCount } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({
+          diagnosis: `Cohort mean score is ${meanScore || 65}%. The examination items demonstrate a balanced spread between difficulty and discrimination parameters.`,
+          actionSteps: [
+            "Maintain current question bank difficulty ratio.",
+            "Review items with p-index < 0.20 for potential ambiguity."
+          ]
+        });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Analyze CBT curriculum examination statistics for Faith Immaculate Academy:
+Mean Score: ${meanScore}%
+Standard Deviation: ${stdDev}
+Skewness: ${skewness}
+Hard Questions (p < 0.3): ${hardQuestionCount}
+Easy Questions (p > 0.8): ${easyQuestionCount}
+
+Return JSON with:
+1. "diagnosis": 2-sentence institutional summary of test difficulty & validity.
+2. "actionSteps": Array of 2 actionable recommendations for question authors.`;
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      const parsed = JSON.parse(response.text || "{}");
+      res.json(parsed);
+    } catch (err) {
+      res.json({
+        diagnosis: "Examination parameters show standard distribution metrics.",
+        actionSteps: ["Periodically review distractor options for hard items."]
+      });
+    }
+  });
   app2.get("/api/analytics", async (req, res) => {
     try {
       const selectedExamId = req.query.examId || "__all__";
@@ -1855,6 +2129,14 @@ ${error.stack}` : String(error));
       } catch (e) {
         console.warn("\u26A0\uFE0F [routes.ts] Firestore results fetch failed. Falling back to local storage:", e);
         allResults = await storage.getResults();
+      }
+      const lastResultTime = allResults.length > 0 ? allResults[allResults.length - 1]?.completedAt || "" : "";
+      const cacheHash = `${allResults.length}_${lastResultTime}`;
+      const cacheKey = `${selectedExamId}:${termFilter}:${classFilter}:${subjectFilter}:${studentFilter}`;
+      const cachedEntry = analyticsResponseCache.get(cacheKey);
+      if (cachedEntry && cachedEntry.cacheHash === cacheHash) {
+        console.log(`[routes.ts] Instant Analytics Cache Hit for key: ${cacheKey}`);
+        return res.json(cachedEntry.data);
       }
       try {
         allQuestions = await getFirestoreQuestions();
@@ -1939,6 +2221,7 @@ ${error.stack}` : String(error));
           if (computedData.error) {
             res.status(500).json({ error: computedData.error });
           } else {
+            analyticsResponseCache.set(cacheKey, { data: computedData, cacheHash });
             res.json(computedData);
           }
         });

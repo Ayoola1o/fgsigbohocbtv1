@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, initializeFirestore, collection, getDocs, Timestamp, Firestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, collection, getDocs, Timestamp, Firestore, doc, getDoc, setDoc } from "firebase/firestore";
 import "dotenv/config";
 
 const firebaseConfig = {
@@ -79,6 +79,22 @@ export const getFirestoreExams = async (): Promise<any[]> => {
     const database = ensureDb();
     const snapshot = await withTimeout(getDocs(collection(database, "exams")), 3000);
     return snapshot.docs.map(docToData);
+};
+
+export const getFirestoreSettings = async (): Promise<any | null> => {
+    const database = ensureDb();
+    const docRef = doc(database, "settings", "global");
+    const docSnap = await withTimeout(getDoc(docRef), 3000);
+    if (docSnap.exists()) {
+        return docToData(docSnap);
+    }
+    return null;
+};
+
+export const saveFirestoreSettings = async (settingsData: any): Promise<void> => {
+    const database = ensureDb();
+    const docRef = doc(database, "settings", "global");
+    await withTimeout(setDoc(docRef, settingsData, { merge: true }), 3000);
 };
 
 export { db, firebaseInitialized };
