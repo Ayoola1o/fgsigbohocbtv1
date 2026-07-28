@@ -208,7 +208,19 @@ export default function ExamResult() {
       }
     }, 600);
   };
-  const totalQuestions = Object.keys(result.correctAnswers).length;
+  const totalQuestions = Math.max(
+    questions?.length || 0,
+    exam?.questionIds?.length || 0,
+    result?.totalPoints || 0,
+    Object.keys(result?.correctAnswers || {}).length
+  );
+
+  const displayTotalPoints = Math.max(
+    result?.totalPoints || 0,
+    questions?.length || 0,
+    exam?.questionIds?.length || 0
+  );
+
   const backLink = isAdminResult ? "/admin/results" : "/student-portal";
   const backText = isAdminResult ? "Back to Results" : "Back to Exams";
 
@@ -314,10 +326,10 @@ export default function ExamResult() {
             </CardHeader>
             <CardContent>
               <div className="text-3.5xl font-black text-slate-800 dark:text-white leading-none" data-testid="text-score">
-                {formatScore(result.score, result.totalPoints, result.percentage)}
+                {formatScore(result.score, displayTotalPoints, result.percentage)}
               </div>
               <p className="text-[11px] font-semibold text-slate-455 mt-1.5">
-                Obtained {result.score} / {result.totalPoints} total points
+                Obtained {result.score} / {displayTotalPoints} total points
               </p>
               <Progress value={result.percentage} className="mt-3.5 h-1.5 rounded-full" />
             </CardContent>
