@@ -89,7 +89,7 @@ export default function ExamResult() {
     // Total questions set by admin for the exam
     let examSetTotal = exam?.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0
       ? exam.numberOfQuestionsToDisplay
-      : (result.totalPoints || (result as any).totalQuestions || 0);
+      : (exam?.questionIds?.length || result.totalPoints || (result as any).totalQuestions || 0);
 
     if (examSetTotal <= 0 && exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
       examSetTotal = Object.values(exam.subjectConfig as Record<string, number>).reduce((a, b) => a + Number(b || 0), 0);
