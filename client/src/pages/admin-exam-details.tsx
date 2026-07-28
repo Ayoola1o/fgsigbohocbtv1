@@ -294,6 +294,8 @@ export default function AdminExamDetails() {
               if (hasSubjectLimits) {
                 const totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
                 dataToSubmit.numberOfQuestionsToDisplay = totalSubjectQuestions;
+              } else if (!dataToSubmit.numberOfQuestionsToDisplay || Number(dataToSubmit.numberOfQuestionsToDisplay) <= 0) {
+                delete dataToSubmit.numberOfQuestionsToDisplay;
               }
               updateExamMutation.mutate(dataToSubmit);
             }}
@@ -475,7 +477,7 @@ export default function AdminExamDetails() {
               {formData.examType !== "Theory" && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
                   <span className="text-[10px] font-extrabold uppercase text-slate-400 mr-1">Quick Presets:</span>
-                  {[10, 20, 30, 40, 50].map((preset) => (
+                  {[10, 20, 30, 40, 50, 60].map((preset) => (
                     <Button
                       key={preset}
                       type="button"

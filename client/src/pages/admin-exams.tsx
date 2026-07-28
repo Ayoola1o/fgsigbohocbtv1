@@ -684,19 +684,13 @@ function ExamForm({
 
       dataToSubmit.questionIds = extractIds(dataToSubmit.theoryConfig.structure);
     } else {
-      const wantsServerSelection = !!formData.numberOfQuestionsToDisplay && formData.numberOfQuestionsToDisplay > 0;
-
-      // If subjectConfig has multiple entries, calculate total and override wantsServerSelection
       const hasSubjectLimits = dataToSubmit.subjectConfig && Object.keys(dataToSubmit.subjectConfig).length > 1;
-      let totalSubjectQuestions = 0;
       if (hasSubjectLimits) {
-        totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
+        const totalSubjectQuestions = Object.values(dataToSubmit.subjectConfig).reduce((sum: number, val: any) => sum + (Number(val) || 0), 0);
         dataToSubmit.numberOfQuestionsToDisplay = totalSubjectQuestions;
       }
 
-      const isDynamic = wantsServerSelection || totalSubjectQuestions > 0;
-
-      if (!isDynamic && formData.questionIds.length === 0) {
+      if (!dataToSubmit.questionIds || dataToSubmit.questionIds.length === 0) {
         if (availableQuestions.length > 0) {
           dataToSubmit.questionIds = availableQuestions.map(q => q.id);
         } else {
@@ -709,12 +703,8 @@ function ExamForm({
         }
       }
 
-      if (!dataToSubmit.numberOfQuestionsToDisplay) {
+      if (!dataToSubmit.numberOfQuestionsToDisplay || dataToSubmit.numberOfQuestionsToDisplay <= 0) {
         delete dataToSubmit.numberOfQuestionsToDisplay;
-      }
-
-      if (isDynamic && formData.questionIds.length === 0) {
-        delete dataToSubmit.questionIds;
       }
     }
 

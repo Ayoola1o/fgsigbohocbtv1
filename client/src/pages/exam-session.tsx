@@ -262,12 +262,19 @@ export default function ExamSessionPage() {
     queryKey: ["sessionQuestions", session?.id, exam?.id],
     queryFn: async () => {
       let idsToFetch = session?.sessionQuestionIds || [];
-      if (exam?.questionIds && exam.questionIds.length > idsToFetch.length) {
-        const displayLimit = exam.numberOfQuestionsToDisplay;
-        if (!displayLimit || displayLimit >= exam.questionIds.length) {
+      const displayLimit = exam?.numberOfQuestionsToDisplay;
+
+      if (exam?.questionIds && exam.questionIds.length > 0) {
+        if (!displayLimit || displayLimit <= 0) {
           idsToFetch = exam.questionIds;
+        } else if (idsToFetch.length > displayLimit) {
+          idsToFetch = idsToFetch.slice(0, displayLimit);
+        } else if (idsToFetch.length < displayLimit && idsToFetch.length < exam.questionIds.length) {
+          const limit = Math.min(displayLimit, exam.questionIds.length);
+          idsToFetch = exam.questionIds.slice(0, limit);
         }
       }
+
       if (!idsToFetch || idsToFetch.length === 0) {
         return [];
       }
