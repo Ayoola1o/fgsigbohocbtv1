@@ -473,9 +473,18 @@ export const submitExamSession = async (
     const exam = await getExam(session.examId);
     if (!exam) throw new Error("Exam not found");
 
-    const questionIdsToGrade = session.sessionQuestionIds || exam.questionIds;
-    const allQuestions = await getQuestions();
-    const questionMap = new Map(allQuestions.map(q => [q.id, q]));
+    const questionIdsToGrade = (session.sessionQuestionIds && session.sessionQuestionIds.length > 0)
+        ? session.sessionQuestionIds
+        : (exam.questionIds || []);
+
+    let questionsToGrade: Question[] = [];
+    if (questionIdsToGrade.length > 0) {
+        questionsToGrade = await getQuestionsByIds(questionIdsToGrade);
+    }
+    if (questionsToGrade.length === 0) {
+        questionsToGrade = await getQuestions();
+    }
+    const questionMap = new Map(questionsToGrade.map(q => [q.id, q]));
 
     const correctAnswers: Record<string, boolean> = {};
     let score = 0;
@@ -489,17 +498,22 @@ export const submitExamSession = async (
             sessionTotalPoints += points;
             const studentAnswer = answers[qId];
             const isTheory = q.questionType === "theory" || exam.examType === "Theory";
-            // Theory questions are now display-only, so we treat them as "completed/correct" by default if they are part of the session
+            
             const isCorrect = isTheory
                 ? true
                 : !!studentAnswer && !!q.correctAnswer && studentAnswer.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
 
             correctAnswers[qId] = isCorrect;
             if (isCorrect) score += points;
+        } else {
+            // Fallback for missing question metadata
+            correctAnswers[qId] = false;
+            sessionTotalPoints += 1;
         }
     }
 
-    const percentage = sessionTotalPoints > 0 ? Math.round((score / sessionTotalPoints) * 100) : 0;
+    const finalTotalPoints = sessionTotalPoints > 0 ? sessionTotalPoints : (questionIdsToGrade.length || 1);
+    const percentage = Math.min(100, Math.max(0, Math.round((score / finalTotalPoints) * 100)));
     const passed = percentage >= exam.passingScore;
 
     await updateExamSession(sessionId, {
@@ -511,10 +525,18 @@ export const submitExamSession = async (
     const resultData = cleanData({
         sessionId,
         examId: exam.id,
+        examTitle: exam.title,
+        classLevel: exam.classLevel,
+        subject: exam.subject,
+        department: exam.department || "",
+        term: exam.term || "First Term",
+        examType: exam.examType || "Objectives",
         studentName: session.studentName,
         studentId: session.studentId,
         score,
-        totalPoints: sessionTotalPoints,
+        totalPoints: finalTotalPoints,
+        totalQuestions: questionIdsToGrade.length,
+        questionsAnswered: Object.keys(answers || {}).length,
         percentage,
         passed,
         submissionType,
@@ -524,7 +546,7 @@ export const submitExamSession = async (
         telemetry: telemetry || { tabSwitches: 0, revisions: 0, timeSpentPerQuestion: {} }
     });
 
-    console.log("submitExamSession: Saving result to Firestore...");
+    console.log("submitExamSession: Saving result to Firestore...", resultData);
     const resultRef = doc(collection(db, "results"));
     const resultId = resultRef.id;
     const savePromise = setDoc(resultRef, cleanData(resultData));
