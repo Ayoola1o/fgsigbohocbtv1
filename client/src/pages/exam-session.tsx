@@ -376,7 +376,7 @@ export default function ExamSessionPage() {
     };
 
     sendPing(); // initial ping
-    const interval = setInterval(sendPing, 10000); // 10s periodic heartbeat
+    const interval = setInterval(sendPing, 45000); // 45s periodic heartbeat (quota optimized)
     return () => clearInterval(interval);
   }, [sessionId, session?.isCompleted, currentQuestionIndex]);
 

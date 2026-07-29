@@ -194,7 +194,12 @@ export const createExam = async (exam: InsertExam): Promise<Exam> => {
     let finalExam = { ...exam } as any;
 
     if ((!exam.questionIds || exam.questionIds.length === 0) && exam.numberOfQuestionsToDisplay && exam.numberOfQuestionsToDisplay > 0) {
-        const allQuestions = await getQuestions();
+        let qQuery = query(collection(db, "questions"));
+        if (exam.classLevel) {
+            qQuery = query(collection(db, "questions"), where("classLevel", "==", exam.classLevel));
+        }
+        const snapshot = await getDocs(qQuery);
+        const allQuestions = snapshot.docs.map(d => docToData<Question>(d));
         const examSubjects = exam.subject
             ? exam.subject.split(",").map((s) => s.trim()).filter(Boolean)
             : [];
@@ -210,12 +215,9 @@ export const createExam = async (exam: InsertExam): Promise<Exam> => {
 
     let totalPoints = 0;
     if (finalExam.questionIds && finalExam.questionIds.length > 0) {
-        const allQuestions = await getQuestions();
-        const questionMap = new Map(allQuestions.map(q => [q.id, q]));
-
-        finalExam.questionIds.forEach((qid: string) => {
-            const q = questionMap.get(qid);
-            if (q) totalPoints += q.points;
+        const questions = await getQuestionsByIds(finalExam.questionIds);
+        questions.forEach(q => {
+            if (q) totalPoints += Number(q.points) || 1;
         });
     }
 
@@ -273,12 +275,46 @@ export const deleteStudent = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, "students", id));
 };
 
+export const getStudentByStudentId = async (studentId: string): Promise<Student | null> => {
+    if (!studentId) return null;
+    const cleanId = studentId.trim();
+    try {
+        const q = query(collection(db, "students"), where("studentId", "==", cleanId));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            return docToData<Student>(snapshot.docs[0]);
+        }
+        const d = await getDoc(doc(db, "students", cleanId));
+        if (d.exists()) {
+            return docToData<Student>(d);
+        }
+    } catch (e) {
+        console.warn("getStudentByStudentId error:", e);
+    }
+    return null;
+};
+
 export const studentLogin = async (name: string, studentId: string): Promise<Student | null> => {
-    const students = await getStudents();
-    return students.find(s =>
-        s.name.trim().toLowerCase() === name.trim().toLowerCase() &&
-        s.studentId.trim().toLowerCase() === studentId.trim().toLowerCase()
-    ) || null;
+    const cleanId = studentId.trim();
+    const cleanName = name.trim().toLowerCase();
+
+    // Direct targeted lookup by studentId
+    const student = await getStudentByStudentId(cleanId);
+    if (student && student.name.trim().toLowerCase() === cleanName) {
+        return student;
+    }
+
+    // Fallback query by student name if studentId query did not match
+    const qName = query(collection(db, "students"), where("name", "==", name.trim()));
+    const snapshot = await getDocs(qName);
+    if (!snapshot.empty) {
+        const found = snapshot.docs
+            .map(d => docToData<Student>(d))
+            .find(s => s.studentId?.trim().toLowerCase() === cleanId.toLowerCase());
+        if (found) return found;
+    }
+
+    return null;
 };
 
 // --- Admin ---
@@ -339,11 +375,7 @@ export const createExamSession = async (session: { examId: string; studentName: 
         let isTestAttempt = false;
         if (session.studentId) {
             try {
-                const students = await getStudents();
-                const student = students.find(s => 
-                    s.studentId?.trim().toLowerCase() === session.studentId?.trim().toLowerCase() ||
-                    s.id?.trim().toLowerCase() === session.studentId?.trim().toLowerCase()
-                );
+                const student = await getStudentByStudentId(session.studentId);
                 if (student) {
                     if (student.department) {
                         candidateDepartment = student.department;
@@ -358,12 +390,19 @@ export const createExamSession = async (session: { examId: string; studentName: 
         }
 
         let sessionQuestionIds = [...(exam.questionIds || [])];
-        const allQuestions = await getQuestions();
-        let poolQuestions = allQuestions.filter(q => sessionQuestionIds.includes(q.id));
+        let poolQuestions: Question[] = [];
 
-        // If poolQuestions missed some IDs because of matching, ensure we retain all exam.questionIds
-        if (poolQuestions.length === 0 && sessionQuestionIds.length > 0) {
-            poolQuestions = allQuestions;
+        if (sessionQuestionIds.length > 0) {
+            poolQuestions = await getQuestionsByIds(sessionQuestionIds);
+        }
+
+        if (poolQuestions.length === 0) {
+            let qQuery = query(collection(db, "questions"));
+            if (exam.classLevel) {
+                qQuery = query(collection(db, "questions"), where("classLevel", "==", exam.classLevel));
+            }
+            const snapshot = await getDocs(qQuery);
+            poolQuestions = snapshot.docs.map(d => docToData<Question>(d));
         }
 
         // Apply candidate department filtering ONLY if questions were dynamically pulled from bank (no explicit questionIds)
@@ -534,7 +573,12 @@ export const submitExamSession = async (
         questionsToGrade = await getQuestionsByIds(questionIdsToGrade);
     }
     if (questionsToGrade.length === 0) {
-        questionsToGrade = await getQuestions();
+        let qQuery = query(collection(db, "questions"));
+        if (exam.classLevel) {
+            qQuery = query(collection(db, "questions"), where("classLevel", "==", exam.classLevel));
+        }
+        const snapshot = await getDocs(qQuery);
+        questionsToGrade = snapshot.docs.map(d => docToData<Question>(d));
     }
     const questionMap = new Map(questionsToGrade.map(q => [q.id, q]));
 

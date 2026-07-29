@@ -245,7 +245,7 @@ export default function AdminInvigilatorPage() {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as InvigilatorSession);
       return list;
     },
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
 
