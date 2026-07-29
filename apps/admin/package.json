@@ -9,9 +9,9 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@cbt/shared-api-client": "workspace:*",
-    "@cbt/shared-realtime": "workspace:*",
-    "@cbt/shared-types": "workspace:*",
-    "@cbt/shared-ui": "workspace:*"
+    "@cbt/shared-api-client": "*",
+    "@cbt/shared-realtime": "*",
+    "@cbt/shared-types": "*",
+    "@cbt/shared-ui": "*"
   }
 }

@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@cbt/shared-types": "workspace:*"
+    "@cbt/shared-types": "*"
   },
   "scripts": {
     "check": "tsc --noEmit"

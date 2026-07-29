@@ -8,8 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@cbt/shared-api-client": "workspace:*",
-    "@cbt/shared-types": "workspace:*"
+    "@cbt/shared-api-client": "*",
+    "@cbt/shared-types": "*"
   },
   "scripts": {
     "check": "tsc --noEmit"
