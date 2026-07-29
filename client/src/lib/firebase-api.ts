@@ -946,8 +946,22 @@ export const createAppNotification = async (notification: {
     deepLink?: string;
     targetAdminId?: string;
     batchId?: string;
-}): Promise<AppNotification> => {
+}): Promise<AppNotification | null> => {
     try {
+        // Deduplication: Avoid notification spam if an unread notification with the same batchId exists
+        if (notification.batchId) {
+            const existingQuery = query(
+                collection(db, "app_notifications"),
+                where("batchId", "==", notification.batchId),
+                where("isRead", "==", false),
+                limit(1)
+            );
+            const snap = await getDocs(existingQuery);
+            if (!snap.empty) {
+                return docToData<AppNotification>(snap.docs[0]);
+            }
+        }
+
         const cleanPayload = cleanData({
             category: notification.category,
             severity: notification.severity || "info",
@@ -964,7 +978,7 @@ export const createAppNotification = async (notification: {
         return { id: ref.id, ...cleanPayload } as AppNotification;
     } catch (e) {
         console.error("createAppNotification error:", e);
-        throw e;
+        return null;
     }
 };
 

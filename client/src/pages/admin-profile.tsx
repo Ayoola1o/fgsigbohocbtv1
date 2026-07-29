@@ -86,8 +86,17 @@ export default function AdminProfilePage() {
       setLandingPage(admin.landingPage || "/admin");
       if (admin.notificationPreferences) {
         setNotifPrefs({
-          ...admin.notificationPreferences,
+          results: admin.notificationPreferences.results ?? true,
           cheating: true, // Cheating alerts are enforced to be true
+          questions: admin.notificationPreferences.questions ?? true,
+          messages: admin.notificationPreferences.messages ?? true,
+          exams: admin.notificationPreferences.exams ?? true,
+          system: admin.notificationPreferences.system ?? true,
+          channels: {
+            inApp: admin.notificationPreferences.channels?.inApp ?? true,
+            email: admin.notificationPreferences.channels?.email ?? true,
+            sms: admin.notificationPreferences.channels?.sms ?? false,
+          },
         });
       }
     }

@@ -1,0 +1,17 @@
+{
+  "name": "@cbt/admin",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cbt/shared-api-client": "workspace:*",
+    "@cbt/shared-realtime": "workspace:*",
+    "@cbt/shared-types": "workspace:*",
+    "@cbt/shared-ui": "workspace:*"
+  }
+}

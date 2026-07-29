@@ -4,11 +4,20 @@
   "type": "module",
   "license": "Azahadinc Dev",
   "description": "Faith Immaculate Academy CBT - Computer-based testing system",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "tsx server/index.ts",
-    "build": "vite build && node build-backend.js",
+    "dev:admin": "npx turbo run dev --filter=@cbt/admin",
+    "dev:student": "npx turbo run dev --filter=@cbt/student-portal",
+    "dev:all": "npx turbo run dev",
+    "build": "npx turbo run build && node build-backend.js",
+    "build:admin": "npx turbo run build --filter=@cbt/admin",
+    "build:student": "npx turbo run build --filter=@cbt/student-portal",
     "start": "vite preview",
-    "check": "tsc",
+    "check": "tsc --noEmit && npx turbo run check",
     "init-firebase": "tsx scripts/init-firebase.ts"
   },
   "dependencies": {

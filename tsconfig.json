@@ -3,7 +3,9 @@
     "client/src/**/*",
     "shared/**/*",
     "server/**/*",
-    "api/**/*"
+    "api/**/*",
+    "apps/**/*",
+    "packages/**/*"
   ],
   "exclude": [
     "node_modules",
@@ -35,6 +37,18 @@
       ],
       "@shared/*": [
         "./shared/*"
+      ],
+      "@cbt/shared-types": [
+        "./packages/shared-types/src/index.ts"
+      ],
+      "@cbt/shared-ui": [
+        "./packages/shared-ui/src/index.ts"
+      ],
+      "@cbt/shared-api-client": [
+        "./packages/shared-api-client/src/index.ts"
+      ],
+      "@cbt/shared-realtime": [
+        "./packages/shared-realtime/src/index.ts"
       ]
     }
   }
