@@ -15,7 +15,8 @@ import {
     Timestamp,
     serverTimestamp,
     limit,
-    orderBy
+    orderBy,
+    onSnapshot
 } from "firebase/firestore";
 import type {
     Question,
@@ -29,7 +30,9 @@ import type {
     InsertExamSession,
     Result,
     InsertResult,
-    SystemSettings
+    SystemSettings,
+    AdminUser,
+    AppNotification
 } from "@shared/schema";
 
 // Helper to convert Firestore doc to typed object
@@ -748,6 +751,7 @@ export const sendSessionHeartbeat = async (
         tabSwitches?: number;
         windowBlurs?: number;
         isFlagged?: boolean;
+        justFlagged?: boolean;
         timeRemaining?: number;
         currentQuestionIndex?: number;
     }
@@ -763,6 +767,18 @@ export const sendSessionHeartbeat = async (
     if (telemetry?.currentQuestionIndex !== undefined) updatePayload.currentQuestionIndex = telemetry.currentQuestionIndex;
 
     await updateDoc(sessionRef, updatePayload);
+
+    // Auto-trigger urgent cheating notification ONLY on newly flagged incidents
+    if (telemetry?.justFlagged) {
+        createAppNotification({
+            category: "cheating",
+            severity: "urgent",
+            title: "Cheating Alert Flagged",
+            message: `Tab switch or window focus loss detected during candidate session.`,
+            deepLink: "/admin/invigilator",
+            batchId: `cheating-${sessionId}`
+        }).catch(() => {});
+    }
 };
 
 export const updateSessionExtraTime = async (sessionId: string, additionalMinutes: number): Promise<void> => {
@@ -774,6 +790,14 @@ export const updateSessionExtraTime = async (sessionId: string, additionalMinute
     await updateDoc(sessionRef, {
         extendedMinutes: currentExtra + additionalMinutes
     });
+
+    createAppNotification({
+        category: "exams",
+        severity: "info",
+        title: "Extra Time Granted",
+        message: `Granted +${additionalMinutes} extra minutes to candidate session ${sessionId}.`,
+        deepLink: "/admin/invigilator"
+    }).catch(() => {});
 };
 
 export const sendStudentMessage = async (sessionId: string, message: string): Promise<void> => {
@@ -781,6 +805,14 @@ export const sendStudentMessage = async (sessionId: string, message: string): Pr
     await updateDoc(sessionRef, {
         invigilatorMessage: message
     });
+
+    createAppNotification({
+        category: "messages",
+        severity: "important",
+        title: "Direct Student Message",
+        message: `Message sent to active candidate session: "${message.slice(0, 50)}..."`,
+        deepLink: "/admin/invigilator"
+    }).catch(() => {});
 };
 
 export const broadcastInvigilatorMessage = async (examId: string | null, message: string): Promise<number> => {
@@ -796,6 +828,15 @@ export const broadcastInvigilatorMessage = async (examId: string | null, message
         batch.update(d.ref, { broadcastMessage: message });
     });
     await batch.commit();
+
+    createAppNotification({
+        category: "messages",
+        severity: "urgent",
+        title: "Invigilator Broadcast Announcement",
+        message: `Broadcast announcement sent to ${snapshot.docs.length} active session(s): "${message.slice(0, 50)}..."`,
+        deepLink: "/admin/invigilator"
+    }).catch(() => {});
+
     return snapshot.docs.length;
 };
 
@@ -821,4 +862,140 @@ export const deleteTestAttemptsBulk = async (): Promise<void> => {
         console.error("Error purging test attempts:", error);
         throw error;
     }
+};
+
+// --- Admin Personal Profile & Personal Settings API ---
+export const getAdminProfile = async (adminId: string = "default-admin"): Promise<AdminUser | null> => {
+    try {
+        const d = await getDoc(doc(db, "admin_users", adminId));
+        if (!d.exists()) {
+            return {
+                id: adminId,
+                name: "Sarah Johnson",
+                email: "sarah.johnson@faithimmaculate.edu.ng",
+                phone: "+234 803 123 4567",
+                avatarUrl: "",
+                role: "Super Admin",
+                theme: "system",
+                timezone: "Africa/Lagos",
+                landingPage: "/admin",
+                twoFactorEnabled: false,
+                notificationPreferences: {
+                    results: true,
+                    cheating: true,
+                    questions: true,
+                    messages: true,
+                    exams: true,
+                    system: true,
+                    channels: { inApp: true, email: true, sms: false }
+                },
+                activeSessions: [
+                    { id: "sess-1", device: "Chrome / Windows 11 (Active)", ipAddress: "192.168.1.100", lastActive: "Active Now", isCurrent: true },
+                    { id: "sess-2", device: "Safari / macOS Mobile", ipAddress: "102.89.23.11", lastActive: "2 hours ago", isCurrent: false }
+                ],
+                permissions: [
+                    "Exam Creation & Scheduling",
+                    "Result Approval & Publishing",
+                    "Invigilator Control & Extra Time",
+                    "Question Bank Management",
+                    "Student Profile Administration",
+                    "System Settings & Audit Log"
+                ],
+                createdAt: new Date()
+            } as AdminUser;
+        }
+        return docToData<AdminUser>(d);
+    } catch (e) {
+        console.warn("getAdminProfile error:", e);
+        return null;
+    }
+};
+
+export const updateAdminProfile = async (adminId: string = "default-admin", data: Partial<AdminUser>): Promise<AdminUser> => {
+    const adminRef = doc(db, "admin_users", adminId);
+    const snap = await getDoc(adminRef);
+    if (!snap.exists()) {
+        const defaultProfile = await getAdminProfile(adminId);
+        const newProfile = { ...defaultProfile, ...data, id: adminId };
+        await setDoc(adminRef, cleanData(newProfile));
+        return newProfile as AdminUser;
+    } else {
+        await updateDoc(adminRef, cleanData(data));
+        const updated = await getDoc(adminRef);
+        return docToData<AdminUser>(updated);
+    }
+};
+
+// --- Real-time Notifications System API ---
+export const getAppNotifications = async (): Promise<AppNotification[]> => {
+    try {
+        const q = query(collection(db, "app_notifications"), orderBy("createdAt", "desc"), limit(50));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => docToData<AppNotification>(d));
+    } catch (e) {
+        console.warn("getAppNotifications error:", e);
+        return [];
+    }
+};
+
+export const createAppNotification = async (notification: {
+    category: "results" | "cheating" | "questions" | "messages" | "exams" | "system";
+    severity?: "urgent" | "important" | "info";
+    title: string;
+    message: string;
+    deepLink?: string;
+    targetAdminId?: string;
+    batchId?: string;
+}): Promise<AppNotification> => {
+    try {
+        const cleanPayload = cleanData({
+            category: notification.category,
+            severity: notification.severity || "info",
+            title: notification.title,
+            message: notification.message,
+            deepLink: notification.deepLink || null,
+            targetAdminId: notification.targetAdminId || null,
+            batchId: notification.batchId || null,
+            isRead: false,
+            createdAt: new Date()
+        });
+
+        const ref = await addDoc(collection(db, "app_notifications"), cleanPayload);
+        return { id: ref.id, ...cleanPayload } as AppNotification;
+    } catch (e) {
+        console.error("createAppNotification error:", e);
+        throw e;
+    }
+};
+
+export const markNotificationAsRead = async (id: string): Promise<void> => {
+    try {
+        await updateDoc(doc(db, "app_notifications", id), { isRead: true });
+    } catch (e) {
+        console.warn("markNotificationAsRead error:", e);
+    }
+};
+
+export const markAllNotificationsAsRead = async (): Promise<void> => {
+    try {
+        const snapshot = await getDocs(query(collection(db, "app_notifications"), where("isRead", "==", false)));
+        if (snapshot.empty) return;
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(d => {
+            batch.update(d.ref, { isRead: true });
+        });
+        await batch.commit();
+    } catch (e) {
+        console.warn("markAllNotificationsAsRead error:", e);
+    }
+};
+
+export const subscribeToNotifications = (callback: (notifications: AppNotification[]) => void) => {
+    const q = query(collection(db, "app_notifications"), orderBy("createdAt", "desc"), limit(40));
+    return onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(d => docToData<AppNotification>(d));
+        callback(list);
+    }, (err) => {
+        console.warn("subscribeToNotifications listener error:", err);
+    });
 };

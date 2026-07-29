@@ -34,6 +34,8 @@ const AdminStudentProfile = lazy(() => import("@/pages/admin-student-profile"));
 const AdminSettings = lazy(() => import("@/pages/admin-settings"));
 const AdminDocumentation = lazy(() => import("@/pages/admin-documentation"));
 const AdminInvigilatorPage = lazy(() => import("@/pages/admin-invigilator"));
+const AdminProfilePage = lazy(() => import("@/pages/admin-profile"));
+const AdminNotificationsPage = lazy(() => import("@/pages/admin-notifications"));
 
 const PageLoader = () => (
   <div className="flex min-h-[60vh] w-full items-center justify-center">
@@ -61,6 +63,16 @@ function Router() {
       <Route path="/admin">
         <AdminLayout>
           <AdminDashboard />
+        </AdminLayout>
+      </Route>
+      <Route path="/admin/profile">
+        <AdminLayout>
+          <AdminProfilePage />
+        </AdminLayout>
+      </Route>
+      <Route path="/admin/notifications">
+        <AdminLayout>
+          <AdminNotificationsPage />
         </AdminLayout>
       </Route>
       <Route path="/admin/invigilator">

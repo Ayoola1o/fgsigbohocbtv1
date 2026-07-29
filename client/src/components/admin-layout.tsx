@@ -18,10 +18,33 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, Bell, Shield, User, Settings, LogOut, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
+import {
+  getAdminProfile,
+  subscribeToNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead
+} from "@/lib/firebase-api";
+import type { AdminUser, AppNotification } from "@shared/schema";
+import {
+  Search,
+  Bell,
+  Shield,
+  User,
+  Settings,
+  LogOut,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ShieldAlert,
+  ArrowRight,
+  ExternalLink,
+  Info,
+  CheckCheck
+} from "lucide-react";
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -32,6 +55,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // Authentication check
   useEffect(() => {
@@ -40,6 +64,45 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       setLocation("/admin/login");
     }
   }, [setLocation]);
+
+  // Fetch Logged In Admin Profile
+  const { data: adminProfile } = useQuery<AdminUser | null>({
+    queryKey: ["adminProfile"],
+    queryFn: () => getAdminProfile("default-admin"),
+  });
+
+  // Subscribe to real-time notifications
+  useEffect(() => {
+    const unsubscribe = subscribeToNotifications((list) => {
+      setNotifications(list);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Filter notifications based on admin preferences (urgent cheating alerts ALWAYS pass through)
+  const filteredNotifications = useMemo(() => {
+    const prefs = adminProfile?.notificationPreferences;
+    return notifications.filter((notif) => {
+      // Cheating & urgent alerts can NEVER be opted out of
+      if (notif.category === "cheating" || notif.severity === "urgent") return true;
+      if (!prefs) return true;
+      if (notif.category === "results" && prefs.results === false) return false;
+      if (notif.category === "questions" && prefs.questions === false) return false;
+      if (notif.category === "messages" && prefs.messages === false) return false;
+      if (notif.category === "exams" && prefs.exams === false) return false;
+      if (notif.category === "system" && prefs.system === false) return false;
+      return true;
+    });
+  }, [notifications, adminProfile]);
+
+  const unreadCount = useMemo(() => {
+    return filteredNotifications.filter((n) => !n.isRead).length;
+  }, [filteredNotifications]);
+
+  // Urgent Cheating Alert Check (triggers top banner toast)
+  const activeUrgentAlert = useMemo(() => {
+    return notifications.find((n) => !n.isRead && (n.severity === "urgent" || n.category === "cheating"));
+  }, [notifications]);
 
   async function handleLogout() {
     try {
@@ -56,6 +119,22 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const handleNotificationItemClick = async (notif: AppNotification) => {
+    if (!notif.isRead) {
+      await markNotificationAsRead(notif.id);
+    }
+    if (notif.deepLink) {
+      setLocation(notif.deepLink);
+    }
+  };
+
+  const adminName = adminProfile?.name || "Sarah Johnson";
+  const adminEmail = adminProfile?.email || "sarah.johnson@faithimmaculate.edu.ng";
+  const getInitials = (nameStr: string) => {
+    const parts = nameStr.split(" ");
+    return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : nameStr.slice(0, 2).toUpperCase();
+  };
+
   // Generate page title from current location
   const pathParts = location.split("/").filter(Boolean);
   const lastPart = pathParts[pathParts.length - 1] || "admin";
@@ -67,6 +146,31 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen w-full overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
         <AppSidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Persistent High-Priority Urgent Cheating Alert Banner */}
+          {activeUrgentAlert && (
+            <div className="bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white px-6 py-2.5 flex items-center justify-between shadow-lg z-20 animate-pulse">
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="h-5 w-5 shrink-0" />
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full mr-2">
+                    URGENT CHEATING ALERT
+                  </span>
+                  <span className="text-xs font-bold">{activeUrgentAlert.title}: {activeUrgentAlert.message}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleNotificationItemClick(activeUrgentAlert)}
+                  className="bg-white text-rose-700 hover:bg-rose-50 text-xs font-black rounded-lg h-7 px-3 gap-1 shadow"
+                >
+                  Investigate Live
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Header Topbar with Search Bar, Notifications, Theme Toggle, Admin Profile */}
           <header className="flex h-14 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 shrink-0 z-10 gap-4">
             <div className="flex items-center gap-4 flex-1">
@@ -92,36 +196,80 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
-              {/* Notification Bell with green count badge */}
+              {/* Dynamic Real-time Notification Bell Popover */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40">
                     <Bell className="h-4 w-4" />
-                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-emerald-500 text-white text-[8px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900">2</span>
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 rounded-2xl border-slate-100 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900">
+                <PopoverContent className="w-88 p-0 rounded-2xl border-slate-100 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900">
                   <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <h4 className="text-xs font-black text-slate-800 dark:text-slate-200">Notifications Center</h4>
-                    <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 font-extrabold text-[10px]">2 New</Badge>
+                    {unreadCount > 0 ? (
+                      <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 font-extrabold text-[10px]">
+                        {unreadCount} Unread
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 font-extrabold text-[10px]">
+                        All Read
+                      </Badge>
+                    )}
                   </div>
-                  <div className="divide-y divide-slate-50 dark:divide-slate-800/40 max-h-72 overflow-y-auto">
-                    <div className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-950/40 transition-colors flex gap-3">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">WAEC-BIO-1 Session Live</p>
-                        <p className="text-[11px] text-slate-400 font-medium">124 candidates currently taking exam</p>
-                        <span className="text-[9px] text-indigo-500 font-bold mt-1 block">2 mins ago</span>
+                  <div className="divide-y divide-slate-50 dark:divide-slate-800/40 max-h-80 overflow-y-auto">
+                    {filteredNotifications.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400 font-medium">
+                        No notifications to display.
                       </div>
-                    </div>
-                    <div className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-950/40 transition-colors flex gap-3">
-                      <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">Center 03 flagged issue</p>
-                        <p className="text-[11px] text-slate-400 font-medium">Network connectivity alert</p>
-                        <span className="text-[9px] text-slate-400 font-bold mt-1 block">25 mins ago</span>
-                      </div>
-                    </div>
+                    ) : (
+                      filteredNotifications.slice(0, 5).map((notif) => {
+                        const isUrgent = notif.severity === "urgent" || notif.category === "cheating";
+                        return (
+                          <div
+                            key={notif.id}
+                            onClick={() => handleNotificationItemClick(notif)}
+                            className={`p-3.5 hover:bg-slate-50 dark:hover:bg-slate-950/40 transition-colors flex gap-3 cursor-pointer ${
+                              !notif.isRead ? (isUrgent ? "bg-rose-50/50 dark:bg-rose-950/20" : "bg-indigo-50/30 dark:bg-indigo-950/10") : ""
+                            }`}
+                          >
+                            {isUrgent ? (
+                              <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0 mt-0.5 animate-pulse" />
+                            ) : notif.severity === "important" ? (
+                              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                            ) : (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className={`text-xs font-extrabold truncate ${isUrgent ? "text-rose-950 dark:text-rose-200" : "text-slate-800 dark:text-slate-200"}`}>
+                                  {notif.title}
+                                </p>
+                                {!notif.isRead && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-medium line-clamp-2 mt-0.5">
+                                {notif.message}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 rounded-b-2xl text-center">
+                    <Link
+                      href="/admin/notifications"
+                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-center gap-1"
+                    >
+                      View All Notifications
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -130,20 +278,28 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
 
-              {/* Admin Profile: "Admin: Sarah Johnson" with avatar */}
+              {/* Admin Profile: Dynamic Admin Name & Avatar linking to /admin/profile */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="flex items-center gap-2 cursor-pointer group p-1 pr-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <div className="hidden sm:block text-right">
                       <p className="text-[10px] text-slate-400 font-medium leading-tight">Admin:</p>
                       <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">
-                        Sarah Johnson
+                        {adminName}
                       </p>
                     </div>
                     <div className="relative">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 flex items-center justify-center text-white text-[10px] font-black shadow-md border-2 border-white dark:border-slate-800">
-                        SJ
-                      </div>
+                      {adminProfile?.avatarUrl ? (
+                        <img
+                          src={adminProfile.avatarUrl}
+                          alt={adminName}
+                          className="h-8 w-8 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 flex items-center justify-center text-white text-[10px] font-black shadow-md border-2 border-white dark:border-slate-800">
+                          {getInitials(adminName)}
+                        </div>
+                      )}
                       <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1.5 ring-white dark:ring-slate-900" />
                     </div>
                   </div>
@@ -151,15 +307,27 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-slate-100 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900">
                   <DropdownMenuLabel className="font-normal p-2">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-xs font-black text-slate-800 dark:text-slate-200">Sarah Johnson</p>
-                      <p className="text-[11px] text-slate-400 font-medium">sarah.johnson@faithimmaculate.edu.ng</p>
+                      <p className="text-xs font-black text-slate-800 dark:text-slate-200">{adminName}</p>
+                      <p className="text-[11px] text-slate-400 font-medium truncate">{adminEmail}</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-2 text-xs font-semibold">
+                    <Link href="/admin/profile" className="flex items-center gap-2 w-full">
+                      <User className="h-4 w-4 text-indigo-600" />
+                      <span>Admin Personal Profile</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-2 text-xs font-semibold">
+                    <Link href="/admin/notifications" className="flex items-center gap-2 w-full">
+                      <Bell className="h-4 w-4 text-slate-500" />
+                      <span>Notification Center</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-2 text-xs font-semibold">
                     <Link href="/admin/settings" className="flex items-center gap-2 w-full">
                       <Settings className="h-4 w-4 text-slate-500" />
-                      <span>System Settings</span>
+                      <span>School System Settings</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-2 text-xs font-semibold">

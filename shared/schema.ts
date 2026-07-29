@@ -419,3 +419,65 @@ export const systemSettingsSchema = z.object({
 
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 
+// --- Admin Personal User Profile & Preferences ---
+export interface AdminNotificationPreferences {
+  results: boolean;
+  cheating: boolean; // Urgent cheating alerts are always enabled
+  questions: boolean;
+  messages: boolean;
+  exams: boolean;
+  system: boolean;
+  channels: {
+    inApp: boolean;
+    email: boolean;
+    sms: boolean;
+  };
+}
+
+export interface AdminActiveSession {
+  id: string;
+  device: string;
+  ipAddress: string;
+  lastActive: string;
+  isCurrent: boolean;
+}
+
+export const adminUsers = pgTable("admin_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  avatarUrl: text("avatar_url"),
+  role: text("role").notNull().default("Super Admin"),
+  theme: text("theme").notNull().default("system"),
+  timezone: text("timezone").notNull().default("Africa/Lagos"),
+  landingPage: text("landing_page").notNull().default("/admin"),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  notificationPreferences: jsonb("notification_preferences").$type<AdminNotificationPreferences>(),
+  activeSessions: jsonb("active_sessions").$type<AdminActiveSession[]>(),
+  permissions: jsonb("permissions").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export type AdminUser = typeof adminUsers.$inferSelect;
+
+// --- Centralized App Notification System ---
+export const notificationCategories = ["results", "cheating", "questions", "messages", "exams", "system"] as const;
+export const notificationSeverities = ["urgent", "important", "info"] as const;
+
+export const appNotifications = pgTable("app_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  targetAdminId: text("target_admin_id"), // null = broadcast to all admins
+  category: text("category").notNull(), // 'results' | 'cheating' | 'questions' | 'messages' | 'exams' | 'system'
+  severity: text("severity").notNull().default("info"), // 'urgent' | 'important' | 'info'
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  deepLink: text("deep_link"),
+  isRead: boolean("is_read").notNull().default(false),
+  batchId: text("batch_id"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export type AppNotification = typeof appNotifications.$inferSelect;
+
+

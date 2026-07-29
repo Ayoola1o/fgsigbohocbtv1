@@ -8,6 +8,8 @@ import {
   Settings,
   BookOpen,
   Radio,
+  User,
+  Bell
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
@@ -71,7 +73,19 @@ const menuItems = [
     testId: "link-analytics",
   },
   {
-    title: "Settings",
+    title: "Notifications",
+    url: "/admin/notifications",
+    icon: Bell,
+    testId: "link-notifications",
+  },
+  {
+    title: "Admin Profile",
+    url: "/admin/profile",
+    icon: User,
+    testId: "link-profile",
+  },
+  {
+    title: "School Settings",
     url: "/admin/settings",
     icon: Settings,
     testId: "link-settings",

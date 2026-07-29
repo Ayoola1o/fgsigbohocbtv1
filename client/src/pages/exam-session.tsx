@@ -354,6 +354,7 @@ export default function ExamSessionPage() {
           sendSessionHeartbeat(sessionId, {
             tabSwitches: tabSwitchesRef.current,
             isFlagged: true,
+            justFlagged: true,
           }).catch(console.error);
         }
       }
