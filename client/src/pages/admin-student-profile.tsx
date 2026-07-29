@@ -69,37 +69,127 @@ export default function AdminStudentProfile() {
     const { formatScore } = useScoreFormat();
     const [resettingResult, setResettingResult] = useState<Result | null>(null);
 
-    // Queries
-    const { data: students = [] } = useQuery<Student[]>({
-        queryKey: ["/api/students"],
+    // 1. Fetch single target student profile
+    const { data: student, isLoading: studentLoading } = useQuery<Student | null>({
+        queryKey: ["studentProfileTarget", studentId],
+        queryFn: async () => {
+            if (!studentId) return null;
+            const { db } = await import("@/lib/firebase");
+            const { getDoc, doc, query, collection, where, getDocs } = await import("firebase/firestore");
+            
+            try {
+                const docSnap = await getDoc(doc(db, "students", studentId));
+                if (docSnap.exists()) {
+                    return { id: docSnap.id, ...docSnap.data() } as Student;
+                }
+            } catch (e) {
+                // Ignore doc ID error and fall back to query
+            }
+
+            const q = query(collection(db, "students"), where("studentId", "==", studentId));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                return { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
+            }
+            return null;
+        }
     });
 
-    const { data: results = [], isLoading: resultsLoading } = useQuery<Result[]>({
-        queryKey: ["/api/results"],
+    // 2. Fetch scoped data for student & class analytics
+    const { data: scopedData, isLoading: scopedLoading } = useQuery({
+        queryKey: ["studentScopedAnalyticsData", student?.id, student?.studentId, student?.classLevel],
+        enabled: !!student,
+        queryFn: async () => {
+            const { db } = await import("@/lib/firebase");
+            const { getDocs, query, collection, where, getDoc, doc } = await import("firebase/firestore");
+            const { getQuestionsByIds } = await import("@/lib/firebase-api");
+
+            // A. Student's own results
+            const studentResultsQuery = query(
+                collection(db, "results"),
+                where("studentId", "==", student!.studentId)
+            );
+            const studentResultsSnap = await getDocs(studentResultsQuery);
+            let studentResults = studentResultsSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Result);
+            
+            if (studentResults.length === 0 && student!.id) {
+                const studentDbIdQuery = query(
+                    collection(db, "results"),
+                    where("studentId", "==", student!.id)
+                );
+                const dbIdSnap = await getDocs(studentDbIdQuery);
+                studentResults = dbIdSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Result);
+            }
+
+            // B. Classmate student profiles
+            const classmatesQuery = query(
+                collection(db, "students"),
+                where("classLevel", "==", student!.classLevel)
+            );
+            const classmatesSnap = await getDocs(classmatesQuery);
+            const classmates = classmatesSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Student);
+
+            // C. Classmate results (batched by 30)
+            const classmateStudentIds = Array.from(new Set(
+                classmates.flatMap(c => [c.studentId, c.id]).filter(Boolean) as string[]
+            ));
+
+            let classResults: Result[] = [];
+            if (classmateStudentIds.length > 0) {
+                const chunks: string[][] = [];
+                for (let i = 0; i < classmateStudentIds.length; i += 30) {
+                    chunks.push(classmateStudentIds.slice(i, i + 30));
+                }
+                const resultPromises = chunks.map(chunk => {
+                    const q = query(collection(db, "results"), where("studentId", "in", chunk));
+                    return getDocs(q);
+                });
+                const resultSnaps = await Promise.all(resultPromises);
+                resultSnaps.forEach(snap => {
+                    classResults.push(...snap.docs.map(d => ({ id: d.id, ...d.data() }) as Result));
+                });
+            }
+
+            // D. Referenced Exams only
+            const allReferencedResults = [...studentResults, ...classResults];
+            const uniqueExamIds = Array.from(new Set(allReferencedResults.map(r => r.examId).filter(Boolean)));
+            let exams: Exam[] = [];
+            if (uniqueExamIds.length > 0) {
+                const examPromises = uniqueExamIds.map(async (id) => {
+                    try {
+                        const docSnap = await getDoc(doc(db, "exams", id));
+                        return docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Exam) : null;
+                    } catch (e) {
+                        return null;
+                    }
+                });
+                const examResults = await Promise.all(examPromises);
+                exams = examResults.filter(Boolean) as Exam[];
+            }
+
+            // E. Referenced Questions only
+            const uniqueQuestionIds = Array.from(new Set(exams.flatMap(e => e.questionIds || [])));
+            let questions: any[] = [];
+            if (uniqueQuestionIds.length > 0) {
+                questions = await getQuestionsByIds(uniqueQuestionIds);
+            }
+
+            return {
+                studentResults,
+                classmates,
+                classResults,
+                exams,
+                questions
+            };
+        }
     });
 
-    const { data: exams = [] } = useQuery<Exam[]>({
-        queryKey: ["/api/exams"],
-    });
-
-    const { data: questions = [] } = useQuery<any[]>({
-        queryKey: ["/api/questions"]
-    });
-
-    const student = useMemo(() => {
-        return students.find((s) => 
-            s.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
-            s.id?.trim().toLowerCase() === studentId?.trim().toLowerCase()
-        );
-    }, [students, studentId]);
-
-    const studentResults = useMemo(() => {
-        if (!student) return [];
-        return results.filter((r) => 
-            r.studentId?.trim().toLowerCase() === student.studentId?.trim().toLowerCase() ||
-            r.studentId?.trim().toLowerCase() === student.id?.trim().toLowerCase()
-        );
-    }, [results, student, studentId]);
+    const studentResults = scopedData?.studentResults || [];
+    const classResults = scopedData?.classResults || [];
+    const students = scopedData?.classmates || (student ? [student] : []);
+    const exams = scopedData?.exams || [];
+    const questions = scopedData?.questions || [];
+    const resultsLoading = studentLoading || scopedLoading;
 
     // Mutations
     const resetResultMutation = useMutation({
@@ -107,8 +197,8 @@ export default function AdminStudentProfile() {
             return apiRequest("POST", `/api/results/${resultId}/reset`);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/results"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+            queryClient.invalidateQueries({ queryKey: ["studentScopedAnalyticsData"] });
+            queryClient.invalidateQueries({ queryKey: ["studentProfileTarget"] });
             toast({
                 title: "Exam Reset Successful",
                 description: "The student's past score and sessions have been fully cleared. They can now retake this exam.",
@@ -189,11 +279,11 @@ export default function AdminStudentProfile() {
         const classStudents = students.filter(s => s.classLevel === studentClass);
         const classStudentIds = new Set(classStudents.map(s => s.studentId?.toLowerCase()));
 
-        const classResults = results.filter(r => 
+        const allClassResults = classResults.filter((r: any) => 
             r.studentId && classStudentIds.has(r.studentId.trim().toLowerCase())
         );
 
-        classResults.forEach(r => {
+        allClassResults.forEach((r: any) => {
             const exam = exams.find(e => e.id === r.examId);
             if (!exam) return;
             const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
@@ -207,7 +297,7 @@ export default function AdminStudentProfile() {
             });
         });
 
-        studentResults.forEach(r => {
+        studentResults.forEach((r: any) => {
             const exam = exams.find(e => e.id === r.examId);
             if (!exam) return;
             const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
@@ -240,7 +330,7 @@ export default function AdminStudentProfile() {
                 "Candidate": studentPct
             };
         }).filter(item => item.subject);
-    }, [results, student, students, studentResults, exams, questions]);
+    }, [classResults, student, students, studentResults, exams, questions]);
 
     const pacingData = useMemo(() => {
         const sorted = [...studentResults].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
@@ -498,18 +588,6 @@ export default function AdminStudentProfile() {
         });
     }, [studentResults, exams]);
 
-    const classStudents = useMemo(() => {
-        if (!student) return [];
-        return students.filter(s => s.classLevel === student.classLevel);
-    }, [students, student]);
-
-    const classResults = useMemo(() => {
-        const classStudentIds = new Set(classStudents.map(s => s.studentId?.trim().toLowerCase()));
-        const classDbIds = new Set(classStudents.map(s => s.id?.trim().toLowerCase()));
-        return results.filter(r => 
-            r.studentId && (classStudentIds.has(r.studentId.trim().toLowerCase()) || classDbIds.has(r.studentId.trim().toLowerCase()))
-        );
-    }, [results, classStudents]);
 
     const radarChartData = useMemo(() => {
         const studentSubjectScores: Record<string, { sum: number; count: number }> = {};

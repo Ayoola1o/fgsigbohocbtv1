@@ -60,6 +60,7 @@ export interface IStorage {
   createStudents(students: InsertStudent[]): Promise<Student[]>;
   updateStudent(id: string, data: Partial<Student>): Promise<Student | undefined>;
   deleteStudent(id: string): Promise<void>;
+  purgeTestAttempts(): Promise<void>;
 
   // System Settings
   getSystemSettings(): Promise<SystemSettings>;
@@ -296,6 +297,14 @@ export class MemStorage implements IStorage {
       sessionQuestionIds: (insertSession as any).sessionQuestionIds || [],
       isCompleted: false,
       timeRemaining: null,
+      lastSeenAt: new Date(),
+      tabSwitches: 0,
+      windowBlurs: 0,
+      extendedMinutes: 0,
+      invigilatorMessage: null,
+      broadcastMessage: null,
+      isFlagged: false,
+      isTestAttempt: insertSession.isTestAttempt || false,
     };
     this.examSessions.set(id, session);
     return session;
@@ -335,6 +344,7 @@ export class MemStorage implements IStorage {
       id,
       submissionType: insertResult.submissionType ?? null,
       completedAt: new Date(),
+      isTestAttempt: insertResult.isTestAttempt || false,
     };
     this.results.set(id, result);
     return result;
@@ -379,6 +389,7 @@ export class MemStorage implements IStorage {
       diagnosis: (insertStudent as any).diagnosis || null,
       actionPlan: (insertStudent as any).actionPlan || null,
       lastAnalyzed: (insertStudent as any).lastAnalyzed || null,
+      isTestUser: insertStudent.isTestUser || false,
     };
     this.students.set(id, student);
     this.saveStudentsToDisk();
@@ -420,6 +431,19 @@ export class MemStorage implements IStorage {
   async deleteStudent(id: string): Promise<void> {
     this.students.delete(id);
     this.saveStudentsToDisk();
+  }
+
+  async purgeTestAttempts(): Promise<void> {
+    this.results.forEach((r, id) => {
+      if ((r as any).isTestAttempt === true || (r as any).isTestAttempt === "true") {
+        this.results.delete(id);
+      }
+    });
+    this.examSessions.forEach((s, id) => {
+      if ((s as any).isTestAttempt === true || (s as any).isTestAttempt === "true") {
+        this.examSessions.delete(id);
+      }
+    });
   }
 
   private saveStudentsToDisk() {

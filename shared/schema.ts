@@ -131,6 +131,14 @@ export const examSessions = pgTable("exam_sessions", {
   isCompleted: boolean("is_completed").notNull().default(false),
   timeRemaining: integer("time_remaining"), // in seconds
   sessionQuestionIds: jsonb("session_question_ids").$type<string[]>(),
+  lastSeenAt: timestamp("last_seen_at"),
+  tabSwitches: integer("tab_switches").default(0),
+  windowBlurs: integer("window_blurs").default(0),
+  extendedMinutes: integer("extended_minutes").default(0),
+  invigilatorMessage: text("invigilator_message"),
+  broadcastMessage: text("broadcast_message"),
+  isFlagged: boolean("is_flagged").default(false),
+  isTestAttempt: boolean("is_test_attempt").notNull().default(false),
 });
 
 export const insertExamSessionSchema = createInsertSchema(examSessions).omit({
@@ -142,6 +150,7 @@ export const insertExamSessionSchema = createInsertSchema(examSessions).omit({
   answers: z.record(z.string()).default({}),
   currentQuestionIndex: z.number().default(0),
   sessionQuestionIds: z.array(z.string()).optional(),
+  isTestAttempt: z.boolean().optional(),
 });
 
 export type InsertExamSession = z.infer<typeof insertExamSessionSchema>;
@@ -162,6 +171,7 @@ export const results = pgTable("results", {
   answers: jsonb("answers").$type<Record<string, string>>().notNull(),
   correctAnswers: jsonb("correct_answers").$type<Record<string, boolean>>().notNull(),
   completedAt: timestamp("completed_at").notNull().default(sql`now()`),
+  isTestAttempt: boolean("is_test_attempt").notNull().default(false),
 });
 
 export const insertResultSchema = createInsertSchema(results).omit({
@@ -169,6 +179,7 @@ export const insertResultSchema = createInsertSchema(results).omit({
   completedAt: true,
 }).extend({
   submissionType: z.enum(['student', 'auto']).optional(),
+  isTestAttempt: z.boolean().optional(),
 });
 
 export type InsertResult = z.infer<typeof insertResultSchema>;
@@ -191,6 +202,7 @@ export const students = pgTable("students", {
   diagnosis: text("diagnosis"),
   actionPlan: jsonb("action_plan").$type<string[]>(),
   lastAnalyzed: text("last_analyzed"),
+  isTestUser: boolean("is_test_user").notNull().default(false),
 });
 
 
@@ -209,6 +221,7 @@ export const insertStudentSchema = createInsertSchema(students).omit({
   diagnosis: z.string().optional(),
   actionPlan: z.array(z.string()).optional(),
   lastAnalyzed: z.string().optional(),
+  isTestUser: z.boolean().optional(),
 });
 
 

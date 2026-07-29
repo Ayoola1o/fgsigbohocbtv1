@@ -37,7 +37,8 @@ import {
   getQuestionsByIds,
   getStudentQuestionsByIds,
   updateExamSession,
-  submitExamSession
+  submitExamSession,
+  sendSessionHeartbeat
 } from "@/lib/firebase-api";
 import { cn } from "@/lib/utils";
 
@@ -348,11 +349,62 @@ export default function ExamSessionPage() {
           description: `Window focus lost. This incident (Lost Focus #${tabSwitchesRef.current}) has been logged to the forensic database. Please remain within the examination screen.`,
           variant: "destructive",
         });
+        // Ping telemetry immediately on tab switch
+        if (sessionId) {
+          sendSessionHeartbeat(sessionId, {
+            tabSwitches: tabSwitchesRef.current,
+            isFlagged: true,
+          }).catch(console.error);
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [session, toast]);
+  }, [session, sessionId, toast]);
+
+  // Periodic 10-Second Heartbeat Ping
+  useEffect(() => {
+    if (!sessionId || !session || session.isCompleted) return;
+    const sendPing = () => {
+      if (navigator.onLine) {
+        sendSessionHeartbeat(sessionId, {
+          tabSwitches: tabSwitchesRef.current,
+          isFlagged: tabSwitchesRef.current > 0,
+          currentQuestionIndex,
+        }).catch((err) => console.warn("Heartbeat ping error:", err));
+      }
+    };
+
+    sendPing(); // initial ping
+    const interval = setInterval(sendPing, 10000); // 10s periodic heartbeat
+    return () => clearInterval(interval);
+  }, [sessionId, session?.isCompleted, currentQuestionIndex]);
+
+  // Invigilator & Broadcast Message Notifications
+  const lastBroadcastRef = useRef<string | null>(null);
+  const lastDirectMsgRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+
+    if (session.broadcastMessage && session.broadcastMessage !== lastBroadcastRef.current) {
+      lastBroadcastRef.current = session.broadcastMessage;
+      toast({
+        title: "📢 Invigilator Announcement",
+        description: session.broadcastMessage,
+        duration: 10000,
+      });
+    }
+
+    if (session.invigilatorMessage && session.invigilatorMessage !== lastDirectMsgRef.current) {
+      lastDirectMsgRef.current = session.invigilatorMessage;
+      toast({
+        title: "✉️ Message from Invigilator",
+        description: session.invigilatorMessage,
+        duration: 10000,
+      });
+    }
+  }, [session?.broadcastMessage, session?.invigilatorMessage, toast]);
 
   const saveProgressMutation = useMutation({
     mutationFn: async (data: { answers: Record<string, string>; currentQuestionIndex: number }) => {
@@ -454,13 +506,11 @@ export default function ExamSessionPage() {
     if (!session || !exam || !isExamActive.current) return;
 
     // Calculate end time only once or if dependencies drastically change
-    if (endTimeRef.current === null) {
-      const examDurationSeconds = exam.duration * 60;
+    // Calculate end time with individual invigilator extended time
+    if (endTimeRef.current === null || session?.extendedMinutes) {
+      const baseDurationSeconds = (exam.duration + (session?.extendedMinutes || 0)) * 60;
       const startedAt = new Date(session.startedAt).getTime();
-      // Server time offset might be needed in production but for now:
-      // We assume client clock is reasonably close or rely on relative diff if provided
-      // Ideally: endTime = startedAt + duration
-      endTimeRef.current = startedAt + (examDurationSeconds * 1000);
+      endTimeRef.current = startedAt + (baseDurationSeconds * 1000);
     }
 
     const calculateRemaining = () => {
@@ -487,8 +537,33 @@ export default function ExamSessionPage() {
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [session?.startedAt, exam?.duration, handleAutoSubmit]);
+  }, [session?.startedAt, session?.extendedMinutes, exam?.duration, handleAutoSubmit]);
 
+  // Offline Answer Cache Auto-Flush on Reconnection
+  useEffect(() => {
+    const handleReconnect = async () => {
+      if (!sessionId) return;
+      const cachedAnswersStr = localStorage.getItem(`fia_session_answers_${sessionId}`);
+      if (cachedAnswersStr) {
+        try {
+          const cachedAnswers = JSON.parse(cachedAnswersStr);
+          await updateExamSession(sessionId, {
+            answers: cachedAnswers,
+            currentQuestionIndex,
+          });
+          toast({
+            title: "Network Reconnected",
+            description: "Your offline cached answers have been synced to the server.",
+          });
+        } catch (err) {
+          console.warn("Failed to flush cached answers on reconnect:", err);
+        }
+      }
+    };
+
+    window.addEventListener("online", handleReconnect);
+    return () => window.removeEventListener("online", handleReconnect);
+  }, [sessionId, currentQuestionIndex, toast]);
 
   const debouncedSaveProgress = useCallback(
     (newAnswers: Record<string, string>, qIndex: number) => {
@@ -496,10 +571,12 @@ export default function ExamSessionPage() {
         clearTimeout(debounceTimerRef.current);
       }
       debounceTimerRef.current = setTimeout(() => {
-        saveProgressMutation.mutate({
-          answers: newAnswers,
-          currentQuestionIndex: qIndex,
-        });
+        if (navigator.onLine) {
+          saveProgressMutation.mutate({
+            answers: newAnswers,
+            currentQuestionIndex: qIndex,
+          });
+        }
       }, 1200);
     },
     [saveProgressMutation]
@@ -513,9 +590,19 @@ export default function ExamSessionPage() {
       }
       const newAnswers = { ...answers, [questionId]: answer };
       setAnswers(newAnswers);
+
+      // Instant local caching (zero loss under network outage)
+      if (sessionId) {
+        try {
+          localStorage.setItem(`fia_session_answers_${sessionId}`, JSON.stringify(newAnswers));
+        } catch (e) {
+          console.error("Failed to write answer to localStorage", e);
+        }
+      }
+
       debouncedSaveProgress(newAnswers, currentQuestionIndex);
     },
-    [answers, currentQuestionIndex, debouncedSaveProgress]
+    [answers, sessionId, currentQuestionIndex, debouncedSaveProgress]
   );
 
   const handleNavigate = useCallback(

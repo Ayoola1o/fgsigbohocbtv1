@@ -71,6 +71,7 @@ export default function AdminStudents() {
   });
 
   // State
+  const [activeTab, setActiveTab] = useState<"students" | "qa">("students");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClass, setFilterClass] = useState("All");
@@ -91,6 +92,7 @@ export default function AdminStudents() {
   const [manualClassLevel, setManualClassLevel] = useState("");
   const [manualSex, setManualSex] = useState("");
   const [manualDept, setManualDept] = useState("");
+  const [manualIsTestUser, setManualIsTestUser] = useState(false);
 
   // Mutations
   const addStudentMutation = useMutation({
@@ -105,6 +107,7 @@ export default function AdminStudents() {
       setManualClassLevel("");
       setManualSex("");
       setManualDept("");
+      setManualIsTestUser(false);
       toast({
         title: "Student Enrolled",
         description: "Student has been added successfully.",
@@ -199,6 +202,7 @@ export default function AdminStudents() {
       classLevel: manualClassLevel,
       sex: manualSex,
       department: manualDept || null,
+      isTestUser: manualIsTestUser,
     });
   };
 
@@ -245,20 +249,26 @@ export default function AdminStudents() {
   };
 
   // Dynamic statistics
-  const totalCount = students.length;
-  const maleCount = students.filter((s) => s.sex === "M").length;
-  const femaleCount = students.filter((s) => s.sex === "F").length;
+  const realStudentsOnly = students.filter(s => s.isTestUser !== true);
+  const totalCount = realStudentsOnly.length;
+  const maleCount = realStudentsOnly.filter((s) => s.sex === "M").length;
+  const femaleCount = realStudentsOnly.filter((s) => s.sex === "F").length;
 
   const averagePerformance = (() => {
-    if (results.length === 0) return 0;
-    const sum = results.reduce((acc, r) => acc + r.percentage, 0);
-    return Math.round(sum / results.length);
+    const nonTestResults = results.filter(r => r.isTestAttempt !== true);
+    if (nonTestResults.length === 0) return 0;
+    const sum = nonTestResults.reduce((acc, r) => acc + r.percentage, 0);
+    return Math.round(sum / nonTestResults.length);
   })();
 
   const activeStanding = getStudentAcademicStanding(averagePerformance === 0 ? null : averagePerformance);
 
   // Filters & Sorting
   const filteredStudents = students.filter((student) => {
+    const isQA = student.isTestUser === true;
+    if (activeTab === "students" && isQA) return false;
+    if (activeTab === "qa" && !isQA) return false;
+
     const matchesSearch =
       student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.studentId.toLowerCase().includes(searchTerm.toLowerCase());
@@ -305,7 +315,7 @@ export default function AdminStudents() {
   });
 
   const topThreeByClass = allClasses.reduce((acc, cls) => {
-    const classStudents = students.filter(s => s.classLevel === cls);
+    const classStudents = students.filter(s => s.classLevel === cls && s.isTestUser !== true);
     const ranked = classStudents
       .map(s => ({
         student: s,
@@ -402,6 +412,7 @@ export default function AdminStudents() {
                       classLevel: parts[2],
                       sex: parts[3],
                       department: parts[4] || "",
+                      isTestUser: false,
                     });
                   }
                   if (rows.length === 0) {
@@ -730,14 +741,40 @@ export default function AdminStudents() {
           {/* Left Panel: 8/12 Columns - Student Roster & Progress Table */}
           <div className="lg:col-span-8 space-y-6">
             <Card className="border-none shadow-xl overflow-hidden bg-white dark:bg-slate-900 rounded-3xl">
-              <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+              <div className="p-5 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-black text-slate-800 dark:text-slate-200">Student Roster & Progress</h3>
-                  <p className="text-xs text-slate-500 font-medium">Real-time candidate standing and examination progress bars.</p>
+                  <h3 className="text-base font-black text-slate-800 dark:text-slate-200">
+                    {activeTab === "qa" ? "QA Staff Accounts" : "Student Roster & Progress"}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {activeTab === "qa" 
+                      ? "Special accounts registered for staff testing and validation." 
+                      : "Real-time candidate standing and examination progress bars."}
+                  </p>
                 </div>
-                <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/40">
-                  {paginatedStudents.length} Candidates Displayed
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-slate-105 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/40 dark:border-slate-850">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setActiveTab("students")}
+                      className={`h-8 rounded-lg text-xs font-bold transition-all px-3 ${activeTab === "students" ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-slate-500 hover:text-indigo-500"}`}
+                    >
+                      Active Students
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setActiveTab("qa")}
+                      className={`h-8 rounded-lg text-xs font-bold transition-all px-3 ${activeTab === "qa" ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-sm" : "text-slate-500 hover:text-indigo-500"}`}
+                    >
+                      QA Accounts
+                    </Button>
+                  </div>
+                  <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-900/40">
+                    {paginatedStudents.length} Displayed
+                  </span>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -1089,6 +1126,20 @@ export default function AdminStudents() {
               </div>
             )}
 
+            <div className="flex items-center space-x-2 pt-2">
+              <input
+                type="checkbox"
+                id="manual-isTestUser"
+                checked={manualIsTestUser}
+                onChange={(e) => setManualIsTestUser(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-350 text-indigo-600 focus:ring-indigo-500 bg-slate-50/50 dark:bg-slate-950/40"
+              />
+              <Label htmlFor="manual-isTestUser" className="text-xs font-black text-slate-700 dark:text-slate-300 cursor-pointer flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                Designate as QA Staff / Test Account
+              </Label>
+            </div>
+
             <DialogFooter className="pt-4 gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setIsAddManualOpen(false)} className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-bold h-9">
                 Cancel
@@ -1182,6 +1233,20 @@ export default function AdminStudents() {
                   </select>
                 </div>
               )}
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="edit-isTestUser"
+                  checked={editingStudent.isTestUser || false}
+                  onChange={(e) => setEditingStudent({ ...editingStudent, isTestUser: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-350 text-indigo-600 focus:ring-indigo-500 bg-slate-50/50 dark:bg-slate-950/40"
+                />
+                <Label htmlFor="edit-isTestUser" className="text-xs font-black text-slate-700 dark:text-slate-300 cursor-pointer flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                  Designate as QA Staff / Test Account
+                </Label>
+              </div>
 
               <DialogFooter className="pt-4 gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setIsEditOpen(false)} className="rounded-xl border-slate-200 dark:border-slate-800 text-xs h-9">

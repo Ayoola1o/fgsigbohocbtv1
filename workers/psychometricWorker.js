@@ -88,8 +88,12 @@ function calculatePsychometrics(workerData) {
     resultsByStudent.set(key, list);
   });
 
+  // Filter out test users from student predictions
+  const realStudents = (allStudents || []).filter(s => s.isTestUser !== true && s.isTestUser !== "true");
+
   // Calculate probability for each unique student in the dataset
-  allStudents.forEach(student => {
+  realStudents.forEach(student => {
+    if (!student.studentId) return;
     const sKey = student.studentId.toLowerCase().trim();
     const sResults = resultsByStudent.get(sKey) || [];
     
@@ -538,6 +542,17 @@ function calculatePsychometrics(workerData) {
       totalAttempts: totalCount
     };
   });
+
+  const examLedger = {};
+  allExams.forEach(exam => {
+    const eResults = (allResults || []).filter(r => r.examId === exam.id);
+    const candidatesCount = eResults.length;
+    const meanScore = candidatesCount > 0
+      ? Math.round(eResults.reduce((sum, r) => sum + (r.percentage || 0), 0) / candidatesCount)
+      : 0;
+    examLedger[exam.id] = { candidatesCount, meanScore };
+  });
+
   return {
     cohortPassProbability,
     atRiskCount,
@@ -558,15 +573,12 @@ function calculatePsychometrics(workerData) {
     histogramBuckets,
     cronbachAlpha: Math.round(cronbachAlpha * 100) / 100,
     itemAnalysis: itemAnalysisSpreadsheet,
-    totalCandidates
+    totalCandidates,
+    examLedger
   };
 }
 
 // Export for main thread/inline calculation fallback
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { calculatePsychometrics };
-}
-
 export { calculatePsychometrics };
 
 // Conditionally hook into worker thread if available

@@ -13,6 +13,7 @@ import {
     writeBatch,
     documentId,
     Timestamp,
+    serverTimestamp,
     limit,
     orderBy
 } from "firebase/firestore";
@@ -333,8 +334,9 @@ export const createExamSession = async (session: { examId: string; studentName: 
             throw new Error("Exam not found");
         }
 
-        // Retrieve candidate's department if available
+        // Retrieve candidate's department and test user status if available
         let candidateDepartment = "";
+        let isTestAttempt = false;
         if (session.studentId) {
             try {
                 const students = await getStudents();
@@ -342,11 +344,16 @@ export const createExamSession = async (session: { examId: string; studentName: 
                     s.studentId?.trim().toLowerCase() === session.studentId?.trim().toLowerCase() ||
                     s.id?.trim().toLowerCase() === session.studentId?.trim().toLowerCase()
                 );
-                if (student && student.department) {
-                    candidateDepartment = student.department;
+                if (student) {
+                    if (student.department) {
+                        candidateDepartment = student.department;
+                    }
+                    if (student.isTestUser === true) {
+                        isTestAttempt = true;
+                    }
                 }
             } catch (e) {
-                console.warn("Could not fetch student department for exam session filter", e);
+                console.warn("Could not fetch student department/test flag for exam session filter", e);
             }
         }
 
@@ -463,7 +470,8 @@ export const createExamSession = async (session: { examId: string; studentName: 
             startedAt: new Date(),
             isCompleted: false,
             answers: {},
-            currentQuestionIndex: 0
+            currentQuestionIndex: 0,
+            isTestAttempt
         });
 
         console.log("createExamSession: Preparing document reference...");
@@ -566,6 +574,8 @@ export const submitExamSession = async (
         answers
     });
 
+    const isTestAttempt = session.isTestAttempt === true;
+
     const resultData = cleanData({
         sessionId,
         examId: exam.id,
@@ -587,7 +597,8 @@ export const submitExamSession = async (
         answers,
         correctAnswers,
         completedAt: new Date(),
-        telemetry: telemetry || { tabSwitches: 0, revisions: 0, timeSpentPerQuestion: {} }
+        telemetry: telemetry || { tabSwitches: 0, revisions: 0, timeSpentPerQuestion: {} },
+        isTestAttempt
     });
 
     console.log("submitExamSession: Saving result to Firestore...", resultData);
@@ -684,4 +695,86 @@ export const saveSystemSettings = async (settings: Partial<SystemSettings>): Pro
     const updated = await getSystemSettings();
     if (!updated) throw new Error("Failed to retrieve updated settings");
     return updated;
+};
+
+// --- Invigilator Proctoring & Heartbeat API ---
+export const sendSessionHeartbeat = async (
+    sessionId: string,
+    telemetry?: {
+        tabSwitches?: number;
+        windowBlurs?: number;
+        isFlagged?: boolean;
+        timeRemaining?: number;
+        currentQuestionIndex?: number;
+    }
+): Promise<void> => {
+    const sessionRef = doc(db, "exam_sessions", sessionId);
+    const updatePayload: Record<string, any> = {
+        lastSeenAt: serverTimestamp(),
+    };
+    if (telemetry?.tabSwitches !== undefined) updatePayload.tabSwitches = telemetry.tabSwitches;
+    if (telemetry?.windowBlurs !== undefined) updatePayload.windowBlurs = telemetry.windowBlurs;
+    if (telemetry?.isFlagged !== undefined) updatePayload.isFlagged = telemetry.isFlagged;
+    if (telemetry?.timeRemaining !== undefined) updatePayload.timeRemaining = telemetry.timeRemaining;
+    if (telemetry?.currentQuestionIndex !== undefined) updatePayload.currentQuestionIndex = telemetry.currentQuestionIndex;
+
+    await updateDoc(sessionRef, updatePayload);
+};
+
+export const updateSessionExtraTime = async (sessionId: string, additionalMinutes: number): Promise<void> => {
+    const sessionRef = doc(db, "exam_sessions", sessionId);
+    const sessionSnap = await getDoc(sessionRef);
+    if (!sessionSnap.exists()) throw new Error("Exam session not found");
+    const sessionData = docToData<ExamSession>(sessionSnap);
+    const currentExtra = sessionData.extendedMinutes || 0;
+    await updateDoc(sessionRef, {
+        extendedMinutes: currentExtra + additionalMinutes
+    });
+};
+
+export const sendStudentMessage = async (sessionId: string, message: string): Promise<void> => {
+    const sessionRef = doc(db, "exam_sessions", sessionId);
+    await updateDoc(sessionRef, {
+        invigilatorMessage: message
+    });
+};
+
+export const broadcastInvigilatorMessage = async (examId: string | null, message: string): Promise<number> => {
+    let q;
+    if (examId && examId !== "all") {
+        q = query(collection(db, "exam_sessions"), where("examId", "==", examId), where("isCompleted", "==", false));
+    } else {
+        q = query(collection(db, "exam_sessions"), where("isCompleted", "==", false));
+    }
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(d => {
+        batch.update(d.ref, { broadcastMessage: message });
+    });
+    await batch.commit();
+    return snapshot.docs.length;
+};
+
+// --- QA Test Purge API ---
+export const deleteTestAttemptsBulk = async (): Promise<void> => {
+    try {
+        const resultsQuery = query(collection(db, "results"), where("isTestAttempt", "==", true));
+        const resultsSnapshot = await getDocs(resultsQuery);
+
+        const sessionsQuery = query(collection(db, "exam_sessions"), where("isTestAttempt", "==", true));
+        const sessionsSnapshot = await getDocs(sessionsQuery);
+
+        const batch = writeBatch(db);
+        resultsSnapshot.docs.forEach(d => {
+            batch.delete(d.ref);
+        });
+        sessionsSnapshot.docs.forEach(d => {
+            batch.delete(d.ref);
+        });
+        await batch.commit();
+        console.log(`Successfully purged ${resultsSnapshot.docs.length} test results and ${sessionsSnapshot.docs.length} test sessions.`);
+    } catch (error) {
+        console.error("Error purging test attempts:", error);
+        throw error;
+    }
 };

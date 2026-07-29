@@ -627,3 +627,84 @@ Keep all existing student and staff functionality completely unaffected — this
 ---
 
 One risk worth flagging clearly to your agent (and to yourself): **this feature is a potential integrity backdoor if scoped loosely**. The two things that matter most are (1) making sure test-user privileges can only be granted by a super-admin, not self-assigned or accidentally inherited, and (2) making sure test attempts are *tagged and excluded everywhere* — results, rankings, invigilator hub, exports — with no gaps. I'd have the agent explicitly walk through every place student data currently surfaces and confirm test-user exclusion at each one, rather than assuming one central filter catches everything.
+
+
+---------------------------------------------------------------
+
+
+
+
+Here's the review prompt for the **Analysis/Analytics page**, following the same performance-first structure as the Student Profile fix, but scoped for what's likely a broader (class-wide/school-wide) analytics dashboard:
+
+---
+
+**Prompt:**
+
+"Act as a senior fullstack engineer. I want you to audit and optimize the **Analysis/Analytics page** in our app. This page is heavy — likely showing class-wide, subject-wide, and/or school-wide performance analytics — and it's slowing down the app, similar to the freezing issue found on the Student Profile page. Prioritize diagnosing and fixing performance before adding any new features.
+
+**Step 1 — Root Cause Diagnosis (Priority #1)**
+Before writing any code, profile and investigate:
+
+1. **Where is the computation happening?** — Are averages, rankings, pass rates, trend comparisons, and other analytics being calculated **client-side in the browser** on every page load, or precomputed on the backend and simply fetched?
+2. **Data volume** — Is the page pulling *every* student's *every* result across *every* term/subject at once, instead of scoping to what's actually being viewed (e.g., one class, one term, one subject at a time)?
+3. **Chart/graph rendering** — If using chart libraries (bar/line/pie charts for performance trends, subject comparisons, pass/fail distributions), check how many data points are rendered at once and whether charts re-mount/recalculate unnecessarily on unrelated state changes.
+4. **Re-render behavior** — Check for missing memoization (`useMemo`, `useCallback`, `React.memo`) causing expensive aggregation/sorting logic to re-run on every render instead of only when underlying data changes.
+5. **Main thread blocking** — Identify any synchronous heavy computation (sorting large datasets, computing averages/rankings/standard deviations across many students) running directly in the browser instead of being offloaded or precomputed.
+6. **Network pattern** — Check if the page fires many sequential/redundant API calls (e.g., separate calls per subject, per class) instead of a single batched, purpose-built analytics endpoint.
+7. **Comparison/filter interactions** — If the page allows comparing multiple classes/subjects/terms, check whether every filter change triggers a full re-fetch + full re-computation of everything, rather than just the affected section.
+
+Report back clearly: is the bottleneck primarily **backend** (no precomputed/cached analytics, or an inefficient query), **frontend** (too much rendered/recalculated in-browser), or **both**?
+
+**Step 2 — Optimization Plan**
+Based on the diagnosis, produce a checklist covering:
+
+**A. Move Computation Off the Client**
+8. Precompute and cache analytics (averages, rankings, pass/fail rates, trend data) on the **backend** — ideally recalculated only when new results are added/updated, not on every page view.
+9. Store precomputed analytics in a dedicated summary table or cache layer (e.g., Redis, or a materialized/aggregate table) rather than recalculating from raw result rows every time the page loads.
+10. Design purpose-built API endpoints that return *already-aggregated* data (e.g., `/analytics/class/:id/summary`) instead of the frontend fetching raw records and aggregating them itself.
+
+**B. Scope What's Loaded**
+11. **Default to a narrow scope** — e.g., load one class + current term by default, not the entire school's history — and let the admin explicitly select broader scope/comparisons if needed.
+12. **Lazy-load sections** — load top-level summary first (e.g., overall pass rate, average score); load detailed breakdowns (per-subject, per-student, trend-over-time) only when the admin expands/selects that section.
+13. **Tab or section-based structure** — split into logical views (Overview / By Subject / By Class / Trends Over Time) so only the active section's data loads and computes.
+
+**C. Frontend Rendering Efficiency**
+14. Memoize expensive calculations and chart data transformations so they don't recompute on unrelated re-renders.
+15. Downsample/aggregate chart data points for trend views spanning many terms/years (don't plot every raw data point if there are hundreds).
+16. Debounce filter/comparison controls so rapid changes don't trigger a cascade of full re-fetches and re-renders.
+17. Code-split this page (`React.lazy` + `Suspense`) so its bundle isn't loaded until navigated to.
+18. Ensure chart components update in place rather than fully re-mounting on data changes.
+
+**D. Network Efficiency**
+19. Batch related data needs into single, well-designed endpoints rather than many small calls.
+20. Add loading skeletons per section so the page feels responsive while data streams in progressively, instead of blocking the whole page until every computation finishes.
+21. Consider caching recent analytics responses client-side (e.g., with React Query/SWR) so switching between already-viewed filters doesn't re-trigger a full backend round-trip.
+
+**E. General Gap Review** — also check for:
+- Error boundaries per analytics widget/section (one broken chart shouldn't freeze/crash the whole page)
+- Empty/loading states per section
+- Responsive behavior — analytics pages with dense charts often break down badly on mobile/tablet
+- Whether the same heavy-computation pattern exists on other pages (Student Profile was already found; check Results page, Invigilator Hub reporting, etc.) and should be fixed consistently using the same backend-precomputation approach
+
+Present this as a checklist/task list, grouped by category (Diagnosis Findings, Backend Computation, Scope Reduction, Frontend Rendering, Network Efficiency, Other Gaps), so I can review and prioritize before you write code.
+
+**Step 3 — Implement**
+Once I approve the plan, implement starting with whatever the diagnosis identifies as the primary cause. Pay special attention to:
+- Not losing any analytics currently shown — the goal is loading it efficiently, not removing functionality
+- Testing with the largest realistic dataset (a class/school with several years of history and many students) as the worst-case scenario
+- Wiring to real backend endpoints; if precomputed/cached analytics endpoints don't exist yet, flag it and propose the API contract (including a strategy for when/how cached analytics get refreshed) rather than guessing
+
+Keep existing functionality working. Match existing design system and patterns already in the codebase.
+
+**Step 4 — Verify**
+- Use browser DevTools Performance tab to measure before/after: page load time, main thread blocking time, memory usage, and time-to-interactive.
+- Confirm the page no longer freezes/hangs, specifically testing with the heaviest realistic dataset.
+- Confirm analytics numbers are still accurate after moving computation to the backend (no calculation errors introduced during the refactor).
+- Confirm no existing functionality broke.
+- Note any backend/infrastructure assumptions made (e.g., need for a caching layer, a scheduled job to refresh precomputed analytics, or a new aggregate table).
+
+**Output**: First, report back the root cause diagnosis from Step 1 in plain terms. Then present the optimization checklist from Step 2, wait for my go-ahead, then implement, then show verification artifacts including before/after performance measurements."
+
+---
+
+Given the pattern you found on the Student Profile page, I'd bet this Analysis page has the **same root cause** — raw data being aggregated client-side instead of precomputed server-side. It's worth telling the agent explicitly to check whether the fix from the Student Profile review can be **reused/extended** here (e.g., the same backend analytics/caching layer serving both pages) rather than building a second, separate solution — that'll save significant duplicate work if the underlying problem is identical.

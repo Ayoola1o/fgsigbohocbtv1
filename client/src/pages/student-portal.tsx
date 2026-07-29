@@ -47,9 +47,9 @@ export default function StudentPortal() {
   }, [setLocation]);
 
   const { data: exams, isLoading } = useQuery<Exam[]>({
-    queryKey: ["/api/exams", { classLevel: student?.classLevel }],
+    queryKey: ["/api/exams", { classLevel: student?.isTestUser ? undefined : student?.classLevel }],
     queryFn: async () => {
-      return getExams(student?.classLevel);
+      return getExams(student?.isTestUser ? undefined : student?.classLevel);
     },
     enabled: !!student,
   });
@@ -219,6 +219,9 @@ export default function StudentPortal() {
               {exams
                 .filter((exam) => {
                   if (!exam.isActive) return false;
+                  // Test users can view and attempt all active exams regardless of department/elective mappings
+                  if (currentStudent?.isTestUser === true) return true;
+
                   // If hideCompleted setting is active, filter out completed exams
                   if (hideCompleted && isExamCompleted(exam.id)) return false;
 
@@ -376,6 +379,34 @@ export default function StudentPortal() {
                             <Button disabled className="w-full bg-rose-100 text-rose-400 dark:bg-rose-955/20 dark:text-rose-600 font-bold border-none cursor-not-allowed rounded-xl h-10">
                               Locked / Blocked
                             </Button>
+                          </div>
+                        ) : currentStudent?.isTestUser === true ? (
+                          <div className="space-y-2 pt-2 border-t border-indigo-150/40 dark:border-indigo-900/20">
+                            <div className="flex items-center justify-between text-xs font-extrabold text-indigo-650 dark:text-indigo-400">
+                              <span className="flex items-center gap-1.5">
+                                <Sparkles className="h-4 w-4 shrink-0 text-indigo-500" />
+                                QA Staff Privileges
+                              </span>
+                              {examResult && (
+                                <Badge className="bg-indigo-50 text-indigo-750 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/30 dark:border-indigo-900/30 text-[9px] uppercase rounded-lg">
+                                  Tested
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              {examResult && (
+                                <Link href={`/exam/result/${examResult.id}`} className="flex-1">
+                                  <Button variant="outline" className="w-full border-indigo-200 bg-indigo-50/20 text-indigo-700 hover:bg-indigo-50/50 font-bold rounded-xl h-10 transition-colors text-[11px] px-1.5">
+                                    Last Result
+                                  </Button>
+                                </Link>
+                              )}
+                              <Link href={`/exam/${exam.id}/start?studentName=${encodeURIComponent(currentStudent.name)}&studentId=${encodeURIComponent(currentStudent.studentId)}`} className="flex-1">
+                                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-md hover:scale-[1.01] transition-all rounded-xl h-10 flex items-center justify-center gap-1 text-[11px] px-1.5">
+                                  Run QA Test <ArrowRight className="h-3.5 w-3.5" />
+                                </Button>
+                              </Link>
+                            </div>
                           </div>
                         ) : hasTaken ? (
                           <div className="space-y-2 pt-2 border-t border-emerald-100/40 dark:border-emerald-900/20">

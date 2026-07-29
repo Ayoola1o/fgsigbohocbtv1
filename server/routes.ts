@@ -1250,6 +1250,51 @@ Return JSON with:
     }
   });
 
+  // Bulk purge QA test attempt data
+  app.post("/api/admin/purge-test-data", async (req, res) => {
+    try {
+      console.log("[routes.ts] Initiating bulk purge of QA test attempts...");
+      
+      // 1. Purge from local MemStorage
+      await storage.purgeTestAttempts();
+      
+      // 2. Purge from Firestore if configured
+      try {
+        const { db: firestoreDb } = await import("./firebase");
+        if (firestoreDb) {
+          const { collection, getDocs, writeBatch, query, where } = await import("firebase/firestore");
+          
+          const resultsQuery = query(collection(firestoreDb, "results"), where("isTestAttempt", "==", true));
+          const resultsSnapshot = await getDocs(resultsQuery);
+
+          const sessionsQuery = query(collection(firestoreDb, "exam_sessions"), where("isTestAttempt", "==", true));
+          const sessionsSnapshot = await getDocs(sessionsQuery);
+
+          const batch = writeBatch(firestoreDb);
+          resultsSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+          });
+          sessionsSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+          console.log(`[routes.ts] Firestore purged: ${resultsSnapshot.docs.length} results, ${sessionsSnapshot.docs.length} sessions.`);
+        }
+      } catch (firestoreErr) {
+        console.warn("⚠️ Firestore purge failed or not configured, relying on local storage purge:", firestoreErr);
+      }
+
+      // 3. Clear analytics cache
+      analyticsResponseCache.clear();
+      console.log("[routes.ts] Analytics response cache cleared.");
+
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error("Purge test data failed:", error);
+      res.status(500).json({ error: "Failed to purge test data", details: error.message || String(error) });
+    }
+  });
+
   // ─── Server-Side Psychometric Analytics Engine ───
   // Moves ALL heavy computation off the browser thread to eliminate client freezing.
   app.get("/api/analytics", async (req, res) => {
@@ -1267,11 +1312,83 @@ Return JSON with:
       let allExamSessions: any[] = [];
 
       try {
-        allResults = await getFirestoreResults();
+        const { db: firestoreDb } = await import("./firebase");
+        if (firestoreDb) {
+          const { collection, getDocs, query, where, limit } = await import("firebase/firestore");
+
+          // 1. Scoped Results
+          let resultsQ;
+          if (selectedExamId !== "__all__") {
+            resultsQ = query(collection(firestoreDb, "results"), where("examId", "==", selectedExamId));
+          } else if (studentFilter !== "__all__") {
+            resultsQ = query(collection(firestoreDb, "results"), where("studentId", "==", studentFilter));
+          } else {
+            resultsQ = query(collection(firestoreDb, "results"), limit(600));
+          }
+          const resultsSnap = await getDocs(resultsQ);
+          allResults = resultsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // 2. Scoped Questions
+          let questionsQ;
+          if (subjectFilter !== "__all__") {
+            questionsQ = query(collection(firestoreDb, "questions"), where("subject", "==", subjectFilter));
+          } else if (classFilter !== "__all__") {
+            questionsQ = query(collection(firestoreDb, "questions"), where("classLevel", "==", classFilter));
+          } else {
+            questionsQ = query(collection(firestoreDb, "questions"), limit(1000));
+          }
+          const questionsSnap = await getDocs(questionsQ);
+          allQuestions = questionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // 3. Scoped Exams
+          let examsQ;
+          if (selectedExamId !== "__all__") {
+            examsQ = query(collection(firestoreDb, "exams"), where("id", "==", selectedExamId));
+          } else if (classFilter !== "__all__") {
+            examsQ = query(collection(firestoreDb, "exams"), where("classLevel", "==", classFilter));
+          } else {
+            examsQ = query(collection(firestoreDb, "exams"), limit(200));
+          }
+          const examsSnap = await getDocs(examsQ);
+          allExams = examsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // 4. Scoped Students
+          let studentsQ;
+          if (studentFilter !== "__all__") {
+            studentsQ = query(collection(firestoreDb, "students"), where("studentId", "==", studentFilter));
+          } else if (classFilter !== "__all__") {
+            studentsQ = query(collection(firestoreDb, "students"), where("classLevel", "==", classFilter));
+          } else {
+            studentsQ = query(collection(firestoreDb, "students"), limit(500));
+          }
+          const studentsSnap = await getDocs(studentsQ);
+          allStudents = studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // 5. Scoped Sessions
+          let sessionsQ;
+          if (selectedExamId !== "__all__") {
+            sessionsQ = query(collection(firestoreDb, "exam_sessions"), where("examId", "==", selectedExamId));
+          } else if (studentFilter !== "__all__") {
+            sessionsQ = query(collection(firestoreDb, "exam_sessions"), where("studentId", "==", studentFilter));
+          } else {
+            sessionsQ = query(collection(firestoreDb, "exam_sessions"), limit(500));
+          }
+          const sessionsSnap = await getDocs(sessionsQ);
+          allExamSessions = sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
       } catch (e) {
-        console.warn("⚠️ [routes.ts] Firestore results fetch failed. Falling back to local storage:", e);
-        allResults = await storage.getResults();
+        console.warn("⚠️ Firestore analytics fetch failed. Falling back to local storage:", e);
       }
+
+      if (allResults.length === 0) allResults = await storage.getResults();
+      if (allQuestions.length === 0) allQuestions = await storage.getQuestions();
+      if (allExams.length === 0) allExams = await storage.getExams();
+      if (allStudents.length === 0) allStudents = await storage.getStudents();
+      if (allExamSessions.length === 0) allExamSessions = await storage.getExamSessions();
+
+      // Filter out test attempts to ensure absolute data isolation in analytics cohort calculations
+      allResults = allResults.filter(r => r.isTestAttempt !== true && r.isTestAttempt !== "true");
+      allExamSessions = allExamSessions.filter(s => s.isTestAttempt !== true && s.isTestAttempt !== "true");
 
       // Compute cache hash based on results count and last completion timestamp
       const lastResultTime = allResults.length > 0 ? (allResults[allResults.length - 1]?.completedAt || '') : '';
@@ -1282,50 +1399,6 @@ Return JSON with:
       if (cachedEntry && cachedEntry.cacheHash === cacheHash) {
         console.log(`[routes.ts] Instant Analytics Cache Hit for key: ${cacheKey}`);
         return res.json(cachedEntry.data);
-      }
-
-      try {
-        allQuestions = await getFirestoreQuestions();
-      } catch (e) {
-        console.warn("⚠️ [routes.ts] Firestore questions fetch failed. Falling back to local storage:", e);
-        allQuestions = await storage.getQuestions();
-      }
-
-      try {
-        allExams = await getFirestoreExams();
-      } catch (e) {
-        console.warn("⚠️ [routes.ts] Firestore exams fetch failed. Falling back to local storage:", e);
-        allExams = await storage.getExams();
-      }
-
-      // Fetch students from Firestore or local storage
-      try {
-        const { db: firestoreDb } = await import("./firebase");
-        if (firestoreDb) {
-          const { collection, getDocs } = await import("firebase/firestore");
-          const snapshot = await getDocs(collection(firestoreDb, "students"));
-          allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        }
-      } catch (e) {
-        console.warn("⚠️ Firestore students fetch failed. Falling back to local storage:", e);
-      }
-      if (allStudents.length === 0) {
-        allStudents = await storage.getStudents();
-      }
-
-      // Fetch sessions from Firestore or local storage
-      try {
-        const { db: firestoreDb } = await import("./firebase");
-        if (firestoreDb) {
-          const { collection, getDocs } = await import("firebase/firestore");
-          const snapshot = await getDocs(collection(firestoreDb, "exam_sessions"));
-          allExamSessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        }
-      } catch (e) {
-        console.warn("⚠️ Firestore exam sessions fetch failed. Falling back to local storage:", e);
-      }
-      if (allExamSessions.length === 0) {
-        allExamSessions = await storage.getExamSessions();
       }
 
       const workerPayload = {

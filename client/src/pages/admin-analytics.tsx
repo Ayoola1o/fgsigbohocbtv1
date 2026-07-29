@@ -130,18 +130,6 @@ export default function AdminAnalytics() {
     queryKey: ["/api/exams"],
   });
 
-  // Fetch results to compute exam-by-exam analytics overview
-  const { data: results = [] } = useQuery<Result[]>({
-    queryKey: ["/api/results"],
-    queryFn: async () => {
-      try {
-        return await getResults();
-      } catch (err) {
-        console.error("AdminAnalytics: Error fetching results for comparative ledger:", err);
-        return [];
-      }
-    }
-  });
 
   // Unique filters lists mapped dynamically from exams
   const termsList = useMemo(() => {
@@ -872,11 +860,10 @@ export default function AdminAnalytics() {
                     </TableHeader>
                     <TableBody>
                       {exams.map((exam) => {
-                        const examResults = results.filter(r => r.examId === exam.id);
-                        const candidatesCount = examResults.length;
-                        const meanScore = candidatesCount > 0
-                          ? Math.round(examResults.reduce((sum, r) => sum + (r.percentage || 0), 0) / candidatesCount)
-                          : 0;
+                        const ledgerEntry = (analytics as any)?.examLedger?.[exam.id];
+                        const candidatesCount = ledgerEntry?.candidatesCount || 0;
+                        const meanScore = ledgerEntry?.meanScore || 0;
+
                         
                         let rigourLabel = "No Data";
                         let rigourClass = "bg-slate-100 text-slate-650 dark:bg-slate-800 dark:text-slate-400";

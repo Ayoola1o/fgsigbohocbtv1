@@ -138,6 +138,11 @@ export async function apiRequest<T = unknown>(
     return fb.toggleStudentExamBlock(match.id, data.examId, data.blockState) as T;
   }
 
+  // Purge QA Test Attempts
+  if (method === "POST" && url === "/api/admin/purge-test-data") {
+    return fb.deleteTestAttemptsBulk() as T;
+  }
+
   // Settings
   if (url === "/api/settings" && (method === "POST" || method === "PUT")) {
     try {

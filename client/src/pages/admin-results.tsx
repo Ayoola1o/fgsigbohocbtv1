@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { getResults, deleteResult, deleteResultsBulk } from "@/lib/firebase-api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useScoreFormat } from "@/hooks/use-score-format";
+import { apiRequest } from "@/lib/queryClient";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +62,8 @@ export default function AdminResults() {
     from: undefined,
     to: undefined,
   });
+
+  const [resultsTab, setResultsTab] = useState<"real" | "qa">("real");
 
   // Modal State
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
@@ -196,39 +199,48 @@ export default function AdminResults() {
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
   const { data: students } = useQuery<Student[]>({ queryKey: ["/api/students"] });
 
-  const filteredResults = results?.filter(
-    (result) => {
-      const exam = exams?.find(e => e.id === result.examId);
-      const student = students?.find(s => 
-        s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
-        s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
-      );
+  const filteredResults = useMemo(() => {
+    if (!results) return [];
+    return results.filter(
+      (result) => {
+        // Tab separation for QA test runs
+        const isQA = result.isTestAttempt === true;
+        if (resultsTab === "real" && isQA) return false;
+        if (resultsTab === "qa" && !isQA) return false;
 
-      const examMatch = filterExamId === "ALL" || result.examId === filterExamId;
-      const searchMatch = result.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        result.studentId.toLowerCase().includes(searchQuery.toLowerCase());
+        const exam = exams?.find(e => e.id === result.examId);
+        const student = students?.find(s => 
+          s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
+          s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
+        );
 
-      const classLevelMatch = filterClassLevel === "ALL" || student?.classLevel === filterClassLevel || (result as any).classLevel === filterClassLevel;
-      const departmentMatch = filterDepartment === "ALL" || student?.department === filterDepartment || (result as any).department === filterDepartment;
-      const statusMatch = filterStatus === "ALL" || (filterStatus === "PASS" ? result.passed : !result.passed);
+        const examMatch = filterExamId === "ALL" || result.examId === filterExamId;
+        const searchMatch = result.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          result.studentId.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // Exam type match
-      const isMultiExam = !!(exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 1);
-      const examTypeMatch = filterExamType === "ALL" || (filterExamType === "multi" ? isMultiExam : !isMultiExam);
+        const classLevelMatch = filterClassLevel === "ALL" || student?.classLevel === filterClassLevel || (result as any).classLevel === filterClassLevel;
+        const departmentMatch = filterDepartment === "ALL" || student?.department === filterDepartment || (result as any).department === filterDepartment;
+        const statusMatch = filterStatus === "ALL" || (filterStatus === "PASS" ? result.passed : !result.passed);
 
-      // Score range match
-      let scoreRangeMatch = true;
-      if (filterScoreRange === "<40") scoreRangeMatch = result.percentage < 40;
-      else if (filterScoreRange === "40-60") scoreRangeMatch = result.percentage >= 40 && result.percentage <= 60;
-      else if (filterScoreRange === ">60") scoreRangeMatch = result.percentage > 60;
+        // Exam type match
+        const isMultiExam = !!(exam?.subjectConfig && Object.keys(exam.subjectConfig).length > 1);
+        const examTypeMatch = filterExamType === "ALL" || (filterExamType === "multi" ? isMultiExam : !isMultiExam);
 
-      const completedDate = new Date(result.completedAt);
-      const dateMatch = (!dateRange.from || completedDate >= dateRange.from) &&
-        (!dateRange.to || completedDate <= dateRange.to);
+        // Score range match
+        let scoreRangeMatch = true;
+        if (filterScoreRange === "<40") scoreRangeMatch = result.percentage < 40;
+        else if (filterScoreRange === "40-60") scoreRangeMatch = result.percentage >= 40 && result.percentage <= 60;
+        else if (filterScoreRange === ">60") scoreRangeMatch = result.percentage > 60;
 
-      return examMatch && searchMatch && classLevelMatch && departmentMatch && statusMatch && examTypeMatch && scoreRangeMatch && dateMatch;
-    }
-  );
+        const completedDate = new Date(result.completedAt);
+        const dateMatch = (!dateRange.from || completedDate >= dateRange.from) &&
+          (!dateRange.to || completedDate <= dateRange.to);
+
+        return examMatch && searchMatch && classLevelMatch && departmentMatch && statusMatch && examTypeMatch && scoreRangeMatch && dateMatch;
+      }
+    );
+  }, [results, exams, students, filterExamId, searchQuery, filterClassLevel, filterDepartment, filterStatus, filterExamType, filterScoreRange, dateRange, resultsTab]);
+
   const [viewMode, setViewMode] = useState<"combined" | "by-subject">("combined");
 
   const sortedResults = useMemo(() => {
@@ -784,28 +796,37 @@ export default function AdminResults() {
   // Purge Test Data Candidates Preview & Execution
   const purgeCandidateList = useMemo(() => {
     if (!results) return [];
+    
+    // Always include all test user attempts in the purge preview
+    const testAttempts = results.filter(r => r.isTestAttempt === true);
+    
     const kw = purgeKeyword.trim().toLowerCase();
-    return results.filter(r => {
-      if (!kw) return false;
+    if (!kw) return testAttempts;
+    
+    const keywordMatches = results.filter(r => {
       const nameMatch = r.studentName.toLowerCase().includes(kw);
       const idMatch = r.studentId.toLowerCase().includes(kw);
       const zeroMatch = kw === "zero" && r.percentage === 0;
       return nameMatch || idMatch || zeroMatch;
     });
+
+    const unionMap = new Map<string, Result>();
+    testAttempts.forEach(r => unionMap.set(r.id, r));
+    keywordMatches.forEach(r => unionMap.set(r.id, r));
+
+    return Array.from(unionMap.values());
   }, [results, purgeKeyword]);
 
   const handleExecutePurge = async () => {
-    if (purgeCandidateList.length === 0) return;
     setIsPurging(true);
     try {
-      const idsToPurge = purgeCandidateList.map(r => r.id);
-      await deleteResultsBulk(idsToPurge);
+      await apiRequest("POST", "/api/admin/purge-test-data");
       queryClient.invalidateQueries({ queryKey: ["/api/results"] });
       setIsPurgeModalOpen(false);
       setPurgeStep("preview");
       toast({
         title: "Test Data Purged",
-        description: `Successfully purged ${idsToPurge.length} test result record(s).`,
+        description: "Successfully purged all QA Staff test sessions and result records.",
       });
     } catch (err) {
       console.error("Purge error:", err);
@@ -1522,6 +1543,34 @@ export default function AdminResults() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Results Stream Selection Tabs */}
+        <div className="flex bg-slate-100 dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-200/40 dark:border-slate-850 w-full sm:w-fit mb-6 print:hidden">
+          <Button
+            onClick={() => setResultsTab("real")}
+            className={cn(
+              "h-10 rounded-xl text-xs font-black transition-all px-6 flex items-center gap-2",
+              resultsTab === "real" 
+                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md font-bold" 
+                : "bg-transparent text-slate-550 dark:text-slate-400 hover:text-indigo-605 border-none hover:bg-slate-50 dark:hover:bg-slate-900/50"
+            )}
+          >
+            <CheckCircle className="h-4 w-4" />
+            General Student Results
+          </Button>
+          <Button
+            onClick={() => setResultsTab("qa")}
+            className={cn(
+              "h-10 rounded-xl text-xs font-black transition-all px-6 flex items-center gap-2",
+              resultsTab === "qa" 
+                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-md font-bold" 
+                : "bg-transparent text-slate-550 dark:text-slate-400 hover:text-indigo-605 border-none hover:bg-slate-50 dark:hover:bg-slate-900/50"
+            )}
+          >
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            QA Staff Test Logs
+          </Button>
+        </div>
 
         {/* 2-Column Grid Layout: 8/12 Main Table + 4/12 Visual Analytics Sidebar (uplift.md Section 5) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:block">

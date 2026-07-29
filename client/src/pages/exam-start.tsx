@@ -56,14 +56,16 @@ export default function ExamStart() {
     queryKey: ["/api/results"],
   });
   
-  const hasTaken = results.some(r => 
-    r.examId === examId && 
-    (r.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
-     (currentStudent && r.studentId?.trim().toLowerCase() === currentStudent.id?.trim().toLowerCase()))
-  ) || (studentId && localStorage.getItem(`fia_submitted_exam_${studentId.trim().toLowerCase()}_${examId}`) === "true")
-    || (currentStudent && localStorage.getItem(`fia_submitted_exam_${currentStudent.id?.trim().toLowerCase()}_${examId}`) === "true");
+  const hasTaken = currentStudent?.isTestUser === true
+    ? false
+    : results.some(r => 
+        r.examId === examId && 
+        (r.studentId?.trim().toLowerCase() === studentId?.trim().toLowerCase() ||
+         (currentStudent && r.studentId?.trim().toLowerCase() === currentStudent.id?.trim().toLowerCase()))
+      ) || (studentId && localStorage.getItem(`fia_submitted_exam_${studentId.trim().toLowerCase()}_${examId}`) === "true")
+        || (currentStudent && localStorage.getItem(`fia_submitted_exam_${currentStudent.id?.trim().toLowerCase()}_${examId}`) === "true");
 
-  const isBlocked = currentStudent?.blockedExams?.includes(examId!) || false;
+  const isBlocked = currentStudent?.isTestUser === true ? false : (currentStudent?.blockedExams?.includes(examId!) || false);
 
   const startExamMutation = useMutation({
     mutationFn: async () => {
