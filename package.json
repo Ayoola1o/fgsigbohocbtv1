@@ -13,9 +13,9 @@
     "dev:admin": "npx turbo run dev --filter=@cbt/admin",
     "dev:student": "npx turbo run dev --filter=@cbt/student-portal",
     "dev:all": "npx turbo run dev",
-    "build": "npx turbo run build && node build-backend.js",
-    "build:admin": "npx turbo run build --filter=@cbt/admin",
-    "build:student": "npx turbo run build --filter=@cbt/student-portal",
+    "build": "npx turbo run build && node build-backend.js && node scripts/copy-dist.js",
+    "build:admin": "npx turbo run build --filter=@cbt/admin && node build-backend.js && node scripts/copy-dist.js",
+    "build:student": "npx turbo run build --filter=@cbt/student-portal && node build-backend.js && node scripts/copy-dist.js",
     "start": "vite preview",
     "check": "tsc --noEmit && npx turbo run check",
     "init-firebase": "tsx scripts/init-firebase.ts"
