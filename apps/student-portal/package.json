@@ -12,6 +12,7 @@
     "@cbt/shared-api-client": "*",
     "@cbt/shared-realtime": "*",
     "@cbt/shared-types": "*",
-    "@cbt/shared-ui": "*"
+    "@cbt/shared-ui": "*",
+    "firebase": "^11.3.0"
   }
 }

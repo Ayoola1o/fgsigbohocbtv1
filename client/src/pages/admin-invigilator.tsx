@@ -130,6 +130,7 @@ export default function AdminInvigilatorPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [examFilter, setExamFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("today"); // default to Today
+  const [isLiveSyncEnabled, setIsLiveSyncEnabled] = useState<boolean>(false); // Default OFF to save quota!
   const [extraTimeMinutes, setExtraTimeMinutes] = useState<number>(5);
   const [selectedSessionForAction, setSelectedSessionForAction] = useState<InvigilatorSession | null>(null);
   const [actionType, setActionType] = useState<"addTime" | "forceSubmit" | "deleteSession" | "purgeCompleted" | "purgeExpired" | "forceSubmitAll" | null>(null);
@@ -245,7 +246,7 @@ export default function AdminInvigilatorPage() {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as InvigilatorSession);
       return list;
     },
-    refetchInterval: 15000,
+    refetchInterval: isLiveSyncEnabled ? 15000 : false,
   });
 
 
@@ -657,12 +658,27 @@ export default function AdminInvigilatorPage() {
           </Button>
 
           <Button
+            onClick={() => setIsLiveSyncEnabled(prev => !prev)}
+            className={cn(
+              "rounded-xl h-10 px-3.5 text-xs font-bold gap-2 shadow-md transition-all border",
+              isLiveSyncEnabled
+                ? "bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-300 border-emerald-700/80"
+                : "bg-[#1c1d22] hover:bg-[#272830] text-slate-400 border-slate-700/80"
+            )}
+            title={isLiveSyncEnabled ? "Live Polling ON (Auto-refetches every 15s)" : "Live Polling OFF (Click to turn ON live polling)"}
+          >
+            <Radio className={cn("h-4 w-4", isLiveSyncEnabled ? "animate-pulse text-emerald-400" : "text-slate-500")} />
+            <span>{isLiveSyncEnabled ? "Live Sync: ON" : "Live Sync: OFF"}</span>
+          </Button>
+
+          <Button
             onClick={() => refetch()}
             variant="ghost"
-            className="text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl h-10 w-10 p-0"
-            title="Refresh feed"
+            className="text-slate-400 hover:text-white hover:bg-slate-800/60 rounded-xl h-10 px-3 text-xs font-bold gap-1.5"
+            title="Refresh feed manually"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin text-emerald-400" : ""}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </div>
