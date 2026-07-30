@@ -18,6 +18,23 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("firebase")) {
+              return "vendor-firebase";
+            }
+            if (id.includes("lucide-react") || id.includes("framer-motion") || id.includes("@radix-ui")) {
+              return "vendor-ui";
+            }
+            if (id.includes("@tanstack") || id.includes("wouter")) {
+              return "vendor-core";
+            }
+          }
+        },
+      },
+    },
   },
   server: {
     host: "0.0.0.0",

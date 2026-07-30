@@ -43,6 +43,9 @@ import {
     ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import type { Result, Exam, Student } from "@shared/schema";
+import { db } from "@/lib/firebase";
+import { getDocs, query, collection, where, getDoc, doc } from "firebase/firestore";
+import { getQuestionsByIds } from "@/lib/firebase-api";
 import { PrintStudyGuideTemplate } from "@/components/PrintStudyGuideTemplate";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -100,10 +103,6 @@ export default function AdminStudentProfile() {
         queryKey: ["studentScopedAnalyticsData", student?.id, student?.studentId, student?.classLevel],
         enabled: !!student,
         queryFn: async () => {
-            const { db } = await import("@/lib/firebase");
-            const { getDocs, query, collection, where, getDoc, doc } = await import("firebase/firestore");
-            const { getQuestionsByIds } = await import("@/lib/firebase-api");
-
             // A. Student's own results
             const studentResultsQuery = query(
                 collection(db, "results"),

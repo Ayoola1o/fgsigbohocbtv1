@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import * as fb from "./firebase-api";
 
 // Helper to match paths
 const matchPath = (pattern: string, path: string) => {
@@ -23,7 +24,6 @@ export async function apiRequest<T = unknown>(
   data?: any,
 ): Promise<T> {
   console.log(`API Request: ${method} ${url}`, data);
-  const fb = await import("./firebase-api");
 
   // Admin Auth
   if (method === "POST" && url === "/api/admin/login") {
@@ -178,8 +178,6 @@ export const getQueryFn = <T>({ on401: unauthorizedBehavior }: { on401: Unauthor
       }
       return JSON.parse(userStr) as T;
     }
-
-    const fb = await import("./firebase-api");
 
     // Questions
     if (url === "/api/questions") {
