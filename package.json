@@ -9,7 +9,8 @@
     "build": "vite build",
     "start": "vite preview",
     "check": "tsc",
-    "init-firebase": "tsx scripts/init-firebase.ts"
+    "init-firebase": "tsx scripts/init-firebase.ts",
+    "seed": "tsx scripts/seed-firebase-data.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

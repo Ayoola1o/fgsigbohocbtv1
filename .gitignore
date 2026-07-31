@@ -7,6 +7,8 @@ vite.config.ts.*
 *.tar.gz
 .env
 .env.local
+client/.env
+*.env
 
 # Local Data & Uploads
 uploads/
