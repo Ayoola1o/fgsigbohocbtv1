@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Award, TrendingUp, Sparkles, Clock, ChevronRight, User, BarChart3, FileSpreadsheet } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
-import type { Result, Exam, Student } from "@shared/schema";
+import { Result, Exam, Student, defaultSystemSettings } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { createRoot } from "react-dom/client";
@@ -56,6 +56,7 @@ export default function AdminResults() {
   const [filterDepartment, setFilterDepartment] = useState<string>("ALL");
   const [filterStatus, setFilterStatus] = useState<string>("ALL"); // "ALL", "PASS", "FAIL"
   const [filterExamType, setFilterExamType] = useState<string>("ALL"); // "ALL", "single", "multi"
+  const [filterTerm, setFilterTerm] = useState<string>("ALL");
   const [filterScoreRange, setFilterScoreRange] = useState<string>("ALL"); // "ALL", "<40", "40-60", ">60"
   const [sortBy, setSortBy] = useState<string>("date-desc"); // "date-desc", "date-asc", "name-asc", "name-desc", "score-desc", "score-asc", "class"
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -78,6 +79,29 @@ export default function AdminResults() {
   const [selectedMultiExamId, setSelectedMultiExamId] = useState<string>("");
   const [selectedMultiSubject, setSelectedMultiSubject] = useState<string>("");
   const [selectedMultiClass, setSelectedMultiClass] = useState<string>("ALL");
+
+  // 4-Tier Missing Exam Report Modal State
+  const [isMissingExamModalOpen, setIsMissingExamModalOpen] = useState(false);
+  const [missingScope, setMissingScope] = useState<'student' | 'subject' | 'class' | 'school'>('class');
+  const [missingSelectedTerm, setMissingSelectedTerm] = useState<string>("ALL");
+  const [missingSelectedStudentId, setMissingSelectedStudentId] = useState<string>("ALL");
+  const [missingSelectedExamId, setMissingSelectedExamId] = useState<string>("ALL");
+  const [missingSelectedClass, setMissingSelectedClass] = useState<string>("ALL");
+  const [missingExamSelectionMode, setMissingExamSelectionMode] = useState<'auto' | 'custom'>('auto');
+  const [missingCustomExamIds, setMissingCustomExamIds] = useState<string[]>([]);
+
+  // Advanced Printouts Modal State
+  const [isAdvancedPrintModalOpen, setIsAdvancedPrintModalOpen] = useState(false);
+  const [advancedPrintType, setAdvancedPrintType] = useState<
+    'student-term-breakdown' | 'student-cumulative-broadsheet' | 'class-broadsheet' | 'subject-broadsheet' | 'department-broadsheet'
+  >('student-cumulative-broadsheet');
+  const [includePosition, setIncludePosition] = useState<boolean>(true);
+  const [rankingScope, setRankingScope] = useState<'class' | 'department'>('class');
+  const [selectedStudentForPrint, setSelectedStudentForPrint] = useState<string>("ALL");
+  // Broadsheet-specific filters (independent from main results table filters)
+  const [broadsheetSelectedTerm, setBroadsheetSelectedTerm] = useState<string>("ALL");
+  const [broadsheetSelectedClass, setBroadsheetSelectedClass] = useState<string>("ALL");
+  const [broadsheetSelectedDept, setBroadsheetSelectedDept] = useState<string>("ALL");
 
   // Published state
   const [publishedResultIds, setPublishedResultIds] = useState<Set<string>>(() => {
@@ -199,20 +223,32 @@ export default function AdminResults() {
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
   const { data: students } = useQuery<Student[]>({ queryKey: ["/api/students"] });
 
+  const isQAUerOrTestRecord = (record: any) => {
+    if (!record) return false;
+    if (record.isTestUser === true || record.isTestAttempt === true) return true;
+    if (record.role === 'admin' || record.role === 'staff' || record.role === 'qa') return true;
+    const sid = (record.studentId || record.id || '').toString().toUpperCase().trim();
+    const sname = (record.studentName || record.name || '').toString().toUpperCase().trim();
+    if (sid.startsWith('QA') || sid.startsWith('TEST') || sid.startsWith('STAFF') || sid.startsWith('ADMIN') || sid.includes('QA_') || sid.includes('TEST_') || sid.includes('DEMO')) return true;
+    if (sname.includes('QA TEST') || sname.includes('STAFF TEST') || sname.includes('ADMIN TEST') || sname.includes('DEMO USER') || sname.includes('[QA]') || sname.includes('TEST ACCOUNT')) return true;
+    return false;
+  };
+
   const filteredResults = useMemo(() => {
     if (!results) return [];
     return results.filter(
       (result) => {
-        // Tab separation for QA test runs
-        const isQA = result.isTestAttempt === true;
-        if (resultsTab === "real" && isQA) return false;
-        if (resultsTab === "qa" && !isQA) return false;
-
-        const exam = exams?.find(e => e.id === result.examId);
         const student = students?.find(s => 
           s.studentId?.trim().toLowerCase() === result.studentId?.trim().toLowerCase() ||
           s.id?.trim().toLowerCase() === result.studentId?.trim().toLowerCase()
         );
+
+        const exam = exams?.find(e => e.id === result.examId);
+
+        // Tab separation for QA test runs
+        const isQA = isQAUerOrTestRecord(result) || isQAUerOrTestRecord(student);
+        if (resultsTab === "real" && isQA) return false;
+        if (resultsTab === "qa" && !isQA) return false;
 
         const examMatch = filterExamId === "ALL" || result.examId === filterExamId;
         const searchMatch = result.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -236,10 +272,13 @@ export default function AdminResults() {
         const dateMatch = (!dateRange.from || completedDate >= dateRange.from) &&
           (!dateRange.to || completedDate <= dateRange.to);
 
-        return examMatch && searchMatch && classLevelMatch && departmentMatch && statusMatch && examTypeMatch && scoreRangeMatch && dateMatch;
+        const examTerm = exam?.term || (result as any).term || "First Term";
+        const termMatch = filterTerm === "ALL" || examTerm === filterTerm;
+
+        return examMatch && searchMatch && classLevelMatch && departmentMatch && statusMatch && examTypeMatch && scoreRangeMatch && dateMatch && termMatch;
       }
     );
-  }, [results, exams, students, filterExamId, searchQuery, filterClassLevel, filterDepartment, filterStatus, filterExamType, filterScoreRange, dateRange, resultsTab]);
+  }, [results, exams, students, filterExamId, searchQuery, filterClassLevel, filterDepartment, filterStatus, filterExamType, filterTerm, filterScoreRange, dateRange, resultsTab]);
 
   const [viewMode, setViewMode] = useState<"combined" | "by-subject">("combined");
 
@@ -630,10 +669,10 @@ export default function AdminResults() {
 
     const matrixRows = Object.values(studentGroupMap).map(row => {
       const scoresList = Object.values(row.scores);
-      const totalScore = scoresList.reduce((acc, curr) => acc + curr.score, 0);
-      const totalPoints = scoresList.reduce((acc, curr) => acc + curr.total, 0);
+      const totalScore = scoresList.reduce((acc: number, curr: any) => acc + curr.score, 0);
+      const totalPoints = scoresList.reduce((acc: number, curr: any) => acc + curr.total, 0);
       const avgPercentage = scoresList.length > 0
-        ? scoresList.reduce((acc, curr) => acc + curr.percentage, 0) / scoresList.length
+        ? scoresList.reduce((acc: number, curr: any) => acc + curr.percentage, 0) / scoresList.length
         : 0;
 
       return {
@@ -641,9 +680,18 @@ export default function AdminResults() {
         cumulativeTotalScore: totalScore,
         cumulativeTotalPoints: totalPoints,
         cumulativePercentage: avgPercentage,
-        passed: avgPercentage >= 40
+        passed: avgPercentage >= 40  // Pass threshold: 40%
       };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    // Tie-aware standard competition ranking
+    matrixRows.sort((a: any, b: any) => b.cumulativePercentage - a.cumulativePercentage);
+    (matrixRows as any[]).forEach((row: any, i: number) => {
+      if (i === 0) row.rank = 1;
+      else if (row.cumulativePercentage === (matrixRows as any[])[i - 1].cumulativePercentage) row.rank = (matrixRows as any[])[i - 1].rank;
+      else row.rank = i + 1;
+      row.position = `${formatRankPosition(row.rank)} of ${matrixRows.length}`;
+    });
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -1203,6 +1251,431 @@ export default function AdminResults() {
     }
   };
 
+  // --- Helper to Compute Dense Ordinal Ranks ---
+  const formatRankPosition = (rank: number) => {
+    const j = rank % 10, k = rank % 100;
+    if (j === 1 && k !== 11) return rank + "st";
+    if (j === 2 && k !== 12) return rank + "nd";
+    if (j === 3 && k !== 13) return rank + "rd";
+    return rank + "th";
+  };
+
+  const getLetterGrade = (percentage: number) => {
+    if (percentage >= 75) return "A";
+    if (percentage >= 60) return "B";
+    if (percentage >= 50) return "C";
+    if (percentage >= 45) return "D";
+    if (percentage >= 40) return "E";
+    return "F";
+  };
+
+  const { data: systemSettingsData } = useQuery<any>({ queryKey: ["/api/settings"] });
+
+  const isStudentEligibleForExam = (student: Student, exam: Exam) => {
+    // 1. Class level check
+    if (exam.classLevel !== student.classLevel) return false;
+
+    // 2. Blocked exam check
+    if (student.blockedExams && student.blockedExams.includes(exam.id)) return false;
+
+    // 3. Custom student-level subject enrollment check (if defined on student profile)
+    const customEnrolled = (student as any).enrolledSubjects || (student as any).subjects;
+    if (Array.isArray(customEnrolled) && customEnrolled.length > 0) {
+      const examSubjLower = (exam.subject || "").toLowerCase().trim();
+      const enrolledMatch = customEnrolled.some((s: string) => {
+        const sClean = s.toLowerCase().trim();
+        return sClean === examSubjLower || sClean.includes(examSubjLower) || examSubjLower.includes(sClean);
+      });
+      if (!enrolledMatch) return false;
+    }
+
+    // 4. Centralized Department Subject Curricula Registry check (for SSS classes)
+    const isJSS = ["JSS1", "JSS2", "JSS3"].includes(student.classLevel);
+    const deptMappings = systemSettingsData?.departmentSubjectMappings || defaultSystemSettings.departmentSubjectMappings;
+
+    const studentDept = (student.department || "General").trim();
+    const allowedSubjects = [
+      ...(deptMappings[studentDept] || []),
+      ...(deptMappings["General"] || [])
+    ].map((s: string) => s.toLowerCase().trim());
+
+    const examSubject = (exam.subject || "").toLowerCase().trim();
+    const examDept = (exam.department || "General").toLowerCase().trim();
+
+    // If exam has an explicit department tag (e.g. Science, Art, Commercial), student department must match
+    if (examDept !== "general" && examDept !== "others" && exam.department) {
+      if (examDept !== studentDept.toLowerCase()) return false;
+    }
+
+    // For Senior Secondary (SSS1-SSS3), verify the subject is in the student's department/general curriculum
+    if (!isJSS && allowedSubjects.length > 0 && examSubject) {
+      const isAllowed = allowedSubjects.some((s: string) => {
+        const sClean = s.toLowerCase().trim();
+        return sClean === examSubject || sClean.includes(examSubject) || examSubject.includes(sClean);
+      });
+      // If subject is not in the student's department or general curriculum, student DOES NOT offer this subject!
+      if (!isAllowed) return false;
+    }
+
+    return true;
+  };
+
+  // --- 1. MISSING EXAM REPORT GENERATOR (4 Scopes) ---
+  const handlePrintMissingExamReport = async () => {
+    if (!students || students.length === 0 || !exams || exams.length === 0) {
+      toast({ title: "Data Loading", description: "Students or exams data is loading...", variant: "destructive" });
+      return;
+    }
+
+    const missingRows: any[] = [];
+
+    const targetStudents = students.filter(s => {
+      if (isQAUerOrTestRecord(s)) return false;
+      if (missingScope === 'student' && missingSelectedStudentId !== 'ALL' && s.id !== missingSelectedStudentId && s.studentId !== missingSelectedStudentId) return false;
+      if ((missingScope === 'class' || missingScope === 'subject') && missingSelectedClass !== 'ALL' && s.classLevel !== missingSelectedClass) return false;
+      return true;
+    });
+
+    targetStudents.forEach(student => {
+      const expectedExams = exams.filter(e => {
+        if (missingExamSelectionMode === 'custom') {
+          if (!missingCustomExamIds.includes(e.id)) return false;
+        } else {
+          if (missingSelectedTerm !== 'ALL' && (e.term || 'First Term') !== missingSelectedTerm) return false;
+          if (missingScope === 'subject' && missingSelectedExamId !== 'ALL' && e.id !== missingSelectedExamId) return false;
+        }
+        return isStudentEligibleForExam(student, e);
+      });
+
+      expectedExams.forEach(exam => {
+        const existingResult = results?.find(r => 
+          r.examId === exam.id && 
+          (r.studentId?.trim().toLowerCase() === student.studentId?.trim().toLowerCase() ||
+           r.studentId?.trim().toLowerCase() === student.id?.trim().toLowerCase()) && 
+          !isQAUerOrTestRecord(r)
+        );
+        
+        if (!existingResult) {
+          missingRows.push({
+            studentName: student.name,
+            studentId: student.studentId,
+            class: student.classLevel,
+            department: student.department || 'General',
+            subject: exam.subject,
+            examTitle: exam.title,
+            status: 'No Result Found'
+          });
+        }
+      });
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
+      return;
+    }
+
+    writePrintWindowDocument(printWindow, "Missing Exam Audit Report");
+
+    try {
+      const container = await waitForPrintRoot(printWindow, 7000);
+      cloneCurrentStylesIntoPrintWindow(printWindow);
+      const root = createRoot(container);
+      root.render(
+        <PrintReportTemplate
+          reportType="missing-exam-report"
+          schoolInfo={{
+            name: "FAITH IMMACULATE ACADEMY",
+            address: "IGBOHO, OYO STATE",
+            motto: "KNOWLEDGE AND GODLINESS",
+            logoText: "FIA",
+            logoUrl: "/logo.png"
+          }}
+          metadata={{
+            class: missingSelectedClass === 'ALL' ? 'All Classes' : missingSelectedClass,
+            exam: missingSelectedExamId === 'ALL' ? 'All Exams' : (exams.find(e => e.id === missingSelectedExamId)?.title || 'Selected Exam'),
+            date: new Date().toLocaleDateString(),
+            session: "2025/2026 ACADEMIC SESSION",
+            term: missingSelectedTerm === 'ALL' ? 'All Terms' : missingSelectedTerm
+          }}
+          missingExamRows={missingRows}
+          missingExamScope={missingScope}
+          onPrint={() => setTimeout(() => printWindow.print(), 500)}
+        />
+      );
+    } catch (err) {
+      console.error("handlePrintMissingExamReport error:", err);
+      toast({ title: "Print Error", description: "Could not generate report document.", variant: "destructive" });
+      printWindow.close();
+    }
+  };
+
+  // --- 2. ADVANCED BROADSHEETS & POSITION RANKINGS GENERATOR ---
+  const handlePrintAdvancedBroadsheet = async () => {
+    if (!results || results.length === 0 || !students) {
+      toast({ title: "No Results Found", description: "No results available to process.", variant: "destructive" });
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "Error", description: "Pop-up blocked. Please allow pop-ups for this site.", variant: "destructive" });
+      return;
+    }
+
+    writePrintWindowDocument(printWindow, "Advanced Broadsheet & Performance Report");
+
+    try {
+      const container = await waitForPrintRoot(printWindow, 7000);
+      cloneCurrentStylesIntoPrintWindow(printWindow);
+      const root = createRoot(container);
+
+      if (advancedPrintType === 'student-cumulative-broadsheet' || advancedPrintType === 'student-term-breakdown') {
+        const studentObj = students.find(s => s.id === selectedStudentForPrint || s.studentId === selectedStudentForPrint) || students[0];
+        const studentResults = results.filter(r => (r.studentId === studentObj.studentId || r.studentId === studentObj.id) && r.isTestAttempt !== true);
+
+        if (advancedPrintType === 'student-cumulative-broadsheet') {
+          const subjectMap: Record<string, { term1?: number; term2?: number; term3?: number }> = {};
+          studentResults.forEach(r => {
+            const ex = exams?.find(e => e.id === r.examId);
+            const subj = ex?.subject || "General";
+            const term = ex?.term || "First Term";
+            if (!subjectMap[subj]) subjectMap[subj] = {};
+            if (term === "First Term") subjectMap[subj].term1 = r.percentage;
+            else if (term === "Second Term") subjectMap[subj].term2 = r.percentage;
+            else if (term === "Third Term") subjectMap[subj].term3 = r.percentage;
+          });
+
+          const peerResults = results.filter(r => {
+            if (r.isTestAttempt === true) return false;
+            const peerStudent = students.find(s => s.studentId === r.studentId || s.id === r.studentId);
+            if (rankingScope === 'department' && studentObj.department && peerStudent?.department !== studentObj.department) return false;
+            if (rankingScope === 'class' && peerStudent?.classLevel !== studentObj.classLevel) return false;
+            return true;
+          });
+
+          const cumulativeRows: any[] = Object.keys(subjectMap).map(subj => {
+            const entry = subjectMap[subj];
+            const pcts = [entry.term1, entry.term2, entry.term3].filter(p => p !== undefined && p !== null) as number[];
+            const cumPct = pcts.length > 0 ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0;
+            const grade = getLetterGrade(cumPct);
+
+            let positionStr = "—";
+            if (includePosition) {
+              const peerScores = peerResults.filter(r => {
+                const ex = exams?.find(e => e.id === r.examId);
+                return ex?.subject === subj;
+              }).map(r => r.percentage);
+
+              peerScores.push(cumPct);
+              peerScores.sort((a, b) => b - a);
+              const rankIdx = peerScores.indexOf(cumPct) + 1;
+              positionStr = `${formatRankPosition(rankIdx)} of ${peerScores.length}`;
+            }
+
+            return {
+              subject: subj,
+              term1Pct: entry.term1 ?? null,
+              term2Pct: entry.term2 ?? null,
+              term3Pct: entry.term3 ?? null,
+              cumulativePct: cumPct,
+              grade,
+              position: positionStr
+            };
+          });
+
+          root.render(
+            <PrintReportTemplate
+              reportType="student-cumulative-broadsheet"
+              schoolInfo={{
+                name: "FAITH IMMACULATE ACADEMY",
+                address: "IGBOHO, OYO STATE",
+                motto: "KNOWLEDGE AND GODLINESS",
+                logoText: "FIA",
+                logoUrl: "/logo.png"
+              }}
+              metadata={{
+                class: studentObj.classLevel,
+                exam: "Annual Academic Broadsheet",
+                date: new Date().toLocaleDateString(),
+                session: "2025/2026 ACADEMIC SESSION",
+                studentName: studentObj.name,
+                studentId: studentObj.studentId,
+                department: studentObj.department || "General"
+              }}
+              cumulativeRows={cumulativeRows}
+              includePosition={includePosition}
+              onPrint={() => setTimeout(() => printWindow.print(), 500)}
+            />
+          );
+        } else {
+          const termsList = ["First Term", "Second Term", "Third Term"];
+          const termTablesData = termsList.map(tName => {
+            const tResults = studentResults.filter(r => {
+              const ex = exams?.find(e => e.id === r.examId);
+              return (ex?.term || "First Term") === tName;
+            }).map(r => {
+              const ex = exams?.find(e => e.id === r.examId);
+              return {
+                subject: ex?.subject || "General",
+                score: r.score,
+                total: r.totalPoints,
+                percentage: r.percentage,
+                grade: getLetterGrade(r.percentage),
+                position: "—"
+              };
+            });
+            return { term: tName, results: tResults };
+          });
+
+          root.render(
+            <PrintReportTemplate
+              reportType="student-term-breakdown"
+              schoolInfo={{
+                name: "FAITH IMMACULATE ACADEMY",
+                address: "IGBOHO, OYO STATE",
+                motto: "KNOWLEDGE AND GODLINESS",
+                logoText: "FIA",
+                logoUrl: "/logo.png"
+              }}
+              metadata={{
+                class: studentObj.classLevel,
+                exam: "Term-by-Term Performance Breakdown",
+                date: new Date().toLocaleDateString(),
+                session: "2025/2026 ACADEMIC SESSION",
+                studentName: studentObj.name,
+                studentId: studentObj.studentId,
+                department: studentObj.department || "General"
+              }}
+              termTables={termTablesData}
+              includePosition={includePosition}
+              onPrint={() => setTimeout(() => printWindow.print(), 500)}
+            />
+          );
+        }
+      } else {
+        const filteredList = results.filter(r => {
+          if (r.isTestAttempt === true) return false;
+          if (isQAUerOrTestRecord(r)) return false;
+          const student = students.find(s => s.studentId === r.studentId || s.id === r.studentId);
+          if (!student) return false;
+          if (isQAUerOrTestRecord(student)) return false;
+          // Use broadsheet-specific filters (independent from main table)
+          if (broadsheetSelectedClass !== 'ALL' && student?.classLevel !== broadsheetSelectedClass) return false;
+          if (broadsheetSelectedDept !== 'ALL' && student?.department !== broadsheetSelectedDept) return false;
+          // Term filter — 'ALL' means include ALL terms (show full academic year)
+          if (broadsheetSelectedTerm !== 'ALL') {
+            const ex = exams?.find(e => e.id === r.examId);
+            if ((ex?.term || 'First Term') !== broadsheetSelectedTerm) return false;
+          }
+          // Subject eligibility — skip exams this student's department does not offer
+          const ex = exams?.find(e => e.id === r.examId);
+          if (ex && !isStudentEligibleForExam(student, ex)) return false;
+          return true;
+        });
+
+        const studentGroupMap: Record<string, any> = {};
+        const subjectSet = new Set<string>();
+
+        filteredList.forEach(r => {
+          const student = students.find(s => s.studentId === r.studentId || s.id === r.studentId);
+          const ex = exams?.find(e => e.id === r.examId);
+          const subj = ex?.subject || "General";
+          subjectSet.add(subj);
+
+          if (!studentGroupMap[r.studentId]) {
+            studentGroupMap[r.studentId] = {
+              studentId: r.studentId,
+              name: r.studentName,
+              class: student?.classLevel || "General",
+              department: student?.department || "General",
+              scores: {},
+              cumulativeTotalScore: 0,
+              cumulativeTotalPoints: 0,
+              cumulativePercentage: 0,
+              passed: true
+            };
+          }
+
+          // Only store highest score if exam has duplicate attempts (shouldn't happen but safe)
+          const existing = studentGroupMap[r.studentId].scores[subj];
+          if (!existing || r.percentage > existing.percentage) {
+            studentGroupMap[r.studentId].scores[subj] = {
+              score: r.score,
+              total: r.totalPoints,
+              percentage: r.percentage
+            };
+          }
+        });
+
+        // Recalculate cumulative totals after deduplication
+        Object.values(studentGroupMap).forEach((row: any) => {
+          const scoreValues = Object.values(row.scores) as any[];
+          row.cumulativeTotalScore = scoreValues.reduce((a, b) => a + b.score, 0);
+          row.cumulativeTotalPoints = scoreValues.reduce((a, b) => a + b.total, 0);
+        });
+
+        const matrixHeaders = Array.from(subjectSet).sort();
+        const matrixRows = Object.values(studentGroupMap).map(row => {
+          const scoreValues = Object.values(row.scores) as any[];
+          row.cumulativePercentage = scoreValues.length > 0
+            ? scoreValues.reduce((a: number, b: any) => a + b.percentage, 0) / scoreValues.length
+            : 0;
+          row.passed = row.cumulativePercentage >= 40;  // Pass threshold: 40%
+          return row;
+        });
+
+        if (includePosition) {
+          // Sort descending by cumulative percentage
+          matrixRows.sort((a, b) => b.cumulativePercentage - a.cumulativePercentage);
+          // Standard competition ranking — tied scores get same rank (1st, 1st, 3rd not 1st, 1st, 2nd)
+          matrixRows.forEach((row, i) => {
+            if (i === 0) {
+              row.rank = 1;
+            } else if (row.cumulativePercentage === matrixRows[i - 1].cumulativePercentage) {
+              row.rank = matrixRows[i - 1].rank;
+            } else {
+              row.rank = i + 1;
+            }
+            row.position = `${formatRankPosition(row.rank)} of ${matrixRows.length}`;
+          });
+        } else {
+          // Sort alphabetically when no position ranking
+          matrixRows.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        root.render(
+          <PrintReportTemplate
+            reportType="consolidated-broadsheet"
+            schoolInfo={{
+              name: "FAITH IMMACULATE ACADEMY",
+              address: "IGBOHO, OYO STATE",
+              motto: "KNOWLEDGE AND GODLINESS",
+              logoText: "FIA",
+              logoUrl: "/logo.png"
+            }}
+            metadata={{
+              class: broadsheetSelectedClass === 'ALL' ? 'All Classes' : broadsheetSelectedClass,
+              exam: "Official Class Academic Broadsheet",
+              date: new Date().toLocaleDateString(),
+              session: "2025/2026 ACADEMIC SESSION",
+              department: broadsheetSelectedDept === 'ALL' ? 'All Departments' : broadsheetSelectedDept,
+              term: broadsheetSelectedTerm === 'ALL' ? 'All Terms' : broadsheetSelectedTerm
+            }}
+            matrixHeaders={matrixHeaders}
+            matrixRows={matrixRows}
+            includePosition={includePosition}
+            onPrint={() => setTimeout(() => printWindow.print(), 500)}
+          />
+        );
+      }
+    } catch (err) {
+      console.error("handlePrintAdvancedBroadsheet error:", err);
+      toast({ title: "Print Error", description: "Could not generate broadsheet.", variant: "destructive" });
+      printWindow.close();
+    }
+  };
+
   return (
     <div className="space-y-8 pb-12">
       <style dangerouslySetInnerHTML={{
@@ -1255,6 +1728,20 @@ export default function AdminResults() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Button
+              onClick={() => setIsMissingExamModalOpen(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-4.5 h-10 rounded-xl shadow-lg shadow-amber-600/30 transition-all hover:scale-[1.02] flex items-center gap-2 text-xs"
+              title="Audit missing or uncompleted exams across students, classes, or departments"
+            >
+              <AlertTriangle className="h-4 w-4" /> Missing Exam Report
+            </Button>
+            <Button
+              onClick={() => setIsAdvancedPrintModalOpen(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-4.5 h-10 rounded-xl shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02] flex items-center gap-2 text-xs"
+              title="Print multi-term breakdown, annual cumulative broadsheets, or class position rankings"
+            >
+              <Award className="h-4 w-4" /> Advanced Broadsheets & Rankings
+            </Button>
+            <Button
               onClick={() => handlePrintBroadsheet()}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-4.5 h-10 rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.02] flex items-center gap-2 text-xs"
               title="Print standard exam score sheet"
@@ -1266,7 +1753,7 @@ export default function AdminResults() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4.5 h-10 rounded-xl shadow-lg shadow-emerald-600/30 transition-all hover:scale-[1.02] flex items-center gap-2 text-xs"
               title="Print consolidated class broadsheet across multiple subject exams"
             >
-              <FileSpreadsheet className="h-4 w-4" /> Print Multi-Exam Subject Broadsheet
+              <FileSpreadsheet className="h-4 w-4" /> Multi-Exam Subject Broadsheet
             </Button>
           </div>
         </div>
@@ -1301,7 +1788,7 @@ export default function AdminResults() {
         <Card className="print:hidden overflow-visible border border-slate-100 dark:border-slate-800/80 shadow-md rounded-2xl bg-white dark:bg-slate-900 mb-6">
           <CardContent className="p-6">
             <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-end">
                 {/* Search */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Search Candidate</label>
@@ -1314,6 +1801,22 @@ export default function AdminResults() {
                       className="pl-10 h-10 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-550 font-medium"
                     />
                   </div>
+                </div>
+
+                {/* Academic Term Selection */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Term</label>
+                  <Select value={filterTerm} onValueChange={setFilterTerm}>
+                    <SelectTrigger className="h-10 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 font-semibold text-slate-700 dark:text-slate-300">
+                      <SelectValue placeholder="All Terms" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-150">
+                      <SelectItem value="ALL">All Terms</SelectItem>
+                      <SelectItem value="First Term">First Term</SelectItem>
+                      <SelectItem value="Second Term">Second Term</SelectItem>
+                      <SelectItem value="Third Term">Third Term</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Exam Selection */}
@@ -2225,6 +2728,362 @@ export default function AdminResults() {
             >
               <Printer className="mr-2 h-4 w-4" />
               Generate Printable Subject Sheet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4-Tier Missing Exam Report Audit Dialog */}
+      <Dialog open={isMissingExamModalOpen} onOpenChange={setIsMissingExamModalOpen}>
+        <DialogContent className="max-w-xl rounded-3xl p-6 sm:p-8">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" /> 4-Tier Missing Exam Audit Report
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Identify candidates who have not completed or started scheduled exams. Generate official printable audit reports for parents and teachers.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Report Audit Scope</label>
+              <Select value={missingScope} onValueChange={(val: any) => setMissingScope(val)}>
+                <SelectTrigger className="h-10 rounded-xl font-semibold">
+                  <SelectValue placeholder="Select Audit Scope" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="class">Class-Wide Scope (All students in a class)</SelectItem>
+                  <SelectItem value="subject">Subject Scope (Specific exam/subject)</SelectItem>
+                  <SelectItem value="student">Student Personal Scope (Single candidate)</SelectItem>
+                  <SelectItem value="school">General School-Wide Scope (Entire School)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Target Academic Term</label>
+              <Select value={missingSelectedTerm} onValueChange={setMissingSelectedTerm}>
+                <SelectTrigger className="h-10 rounded-xl font-semibold">
+                  <SelectValue placeholder="Select Academic Term" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="First Term">First Term</SelectItem>
+                  <SelectItem value="Second Term">Second Term</SelectItem>
+                  <SelectItem value="Third Term">Third Term</SelectItem>
+                  <SelectItem value="ALL">All Terms</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Exam Selection Mode Switcher */}
+            <div className="bg-slate-50 dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-xs text-slate-900 dark:text-white block">Exam Selection Mode</span>
+                  <span className="text-[11px] text-slate-500 block">Switch between automatic class/term filters or manual exam picking</span>
+                </div>
+                <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setMissingExamSelectionMode('auto')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${missingExamSelectionMode === 'auto' ? 'bg-white dark:bg-slate-950 text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Auto Filter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMissingExamSelectionMode('custom')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${missingExamSelectionMode === 'custom' ? 'bg-white dark:bg-slate-950 text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Manual Pick
+                  </button>
+                </div>
+              </div>
+
+              {/* Custom Exam Picker Checklist */}
+              {missingExamSelectionMode === 'custom' && (
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase text-slate-500">Select Specific Exams to Audit ({missingCustomExamIds.length} Selected)</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filtered = (exams || []).filter(e => {
+                            if (missingSelectedTerm !== 'ALL' && (e.term || 'First Term') !== missingSelectedTerm) return false;
+                            if (missingSelectedClass !== 'ALL' && e.classLevel !== missingSelectedClass) return false;
+                            return true;
+                          }).map(e => e.id);
+                          setMissingCustomExamIds(filtered);
+                        }}
+                        className="text-[10px] font-bold text-indigo-600 hover:underline"
+                      >
+                        Select All Filtered
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMissingCustomExamIds([])}
+                        className="text-[10px] font-bold text-rose-600 hover:underline"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-white dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                    {(exams || []).filter(e => {
+                      if (missingSelectedTerm !== 'ALL' && (e.term || 'First Term') !== missingSelectedTerm) return false;
+                      if (missingSelectedClass !== 'ALL' && e.classLevel !== missingSelectedClass) return false;
+                      return true;
+                    }).map(exam => {
+                      const isChecked = missingCustomExamIds.includes(exam.id);
+                      return (
+                        <label
+                          key={exam.id}
+                          onClick={() => {
+                            if (isChecked) {
+                              setMissingCustomExamIds(missingCustomExamIds.filter(id => id !== exam.id));
+                            } else {
+                              setMissingCustomExamIds([...missingCustomExamIds, exam.id]);
+                            }
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${isChecked ? 'bg-indigo-50/70 border-indigo-300 text-indigo-950' : 'bg-slate-50/50 border-slate-200 hover:bg-slate-100'}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center ${isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
+                              {isChecked && <span className="text-[10px] font-bold">✓</span>}
+                            </div>
+                            <span className="font-bold">{exam.title}</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-500">{exam.classLevel} • {exam.term || 'First Term'}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {missingScope === 'student' && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Select Candidate</label>
+                <Select value={missingSelectedStudentId} onValueChange={setMissingSelectedStudentId}>
+                  <SelectTrigger className="h-10 rounded-xl font-semibold">
+                    <SelectValue placeholder="Choose candidate..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="ALL">All Candidates</SelectItem>
+                    {students?.filter(s => !isQAUerOrTestRecord(s)).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name} ({s.studentId})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {missingScope === 'subject' && missingExamSelectionMode === 'auto' && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Select Scheduled Exam</label>
+                <Select value={missingSelectedExamId} onValueChange={setMissingSelectedExamId}>
+                  <SelectTrigger className="h-10 rounded-xl font-semibold">
+                    <SelectValue placeholder="Choose exam..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="ALL">All Scheduled Exams</SelectItem>
+                    {exams?.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.title} ({e.subject})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {(missingScope === 'class' || missingScope === 'subject') && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Target Class Level</label>
+                <Select value={missingSelectedClass} onValueChange={setMissingSelectedClass}>
+                  <SelectTrigger className="h-10 rounded-xl font-semibold">
+                    <SelectValue placeholder="Select Class Level" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="ALL">All Classes</SelectItem>
+                    {["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"].map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setIsMissingExamModalOpen(false)} className="rounded-xl font-bold">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setIsMissingExamModalOpen(false);
+                handlePrintMissingExamReport();
+              }}
+              className="rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <Printer className="mr-2 h-4 w-4" /> Generate Printable Audit Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Advanced Broadsheets & Position Rankings Dialog */}
+      <Dialog open={isAdvancedPrintModalOpen} onOpenChange={setIsAdvancedPrintModalOpen}>
+        <DialogContent className="max-w-xl rounded-3xl p-6 sm:p-8">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black flex items-center gap-2 text-blue-600">
+              <Award className="h-5 w-5" /> Advanced Broadsheets & Position Rankings
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Generate annual cumulative broadsheets, multi-term breakdowns, or class & department position rankings with normalized percentages.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Select Report Type</label>
+              <Select value={advancedPrintType} onValueChange={(val: any) => setAdvancedPrintType(val)}>
+                <SelectTrigger className="h-10 rounded-xl font-semibold">
+                  <SelectValue placeholder="Select Report Type" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="student-cumulative-broadsheet">Type B — Single Student Cumulative Broadsheet (Annual %)</SelectItem>
+                  <SelectItem value="student-term-breakdown">Type A — Single Student Term Breakdown (3 Terms)</SelectItem>
+                  <SelectItem value="class-broadsheet">Class / Department Academic Broadsheet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(advancedPrintType === 'student-cumulative-broadsheet' || advancedPrintType === 'student-term-breakdown') && (
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Select Student</label>
+                <Select value={selectedStudentForPrint} onValueChange={setSelectedStudentForPrint}>
+                  <SelectTrigger className="h-10 rounded-xl font-semibold">
+                    <SelectValue placeholder="Choose student..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {students?.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name} ({s.studentId}) — {s.classLevel}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Class Broadsheet Filters — independent from main table filters */}
+            {advancedPrintType === 'class-broadsheet' && (
+              <div className="space-y-3 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">Broadsheet Scope Filters</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Class selector */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Class Level</label>
+                    <Select value={broadsheetSelectedClass} onValueChange={setBroadsheetSelectedClass}>
+                      <SelectTrigger className="h-9 rounded-xl font-semibold text-xs">
+                        <SelectValue placeholder="All Classes" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="ALL">All Classes</SelectItem>
+                        {Array.from(new Set(students?.map(s => s.classLevel).filter(Boolean))).sort().map(cls => (
+                          <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Department selector */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Department</label>
+                    <Select value={broadsheetSelectedDept} onValueChange={setBroadsheetSelectedDept}>
+                      <SelectTrigger className="h-9 rounded-xl font-semibold text-xs">
+                        <SelectValue placeholder="All Departments" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="ALL">All Departments</SelectItem>
+                        <SelectItem value="Science">Science</SelectItem>
+                        <SelectItem value="Commercial">Commercial</SelectItem>
+                        <SelectItem value="Art">Art</SelectItem>
+                        <SelectItem value="General">General</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Term selector */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Academic Term</label>
+                    <Select value={broadsheetSelectedTerm} onValueChange={setBroadsheetSelectedTerm}>
+                      <SelectTrigger className="h-9 rounded-xl font-semibold text-xs">
+                        <SelectValue placeholder="All Terms" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="ALL">All Terms (Annual)</SelectItem>
+                        <SelectItem value="First Term">First Term Only</SelectItem>
+                        <SelectItem value="Second Term">Second Term Only</SelectItem>
+                        <SelectItem value="Third Term">Third Term Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  ℹ️ "All Terms (Annual)" shows cumulative results across all 3 terms. These filters are independent from the main results table.
+                </p>
+              </div>
+            )}
+
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-xs text-slate-900 dark:text-white block">Include Position / Class Ranking</span>
+                  <span className="text-[11px] text-slate-500 block">Calculate and display ordinal position (e.g. 1st, 2nd, 3rd)</span>
+                </div>
+                <Button
+                  type="button"
+                  variant={includePosition ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIncludePosition(!includePosition)}
+                  className="rounded-xl font-bold text-xs"
+                >
+                  {includePosition ? "Enabled" : "Disabled"}
+                </Button>
+              </div>
+
+              {includePosition && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Position Ranking Scope</label>
+                  <Select value={rankingScope} onValueChange={(val: any) => setRankingScope(val)}>
+                    <SelectTrigger className="h-9 rounded-xl font-semibold text-xs">
+                      <SelectValue placeholder="Select Scope" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="class">Class-Wide Scope (Ranked among all class peers)</SelectItem>
+                      <SelectItem value="department">Department Scope (Ranked within Science/Art/Commercial)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setIsAdvancedPrintModalOpen(false)} className="rounded-xl font-bold">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setIsAdvancedPrintModalOpen(false);
+                handlePrintAdvancedBroadsheet();
+              }}
+              className="rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Printer className="mr-2 h-4 w-4" /> Generate Printable Document
             </Button>
           </DialogFooter>
         </DialogContent>

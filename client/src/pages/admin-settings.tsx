@@ -34,6 +34,7 @@ import {
   Trash2,
   Building,
   GraduationCap,
+  BookOpen,
   Bell,
   Database,
   Lock,
@@ -373,9 +374,12 @@ export default function AdminSettings() {
 
       {/* Main Tabs Container */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 h-auto gap-2 p-1.5 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200/40 dark:border-slate-850/40">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 h-auto gap-2 p-1.5 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200/40 dark:border-slate-850/40">
           <TabsTrigger value="general" className="py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400">
             <Building className="h-4 w-4" /> General & Branding
+          </TabsTrigger>
+          <TabsTrigger value="departments" className="py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400">
+            <BookOpen className="h-4 w-4" /> Department Curricula
           </TabsTrigger>
           <TabsTrigger value="exams" className="py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400">
             <GraduationCap className="h-4 w-4" /> Exam & Grading
@@ -543,6 +547,43 @@ export default function AdminSettings() {
                       onCheckedChange={(checked) => updateField("hideCompleted", checked)}
                     />
                   </div>
+
+                  {/* Term Weightings Settings */}
+                  <div className="p-4 rounded-2xl border border-slate-105 dark:border-slate-800/40 bg-slate-50/30 dark:bg-slate-900/30 space-y-3">
+                    <div className="space-y-1">
+                      <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 block">Annual Cumulative Term Weightings (%)</span>
+                      <span className="text-xs text-slate-500 block">Configure weighting percentage for 1st, 2nd, and 3rd terms when calculating annual broadsheets.</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-extrabold text-slate-500 uppercase">1st Term (%)</label>
+                        <Input
+                          type="number"
+                          value={formData.termWeights?.term1 ?? 33.3}
+                          onChange={(e) => updateField("termWeights", { ...(formData.termWeights || {}), term1: Number(e.target.value) })}
+                          className="h-9 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-extrabold text-slate-500 uppercase">2nd Term (%)</label>
+                        <Input
+                          type="number"
+                          value={formData.termWeights?.term2 ?? 33.3}
+                          onChange={(e) => updateField("termWeights", { ...(formData.termWeights || {}), term2: Number(e.target.value) })}
+                          className="h-9 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-extrabold text-slate-500 uppercase">3rd Term (%)</label>
+                        <Input
+                          type="number"
+                          value={formData.termWeights?.term3 ?? 33.4}
+                          onChange={(e) => updateField("termWeights", { ...(formData.termWeights || {}), term3: Number(e.target.value) })}
+                          className="h-9 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -690,6 +731,107 @@ export default function AdminSettings() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* ─── TAB 2: DEPARTMENT CURRICULA ─── */}
+        <TabsContent value="departments" className="space-y-6 animate-in fade-in duration-300">
+          <Card className="border-none shadow-lg bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
+            <div className="h-2 bg-gradient-to-r from-indigo-500 to-purple-600" />
+            <CardHeader>
+              <CardTitle className="text-base font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
+                <BookOpen className="h-4.5 w-4.5 text-indigo-500" /> Departmental Subject Curricula Registry
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Configure authorized subjects for Science, Commercial, Art, and General streams. The system uses these mappings across Missing Exam Audits and Broadsheet Reports to ensure students are only audited for subjects in their department.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {["Science", "Commercial", "Art", "General"].map((deptKey) => {
+                  const currentMappings = formData.departmentSubjectMappings || defaultSystemSettings.departmentSubjectMappings;
+                  const subjectsList = currentMappings[deptKey] || [];
+                  const themeColors: Record<string, { bg: string; text: string; badge: string }> = {
+                    Science: { bg: "bg-blue-50/50 dark:bg-blue-950/20", text: "text-blue-600 dark:text-blue-400", badge: "bg-blue-100 text-blue-900 border-blue-200" },
+                    Commercial: { bg: "bg-emerald-50/50 dark:bg-emerald-950/20", text: "text-emerald-600 dark:text-emerald-400", badge: "bg-emerald-100 text-emerald-900 border-emerald-200" },
+                    Art: { bg: "bg-purple-50/50 dark:bg-purple-950/20", text: "text-purple-600 dark:text-purple-400", badge: "bg-purple-100 text-purple-900 border-purple-200" },
+                    General: { bg: "bg-amber-50/50 dark:bg-amber-950/20", text: "text-amber-600 dark:text-amber-400", badge: "bg-amber-100 text-amber-900 border-amber-200" },
+                  };
+                  const theme = themeColors[deptKey] || themeColors.General;
+
+                  return (
+                    <div key={deptKey} className={`p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 ${theme.bg}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-black uppercase ${theme.text}`}>{deptKey} Stream</span>
+                        <span className="text-[11px] font-bold text-slate-500">{subjectsList.length} Subjects</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 min-h-[64px] p-3 bg-white dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                        {subjectsList.map((subj, sIdx) => (
+                          <span key={sIdx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 text-xs font-bold shadow-sm">
+                            {subj}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedList = subjectsList.filter((_, i) => i !== sIdx);
+                                updateField("departmentSubjectMappings", {
+                                  ...currentMappings,
+                                  [deptKey]: updatedList
+                                });
+                              }}
+                              className="text-slate-400 hover:text-rose-600 font-black text-xs transition-colors ml-0.5"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder={`Add new subject to ${deptKey}...`}
+                          id={`input-dept-${deptKey}`}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const val = (e.target as HTMLInputElement).value.trim();
+                              if (val && !subjectsList.includes(val)) {
+                                updateField("departmentSubjectMappings", {
+                                  ...currentMappings,
+                                  [deptKey]: [...subjectsList, val]
+                                });
+                                (e.target as HTMLInputElement).value = "";
+                              }
+                            }
+                          }}
+                          className="h-9 text-xs font-medium rounded-xl bg-white dark:bg-slate-950"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            const el = document.getElementById(`input-dept-${deptKey}`) as HTMLInputElement;
+                            if (el && el.value.trim()) {
+                              const val = el.value.trim();
+                              if (!subjectsList.includes(val)) {
+                                updateField("departmentSubjectMappings", {
+                                  ...currentMappings,
+                                  [deptKey]: [...subjectsList, val]
+                                });
+                                el.value = "";
+                              }
+                            }
+                          }}
+                          className="h-9 px-4 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                        >
+                          Add Subject
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ─── TAB 2: EXAM & GRADING ─── */}

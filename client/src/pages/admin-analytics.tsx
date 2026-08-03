@@ -235,13 +235,24 @@ export default function AdminAnalytics() {
   const cognitiveFatigueRate = analytics?.cognitiveFatigueRate || 0;
   const totalCandidates = analytics?.totalCandidates || 0;
   const cronbachAlpha = analytics?.cronbachAlpha || 0;
-  const studentPredictions = analytics?.studentPredictions || [];
-  const pacingRecords = analytics?.pacingRecords || [];
-  const integrityStudentsLog = analytics?.integrityStudentsLog || [];
+  const isQAUerOrTestRecord = (record: any) => {
+    if (!record) return false;
+    if (record.isTestUser === true || record.isTestAttempt === true) return true;
+    if (record.role === 'admin' || record.role === 'staff' || record.role === 'qa') return true;
+    const sid = (record.studentId || record.id || '').toString().toUpperCase().trim();
+    const sname = (record.studentName || record.name || record.studentA || '').toString().toUpperCase().trim();
+    if (sid.startsWith('QA') || sid.startsWith('TEST') || sid.startsWith('STAFF') || sid.startsWith('ADMIN') || sid.includes('QA_') || sid.includes('TEST_') || sid.includes('DEMO')) return true;
+    if (sname.includes('QA TEST') || sname.includes('STAFF TEST') || sname.includes('ADMIN TEST') || sname.includes('DEMO USER') || sname.includes('[QA]') || sname.includes('TEST ACCOUNT')) return true;
+    return false;
+  };
+
+  const studentPredictions = (analytics?.studentPredictions || []).filter(s => !isQAUerOrTestRecord(s));
+  const pacingRecords = (analytics?.pacingRecords || []).filter(p => !isQAUerOrTestRecord(p));
+  const integrityStudentsLog = (analytics?.integrityStudentsLog || []).filter(log => !isQAUerOrTestRecord(log));
   const itemAnalysis = analytics?.itemAnalysis || [];
   const bellCurvePoints = analytics?.bellCurvePoints || [];
   const histogramBuckets = analytics?.histogramBuckets || [];
-  const collusionPairs = analytics?.collusionPairs || [];
+  const collusionPairs = (analytics?.collusionPairs || []).filter(c => !isQAUerOrTestRecord(c));
 
   // Filtering lists based on search queries
   const filteredPredictions = useMemo(() => {

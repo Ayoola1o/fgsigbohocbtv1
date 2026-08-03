@@ -248,14 +248,25 @@ export default function AdminStudents() {
     return { label: "Needs Help", color: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50" };
   };
 
+  const isQAUerOrTestRecord = (record: any) => {
+    if (!record) return false;
+    if (record.isTestUser === true || record.isTestAttempt === true) return true;
+    if (record.role === 'admin' || record.role === 'staff' || record.role === 'qa') return true;
+    const sid = (record.studentId || record.id || '').toString().toUpperCase().trim();
+    const sname = (record.name || record.studentName || '').toString().toUpperCase().trim();
+    if (sid.startsWith('QA') || sid.startsWith('TEST') || sid.startsWith('STAFF') || sid.startsWith('ADMIN') || sid.includes('QA_') || sid.includes('TEST_') || sid.includes('DEMO')) return true;
+    if (sname.includes('QA TEST') || sname.includes('STAFF TEST') || sname.includes('ADMIN TEST') || sname.includes('DEMO USER') || sname.includes('[QA]') || sname.includes('TEST ACCOUNT')) return true;
+    return false;
+  };
+
   // Dynamic statistics
-  const realStudentsOnly = students.filter(s => s.isTestUser !== true);
+  const realStudentsOnly = students.filter(s => !isQAUerOrTestRecord(s));
   const totalCount = realStudentsOnly.length;
   const maleCount = realStudentsOnly.filter((s) => s.sex === "M").length;
   const femaleCount = realStudentsOnly.filter((s) => s.sex === "F").length;
 
   const averagePerformance = (() => {
-    const nonTestResults = results.filter(r => r.isTestAttempt !== true);
+    const nonTestResults = results.filter(r => !isQAUerOrTestRecord(r));
     if (nonTestResults.length === 0) return 0;
     const sum = nonTestResults.reduce((acc, r) => acc + r.percentage, 0);
     return Math.round(sum / nonTestResults.length);
@@ -265,7 +276,7 @@ export default function AdminStudents() {
 
   // Filters & Sorting
   const filteredStudents = students.filter((student) => {
-    const isQA = student.isTestUser === true;
+    const isQA = isQAUerOrTestRecord(student);
     if (activeTab === "students" && isQA) return false;
     if (activeTab === "qa" && !isQA) return false;
 
@@ -862,12 +873,15 @@ export default function AdminStudents() {
                             <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <Link href={`/admin/results/student/${s.studentId}`}>
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-indigo-600 hover:bg-indigo-50">
+                                  <Button size="icon" variant="ghost" title="View Profile & Performance" className="h-7 w-7 rounded-lg text-indigo-600 hover:bg-indigo-50">
                                     <Eye className="h-3.5 w-3.5" />
                                   </Button>
                                 </Link>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => { setEditingStudent(s); setIsEditOpen(true); }}>
+                                <Button size="icon" variant="ghost" title="Edit Student Profile" className="h-7 w-7 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => { setEditingStudent(s); setIsEditOpen(true); }}>
                                   <Edit3 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" title="Delete / Expel Student" className="h-7 w-7 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" onClick={() => { setDeleteConfirm({ open: true, id: s.id, name: s.name }); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             </td>
@@ -1248,13 +1262,28 @@ export default function AdminStudents() {
                 </Label>
               </div>
 
-              <DialogFooter className="pt-4 gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsEditOpen(false)} className="rounded-xl border-slate-200 dark:border-slate-800 text-xs h-9">
-                  Cancel
+              <DialogFooter className="pt-4 flex items-center justify-between">
+                <Button 
+                  type="button" 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={() => { 
+                    const st = editingStudent; 
+                    setIsEditOpen(false); 
+                    setDeleteConfirm({ open: true, id: st.id, name: st.name }); 
+                  }} 
+                  className="rounded-xl text-xs h-9 font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete Student
                 </Button>
-                <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs h-9" disabled={updateStudentMutation.isPending}>
-                  {updateStudentMutation.isPending ? "Saving..." : "Save Changes"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsEditOpen(false)} className="rounded-xl border-slate-200 dark:border-slate-800 text-xs h-9">
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs h-9" disabled={updateStudentMutation.isPending}>
+                    {updateStudentMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
               </DialogFooter>
             </form>
           )}

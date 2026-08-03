@@ -294,6 +294,13 @@ export const systemSettings = pgTable("system_settings", {
   timerWarning: integer("timer_warning").notNull().default(5),
   conceptStrengthThreshold: integer("concept_strength_threshold").notNull().default(70),
   conceptFocusThreshold: integer("concept_focus_threshold").notNull().default(50),
+  termWeights: jsonb("term_weights").$type<{ term1: number; term2: number; term3: number }>().default({ term1: 33.3, term2: 33.3, term3: 33.4 }),
+  departmentSubjectMappings: jsonb("department_subject_mappings").$type<Record<string, string[]>>().default({
+    Science: ["Physics", "Chemistry", "Biology", "Further Mathematics", "Mathematics", "English Language", "Agricultural Science", "Civic Education"],
+    Commercial: ["Financial Accounting", "Commerce", "Economics", "Book Keeping", "Office Practice", "Mathematics", "English Language", "Civic Education"],
+    Art: ["Government", "Literature in English", "Christian Religious Studies", "Islamic Religious Studies", "History", "Yoruba", "Hausa", "Igbo", "Mathematics", "English Language", "Civic Education"],
+    General: ["Mathematics", "English Language", "Civic Education"]
+  }),
 });
 
 export const defaultGradingScale = [
@@ -360,6 +367,13 @@ export const defaultSystemSettings = {
   timerWarning: 5,
   conceptStrengthThreshold: 70,
   conceptFocusThreshold: 50,
+  termWeights: { term1: 33.3, term2: 33.3, term3: 33.4 },
+  departmentSubjectMappings: {
+    Science: ["Physics", "Chemistry", "Biology", "Further Mathematics", "Mathematics", "English Language", "Agricultural Science", "Civic Education"],
+    Commercial: ["Financial Accounting", "Commerce", "Economics", "Book Keeping", "Office Practice", "Mathematics", "English Language", "Civic Education"],
+    Art: ["Government", "Literature in English", "Christian Religious Studies", "Islamic Religious Studies", "History", "Yoruba", "Hausa", "Igbo", "Mathematics", "English Language", "Civic Education"],
+    General: ["Mathematics", "English Language", "Civic Education"]
+  },
 };
 
 export const systemSettingsSchema = z.object({
@@ -415,6 +429,12 @@ export const systemSettingsSchema = z.object({
   timerWarning: z.number().min(1).max(60).default(defaultSystemSettings.timerWarning),
   conceptStrengthThreshold: z.number().min(1).max(100).default(defaultSystemSettings.conceptStrengthThreshold),
   conceptFocusThreshold: z.number().min(1).max(100).default(defaultSystemSettings.conceptFocusThreshold),
+  termWeights: z.object({
+    term1: z.number().min(0).max(100),
+    term2: z.number().min(0).max(100),
+    term3: z.number().min(0).max(100),
+  }).default(defaultSystemSettings.termWeights),
+  departmentSubjectMappings: z.record(z.array(z.string())).default(defaultSystemSettings.departmentSubjectMappings),
 });
 
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
