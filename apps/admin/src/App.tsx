@@ -116,12 +116,12 @@ export default function AdminApp() {
                 </AdminLayout>
               </Route>
 
-              {/* Default Redirect */}
+              {/* Default Redirect — always require login first */}
               <Route path="/">
-                <Redirect to="/admin" />
+                <Redirect to="/admin/login" />
               </Route>
               <Route>
-                <Redirect to="/admin" />
+                <Redirect to="/admin/login" />
               </Route>
             </Switch>
           </Suspense>

@@ -32,15 +32,17 @@ export default function StudentApp() {
         <TooltipProvider>
           <Suspense fallback={<PageLoader />}>
             <Switch>
-              {/* Public & Student Routes */}
-              <Route path="/" component={Home} />
+              {/* Student Routes */}
               <Route path="/student-login" component={StudentLogin} />
               <Route path="/student-portal" component={StudentPortal} />
               <Route path="/exam/:id/start" component={ExamStart} />
               <Route path="/exam/:examId/session/:sessionId" component={ExamSession} />
               <Route path="/exam/result/:resultId" component={ExamResult} />
 
-              {/* Catch-all redirect to student login */}
+              {/* Default: redirect / and all unknown routes to student login */}
+              <Route path="/">
+                <Redirect to="/student-login" />
+              </Route>
               <Route>
                 <Redirect to="/student-login" />
               </Route>
