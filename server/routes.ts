@@ -502,6 +502,31 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   }
 
 
+  app.patch("/api/questions/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateQuestion(req.params.id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Question not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update question" });
+    }
+  });
+
+  app.patch("/api/questions/bulk", async (req, res) => {
+    try {
+      const { ids, updates } = req.body as { ids?: string[]; updates?: Partial<Question> };
+      if (!ids || !Array.isArray(ids)) {
+        return res.status(400).json({ error: "Invalid request body: 'ids' array is required." });
+      }
+      await storage.updateQuestions(ids, updates || {});
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update questions" });
+    }
+  });
+
   app.delete("/api/questions/:id", async (req, res) => {
     try {
       await storage.deleteQuestion(req.params.id);
@@ -548,7 +573,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const s = (req as any).session;
         if (s && s.studentId) {
-          const student = await storage.getStudentById(s.studentId);
+          const student = await storage.getStudentByStudentId(s.studentId);
           if (student && (student as any).classLevel) {
             effectiveClassLevel = (student as any).classLevel;
           }
@@ -697,6 +722,15 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   });
 
   // Exam Sessions API
+  app.get("/api/exam-sessions", async (req, res) => {
+    try {
+      const sessions = await storage.getExamSessions();
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch exam sessions" });
+    }
+  });
+
   app.get("/api/exam-sessions/:id", async (req, res) => {
     try {
       const session = await storage.getExamSession(req.params.id);
@@ -840,6 +874,15 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
     }
   });
 
+  app.delete("/api/exam-sessions/:id", async (req, res) => {
+    try {
+      await storage.deleteExamSession(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete exam session" });
+    }
+  });
+
   app.post("/api/exam-sessions/:id/submit", async (req, res) => {
     try {
       const session = await storage.getExamSession(req.params.id);
@@ -944,6 +987,40 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
     }
   });
 
+  app.delete("/api/results/:id", async (req, res) => {
+    try {
+      await storage.deleteResult(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete result" });
+    }
+  });
+
+  app.delete("/api/results", async (req, res) => {
+    try {
+      const { ids } = req.body as { ids?: string[] };
+      if (ids && Array.isArray(ids)) {
+        await storage.deleteResults(ids);
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete results" });
+    }
+  });
+
+  app.post("/api/results/:id/reset", async (req, res) => {
+    try {
+      const result = await storage.getResult(req.params.id);
+      if (result) {
+        await storage.deleteResult(result.id);
+        await storage.deleteExamSessionsForStudent(result.studentId, result.examId);
+      }
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reset result" });
+    }
+  });
+
   // Students API - simple in-memory student management
   app.get("/api/students", async (req, res) => {
     try {
@@ -1007,6 +1084,19 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete student" });
+    }
+  });
+
+  app.post("/api/students/:id/toggle-block", async (req, res) => {
+    try {
+      const { examId, blockState } = req.body as { examId?: string; blockState?: boolean };
+      if (!examId) {
+        return res.status(400).json({ error: "examId is required" });
+      }
+      await storage.toggleStudentExamBlock(req.params.id, examId, Boolean(blockState));
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to toggle block status" });
     }
   });
 
@@ -1484,24 +1574,7 @@ Return JSON with:
   // ─── Settings Configuration Routes ───
   app.get("/api/settings", async (req, res) => {
     try {
-      let settings: any = null;
-      try {
-        settings = await getFirestoreSettings();
-      } catch (firestoreError) {
-        console.warn("⚠️ [routes.ts] Firestore settings fetch failed. Falling back to local storage:", firestoreError);
-      }
-
-      if (!settings) {
-        settings = await storage.getSystemSettings();
-        // If firestore is active, let's proactively sync defaults
-        try {
-          await saveFirestoreSettings(settings);
-          console.log("🔥 [routes.ts] Proactively synced default settings to Firestore");
-        } catch (e) {
-          // ignore sync failure
-        }
-      }
-
+      const settings = await storage.getSystemSettings();
       res.json(settings);
     } catch (error) {
       console.error("Get settings error:", error);
@@ -1522,17 +1595,7 @@ Return JSON with:
         });
       }
 
-      // Save to local storage (in-memory/json file)
       const updated = await storage.saveSystemSettings(parsed.data);
-
-      // Sync to Firestore if active
-      try {
-        await saveFirestoreSettings(parsed.data);
-        console.log("🔥 [routes.ts] Successfully saved settings to Firestore");
-      } catch (firestoreError) {
-        console.warn("⚠️ [routes.ts] Firestore settings save failed:", firestoreError);
-      }
-
       res.json(updated);
     } catch (error) {
       console.error("Save settings error:", error);

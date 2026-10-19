@@ -1,32 +1,24 @@
-import {
-  getStudents as fbGetStudents,
-  createStudent as fbCreateStudent,
-  createStudentsBulk as fbCreateStudentsBulk,
-  updateStudent as fbUpdateStudent,
-  deleteStudent as fbDeleteStudent
-} from "./firebase-api";
+import { apiRequest } from "./queryClient";
 import type { Student } from "@shared/schema";
 
 export type { Student };
 
 export const getStudents = async (): Promise<Student[]> => {
-  return fbGetStudents();
+  return apiRequest<Student[]>("GET", "/api/students");
 };
 
 export const addStudent = async (student: { name: string; studentId: string; classLevel: any; sex?: any }): Promise<Student> => {
-  // @ts-ignore - classLevel type mismatch in schema vs usage, casting for now
-  return fbCreateStudent(student);
+  return apiRequest<Student>("POST", "/api/students", student);
 };
 
 export const uploadStudents = async (students: { name: string; studentId: string; classLevel: any; sex?: any }[]): Promise<Student[]> => {
-  // @ts-ignore
-  return fbCreateStudentsBulk(students);
+  return apiRequest<Student[]>("POST", "/api/students", students);
 };
 
 export const updateStudent = async (id: string, student: { name: string; studentId: string }): Promise<void> => {
-  return fbUpdateStudent(id, student);
+  await apiRequest("PATCH", `/api/students/${id}`, student);
 };
 
 export const deleteStudent = async (id: string): Promise<void> => {
-  return fbDeleteStudent(id);
+  await apiRequest("DELETE", `/api/students/${id}`);
 };

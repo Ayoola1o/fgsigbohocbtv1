@@ -232,31 +232,13 @@ export default function AdminInvigilatorPage() {
 
   // Fetch active exam sessions (only today's by default, or all if selected)
   const { data: sessions = [], isLoading, refetch } = useQuery<InvigilatorSession[]>({
-    queryKey: ["invigilatorExamSessions", dateFilter],
-    queryFn: async () => {
-      let q;
-      if (dateFilter === "today") {
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        q = query(collection(db, "exam_sessions"), where("startedAt", ">=", todayStart));
-      } else {
-        q = collection(db, "exam_sessions");
-      }
-      const snapshot = await getDocs(q);
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as InvigilatorSession);
-      return list;
-    },
+    queryKey: ["/api/exam-sessions"],
     refetchInterval: isLiveSyncEnabled ? 15000 : false,
   });
-
 
   // Fetch exams lookup
   const { data: exams = [] } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
-    queryFn: async () => {
-      const snapshot = await getDocs(collection(db, "exams"));
-      return snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as Exam);
-    },
   });
 
   const examMap = useMemo(() => new Map(exams.map(e => [e.id, e])), [exams]);

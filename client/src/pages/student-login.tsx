@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -13,20 +13,37 @@ export default function StudentLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const existing = localStorage.getItem("student_user");
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing);
+        if (parsed && (parsed.studentId || parsed.id)) {
+          setLocation("/student-portal");
+        }
+      } catch {
+        localStorage.removeItem("student_user");
+      }
+    }
+  }, [setLocation]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!name || !studentId) {
-      setError("Please enter both name and student ID");
+    const cleanName = name.trim();
+    const cleanId = studentId.trim();
+
+    if (!cleanName || !cleanId) {
+      setError("Please enter both candidate name and student ID");
       return;
     }
     setLoading(true);
     try {
-      await apiRequest("POST", "/api/students/login", { name, studentId });
+      await apiRequest("POST", "/api/students/login", { name: cleanName, studentId: cleanId });
       // on success, redirect to student portal
       setLocation("/student-portal");
     } catch (err: any) {
-      setError(err?.message || "Login failed");
+      setError(err?.message || "Invalid candidate name or ID. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -75,6 +92,9 @@ export default function StudentLoginPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter full registered name"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   className="mt-2 h-11 bg-white/5 border-white/10 text-white placeholder:text-slate-455 focus-visible:ring-indigo-550 rounded-xl focus:border-indigo-500 transition-colors"
                 />
               </div>
@@ -88,6 +108,9 @@ export default function StudentLoginPage() {
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value)}
                   placeholder="Enter your student passcode ID"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   className="mt-2 h-11 bg-white/5 border-white/10 text-white placeholder:text-slate-455 focus-visible:ring-indigo-550 rounded-xl focus:border-indigo-500 transition-colors"
                 />
               </div>

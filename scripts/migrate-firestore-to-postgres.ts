@@ -1,8 +1,9 @@
 import "dotenv/config";
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, collection, getDocs, Timestamp } from "firebase/firestore";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool } from "@neondatabase/serverless";
+import { getFirestore, initializeFirestore, collection, getDocs, Timestamp } from "firebase/firestore";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+const { Pool } = pg;
 import {
   students,
   adminUsers,
@@ -59,9 +60,16 @@ async function runMigration() {
     console.log("⚠️ DATABASE_URL not detected in .env; running in DRY-RUN / AUDIT mode.");
   }
 
-  // Initialize Firebase App & Firestore
+  // Initialize Firebase App & Firestore with long polling
   const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  const firestoreDb = getFirestore(app);
+  let firestoreDb: any;
+  try {
+    firestoreDb = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+  } catch (e) {
+    firestoreDb = getFirestore(app);
+  }
 
   const summary = {
     students: { read: 0, inserted: 0, failed: 0, errors: [] as string[] },
@@ -192,33 +200,48 @@ async function runMigration() {
     console.log("📦 [4/7] Exporting & Transforming 'questions' collection...");
     const questionsSnap = await getDocs(collection(firestoreDb, "questions"));
     summary.questions.read = questionsSnap.size;
+    console.log(`Found ${questionsSnap.size} questions in Firestore. Preparing high-speed batch upload...`);
 
+    const questionBatch: any[] = [];
     for (const docSnap of questionsSnap.docs) {
       const data = docSnap.data();
-      try {
-        const payload: Partial<Question> = {
-          id: docSnap.id,
-          questionText: data.questionText || "Question text missing",
-          questionType: data.questionType || "multiple-choice",
-          subject: data.subject || "General",
-          difficulty: data.difficulty || "medium",
-          options: Array.isArray(data.options) ? data.options : [],
-          correctAnswer: String(data.correctAnswer || ""),
-          points: Number(data.points) || 1,
-          classLevel: data.classLevel || "JSS1",
-          term: data.term || "First Term",
-          examType: data.examType || "Objectives",
-          imageUrl: data.imageUrl || null,
-          department: data.department || null,
-        };
+      questionBatch.push({
+        id: docSnap.id,
+        questionText: data.questionText || "Question text missing",
+        questionType: data.questionType || "multiple-choice",
+        subject: data.subject || "General",
+        difficulty: data.difficulty || "medium",
+        options: Array.isArray(data.options) ? data.options : [],
+        correctAnswer: String(data.correctAnswer || ""),
+        points: Number(data.points) || 1,
+        classLevel: data.classLevel || "JSS1",
+        term: data.term || "First Term",
+        examType: data.examType || "Objectives",
+        imageUrl: data.imageUrl || null,
+        department: data.department || null,
+      });
+    }
 
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < questionBatch.length; i += CHUNK_SIZE) {
+      const chunk = questionBatch.slice(i, i + CHUNK_SIZE);
+      try {
         if (dbPg) {
-          await dbPg.insert(questions).values(payload).onConflictDoNothing();
+          await dbPg.insert(questions).values(chunk).onConflictDoNothing();
         }
-        summary.questions.inserted++;
+        summary.questions.inserted += chunk.length;
+        console.log(`   Transferred questions: ${Math.min(i + CHUNK_SIZE, questionBatch.length)} / ${questionBatch.length}`);
       } catch (err: any) {
-        summary.questions.failed++;
-        summary.questions.errors.push(`Doc ${docSnap.id}: ${err.message}`);
+        console.warn(`Chunk [${i} - ${i + CHUNK_SIZE}] error, falling back to individual inserts:`, err.message);
+        for (const item of chunk) {
+          try {
+            if (dbPg) await dbPg.insert(questions).values(item).onConflictDoNothing();
+            summary.questions.inserted++;
+          } catch (singleErr: any) {
+            summary.questions.failed++;
+            summary.questions.errors.push(`Doc ${item.id}: ${singleErr.message}`);
+          }
+        }
       }
     }
 
@@ -226,34 +249,47 @@ async function runMigration() {
     console.log("📦 [5/7] Exporting & Transforming 'results' collection...");
     const resultsSnap = await getDocs(collection(firestoreDb, "results"));
     summary.results.read = resultsSnap.size;
+    console.log(`Found ${resultsSnap.size} results in Firestore. Preparing batch upload...`);
 
+    const resultBatch: any[] = [];
     for (const docSnap of resultsSnap.docs) {
       const data = docSnap.data();
-      try {
-        const payload: Partial<Result> = {
-          id: docSnap.id,
-          sessionId: data.sessionId || docSnap.id,
-          examId: data.examId || "unknown-exam",
-          studentName: data.studentName || "Student",
-          studentId: data.studentId || "unknown-student",
-          score: Number(data.score) || 0,
-          totalPoints: Number(data.totalPoints) || 100,
-          percentage: Number(data.percentage) || 0,
-          passed: Boolean(data.passed),
-          submissionType: data.submissionType || "student",
-          answers: data.answers || {},
-          correctAnswers: data.correctAnswers || {},
-          completedAt: toJSDate(data.completedAt),
-          isTestAttempt: Boolean(data.isTestAttempt),
-        };
+      resultBatch.push({
+        id: docSnap.id,
+        sessionId: data.sessionId || docSnap.id,
+        examId: data.examId || "unknown-exam",
+        studentName: data.studentName || "Student",
+        studentId: data.studentId || "unknown-student",
+        score: Number(data.score) || 0,
+        totalPoints: Number(data.totalPoints) || 100,
+        percentage: Number(data.percentage) || 0,
+        passed: Boolean(data.passed),
+        submissionType: data.submissionType || "student",
+        answers: data.answers || {},
+        correctAnswers: data.correctAnswers || {},
+        completedAt: toJSDate(data.completedAt),
+        isTestAttempt: Boolean(data.isTestAttempt),
+      });
+    }
 
+    for (let i = 0; i < resultBatch.length; i += CHUNK_SIZE) {
+      const chunk = resultBatch.slice(i, i + CHUNK_SIZE);
+      try {
         if (dbPg) {
-          await dbPg.insert(results).values(payload).onConflictDoNothing();
+          await dbPg.insert(results).values(chunk).onConflictDoNothing();
         }
-        summary.results.inserted++;
+        summary.results.inserted += chunk.length;
+        console.log(`   Transferred results: ${Math.min(i + CHUNK_SIZE, resultBatch.length)} / ${resultBatch.length}`);
       } catch (err: any) {
-        summary.results.failed++;
-        summary.results.errors.push(`Doc ${docSnap.id}: ${err.message}`);
+        for (const item of chunk) {
+          try {
+            if (dbPg) await dbPg.insert(results).values(item).onConflictDoNothing();
+            summary.results.inserted++;
+          } catch (singleErr: any) {
+            summary.results.failed++;
+            summary.results.errors.push(`Doc ${item.id}: ${singleErr.message}`);
+          }
+        }
       }
     }
 
