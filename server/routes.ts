@@ -135,6 +135,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   // Questions API
+  app.get("/api/questions/count", async (_req, res) => {
+    try {
+      const questions = await storage.getQuestions();
+      res.json({ count: questions.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch question count" });
+    }
+  });
+
   app.get("/api/questions", async (req, res) => {
     try {
       const questions = await storage.getQuestions();
@@ -607,14 +616,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         return res.status(404).json({ error: "Exam not found" });
       }
 
-      const questions: Question[] = [];
-      for (const questionId of exam.questionIds) {
-        const question = await storage.getQuestion(questionId);
-        if (question) {
-          questions.push(question);
-        }
-      }
-
+      const questions = await storage.getQuestionsByIds(exam.questionIds || []);
       res.json(questions);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch exam questions" });
@@ -764,8 +766,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         );
 
         const studentDept = student?.department ? student.department.trim() : null;
-        const allQuestions = await storage.getQuestions();
-        const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+        const poolQuestions = await storage.getQuestionsByIds(exam.questionIds || []);
         let selectedIds: string[] = [];
 
         for (const slot of slots) {
@@ -814,8 +815,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
         sessionQuestionIds = selectedIds;
       } else if (exam.subjectConfig && Object.keys(exam.subjectConfig as object).length > 0) {
-        const allQuestions = await storage.getQuestions();
-        const poolQuestions = allQuestions.filter(q => exam.questionIds.includes(q.id));
+        const poolQuestions = await storage.getQuestionsByIds(exam.questionIds || []);
         let selectedIds: string[] = [];
 
         for (const [subj, count] of Object.entries(exam.subjectConfig as Record<string, number>)) {
@@ -904,14 +904,8 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
       const questionIdsToGrade = session.sessionQuestionIds || exam.questionIds;
 
-      // Get all questions for this exam
-      const questions: Question[] = [];
-      for (const questionId of questionIdsToGrade) {
-        const question = await storage.getQuestion(questionId);
-        if (question) {
-          questions.push(question);
-        }
-      }
+      // Get all questions for this exam via batch lookup
+      const questions = await storage.getQuestionsByIds(questionIdsToGrade);
 
       // Grade the exam
       const answers = req.body.answers || session.answers || {};
@@ -968,7 +962,15 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   // Results API
   app.get("/api/results", async (req, res) => {
     try {
-      const results = await storage.getResults();
+      const { studentId, examId } = req.query;
+      let results = await storage.getResults();
+      if (studentId) {
+        const cleanSid = String(studentId).toLowerCase().trim();
+        results = results.filter(r => r.studentId?.toLowerCase().trim() === cleanSid);
+      }
+      if (examId) {
+        results = results.filter(r => r.examId === String(examId));
+      }
       res.json(results);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch results" });
@@ -1021,13 +1023,37 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
     }
   });
 
-  // Students API - simple in-memory student management
+  // Students API
   app.get("/api/students", async (req, res) => {
     try {
-      const students = await storage.getStudents();
+      const { studentId, classLevel } = req.query;
+      let students = await storage.getStudents();
+      if (studentId) {
+        const cleanSid = String(studentId).toLowerCase().trim();
+        students = students.filter(s =>
+          s.studentId.toLowerCase().trim() === cleanSid ||
+          s.id.toLowerCase().trim() === cleanSid
+        );
+      }
+      if (classLevel) {
+        students = students.filter(s => s.classLevel === String(classLevel));
+      }
       res.json(students);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch students" });
+    }
+  });
+
+  app.get("/api/students/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const student = await storage.getStudentByStudentId(id);
+      if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+      res.json(student);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch student" });
     }
   });
 

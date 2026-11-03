@@ -24,8 +24,8 @@ export default function AdminDashboard() {
     queryKey: ["/api/exams"],
   });
 
-  const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
-    queryKey: ["/api/questions"],
+  const { data: questionsCountData } = useQuery<{ count: number }>({
+    queryKey: ["/api/questions/count"],
   });
 
   const { data: results, isLoading: resultsLoading } = useQuery<Result[]>({
@@ -153,12 +153,12 @@ export default function AdminDashboard() {
     };
   }, [results, students, exams]);
 
-  const isLoading = examsLoading || questionsLoading || resultsLoading || studentsLoading;
+  const isLoading = examsLoading || resultsLoading || studentsLoading;
 
   const stats = {
     totalExams: exams?.length || 0,
     activeExams: exams?.filter((e) => e.isActive).length || 0,
-    totalQuestions: questions?.length || 0,
+    totalQuestions: questionsCountData?.count || 0,
     totalStudents: students?.length || 0,
   };
 

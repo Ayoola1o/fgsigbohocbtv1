@@ -222,9 +222,9 @@ export default function AdminInvigilatorPage() {
     toast({ title: "Export Successful", description: `Exported ${enrichedSessions.length} session audit log entries to CSV.` });
   };
 
-  // 1-second live ticker for real-time exam duration tracking
+  // 5-second live ticker for real-time exam duration tracking (optimized for CPU performance)
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(timer);
   }, []);
 

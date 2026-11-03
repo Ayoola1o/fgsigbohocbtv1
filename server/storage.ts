@@ -22,7 +22,7 @@ import {
   type SystemSettings,
   defaultSystemSettings
 } from "../shared/schema";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, desc } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "crypto";
 import fs from "fs";
@@ -572,124 +572,337 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private resultsCache: Result[] | null = null;
+  private resultsCacheTime: number = 0;
+  private resultsInFlight: Promise<Result[]> | null = null;
+
+  private studentsCache: Student[] | null = null;
+  private studentsCacheTime: number = 0;
+  private studentsInFlight: Promise<Student[]> | null = null;
+
+  private examsCache: Exam[] | null = null;
+  private examsCacheTime: number = 0;
+  private examsInFlight: Promise<Exam[]> | null = null;
+
+  private examSessionsCache: ExamSession[] | null = null;
+  private examSessionsCacheTime: number = 0;
+  private examSessionsInFlight: Promise<ExamSession[]> | null = null;
+
+  private questionsCache: Question[] | null = null;
+  private questionsMap: Map<string, Question> = new Map();
+  private questionsCacheTime: number = 0;
+  private questionsInFlight: Promise<Question[]> | null = null;
+
+  private systemSettingsCache: SystemSettings | null = null;
+
   async getQuestions(): Promise<Question[]> {
-    return await db.select().from(questions);
+    const now = Date.now();
+    if (this.questionsCache && (now - this.questionsCacheTime < 60000)) {
+      return this.questionsCache;
+    }
+    if (this.questionsInFlight) {
+      return this.questionsInFlight;
+    }
+    this.questionsInFlight = (async () => {
+      try {
+        const rows = await db.select().from(questions);
+        this.questionsCache = rows;
+        this.questionsCacheTime = Date.now();
+        this.questionsMap = new Map(rows.map(q => [q.id, q]));
+        return rows;
+      } finally {
+        this.questionsInFlight = null;
+      }
+    })();
+    return this.questionsInFlight;
   }
 
   async getQuestion(id: string): Promise<Question | undefined> {
+    if (this.questionsMap.has(id)) {
+      return this.questionsMap.get(id);
+    }
+    if (!this.questionsCache) {
+      await this.getQuestions();
+      if (this.questionsMap.has(id)) {
+        return this.questionsMap.get(id);
+      }
+    }
     const [q] = await db.select().from(questions).where(eq(questions.id, id));
+    if (q) {
+      this.questionsMap.set(q.id, q);
+    }
     return q;
   }
 
   async getQuestionsByIds(ids: string[]): Promise<Question[]> {
     if (!ids || ids.length === 0) return [];
-    return await db.select().from(questions).where(inArray(questions.id, ids));
+    if (!this.questionsCache) {
+      await this.getQuestions();
+    }
+    const missingIds: string[] = [];
+    const result: Question[] = [];
+    for (const id of ids) {
+      const cached = this.questionsMap.get(id);
+      if (cached) {
+        result.push(cached);
+      } else {
+        missingIds.push(id);
+      }
+    }
+    if (missingIds.length > 0) {
+      const fetched = await db.select().from(questions).where(inArray(questions.id, missingIds));
+      for (const q of fetched) {
+        this.questionsMap.set(q.id, q);
+        result.push(q);
+      }
+      if (this.questionsCache) {
+        this.questionsCache = [...this.questionsCache, ...fetched];
+      }
+    }
+    const resultMap = new Map(result.map(q => [q.id, q]));
+    return ids.map(id => resultMap.get(id)).filter(Boolean) as Question[];
   }
 
   async createQuestion(question: InsertQuestion): Promise<Question> {
     const [created] = await db.insert(questions).values(question).returning();
+    if (created) {
+      this.questionsMap.set(created.id, created);
+      if (this.questionsCache) {
+        this.questionsCache = [...this.questionsCache, created];
+      }
+    }
     return created;
   }
 
   async createQuestions(insertQuestions: InsertQuestion[]): Promise<Question[]> {
     if (insertQuestions.length === 0) return [];
-    return await db.insert(questions).values(insertQuestions).returning();
+    const created = await db.insert(questions).values(insertQuestions).returning();
+    if (created.length > 0) {
+      for (const q of created) {
+        this.questionsMap.set(q.id, q);
+      }
+      if (this.questionsCache) {
+        this.questionsCache = [...this.questionsCache, ...created];
+      }
+    }
+    return created;
   }
 
   async updateQuestion(id: string, data: Partial<Question>): Promise<Question | undefined> {
     const [updated] = await db.update(questions).set(data).where(eq(questions.id, id)).returning();
+    if (updated) {
+      this.questionsMap.set(updated.id, updated);
+      if (this.questionsCache) {
+        this.questionsCache = this.questionsCache.map(q => q.id === id ? updated : q);
+      }
+    }
     return updated;
   }
 
   async updateQuestions(ids: string[], updates: Partial<Question>): Promise<void> {
     if (ids.length === 0) return;
     await db.update(questions).set(updates).where(inArray(questions.id, ids));
+    const idSet = new Set(ids);
+    if (this.questionsCache) {
+      this.questionsCache = this.questionsCache.map(q => {
+        if (idSet.has(q.id)) {
+          const updated = { ...q, ...updates };
+          this.questionsMap.set(q.id, updated);
+          return updated;
+        }
+        return q;
+      });
+    }
   }
 
   async deleteQuestion(id: string): Promise<void> {
     await db.delete(questions).where(eq(questions.id, id));
+    this.questionsMap.delete(id);
+    if (this.questionsCache) {
+      this.questionsCache = this.questionsCache.filter(q => q.id !== id);
+    }
   }
 
   async deleteQuestions(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     await db.delete(questions).where(inArray(questions.id, ids));
+    const idSet = new Set(ids);
+    for (const id of ids) {
+      this.questionsMap.delete(id);
+    }
+    if (this.questionsCache) {
+      this.questionsCache = this.questionsCache.filter(q => !idSet.has(q.id));
+    }
   }
 
   async getExams(classLevel?: string): Promise<Exam[]> {
-    if (classLevel) {
-      return await db.select().from(exams).where(eq(exams.classLevel, classLevel));
+    const now = Date.now();
+    let allExams = this.examsCache;
+    if (!allExams || (now - this.examsCacheTime >= 60000)) {
+      if (this.examsInFlight) {
+        allExams = await this.examsInFlight;
+      } else {
+        this.examsInFlight = (async () => {
+          try {
+            const rows = await db.select().from(exams);
+            this.examsCache = rows;
+            this.examsCacheTime = Date.now();
+            return rows;
+          } finally {
+            this.examsInFlight = null;
+          }
+        })();
+        allExams = await this.examsInFlight;
+      }
     }
-    return await db.select().from(exams);
+    if (classLevel) {
+      return allExams.filter(exam => exam.classLevel === classLevel);
+    }
+    return allExams;
   }
 
   async getExam(id: string): Promise<Exam | undefined> {
-    const [e] = await db.select().from(exams).where(eq(exams.id, id));
-    return e;
+    const all = await this.getExams();
+    return all.find(e => e.id === id);
   }
 
   async createExam(exam: InsertExam): Promise<Exam> {
     const [created] = await db.insert(exams).values({ totalPoints: 0, ...exam } as any).returning();
+    if (this.examsCache && created) {
+      this.examsCache = [...this.examsCache, created];
+    }
     return created;
   }
 
   async updateExam(id: string, data: Partial<Exam>): Promise<Exam | undefined> {
     const [updated] = await db.update(exams).set(data).where(eq(exams.id, id)).returning();
+    if (this.examsCache && updated) {
+      this.examsCache = this.examsCache.map(e => e.id === id ? updated : e);
+    }
     return updated;
   }
 
   async deleteExam(id: string): Promise<void> {
     await db.delete(exams).where(eq(exams.id, id));
+    if (this.examsCache) {
+      this.examsCache = this.examsCache.filter(e => e.id !== id);
+    }
   }
 
   async getExamSessions(): Promise<ExamSession[]> {
-    return await db.select().from(examSessions);
+    const now = Date.now();
+    if (this.examSessionsCache && (now - this.examSessionsCacheTime < 10000)) {
+      return this.examSessionsCache;
+    }
+    if (this.examSessionsInFlight) {
+      return this.examSessionsInFlight;
+    }
+    this.examSessionsInFlight = (async () => {
+      try {
+        const rows = await db.select().from(examSessions);
+        this.examSessionsCache = rows;
+        this.examSessionsCacheTime = Date.now();
+        return rows;
+      } finally {
+        this.examSessionsInFlight = null;
+      }
+    })();
+    return this.examSessionsInFlight;
   }
 
   async getExamSession(id: string): Promise<ExamSession | undefined> {
+    if (this.examSessionsCache) {
+      const cached = this.examSessionsCache.find(s => s.id === id);
+      if (cached) return cached;
+    }
     const [s] = await db.select().from(examSessions).where(eq(examSessions.id, id));
     return s;
   }
 
   async createExamSession(session: InsertExamSession): Promise<ExamSession> {
     const [created] = await db.insert(examSessions).values(session).returning();
+    if (this.examSessionsCache && created) {
+      this.examSessionsCache = [...this.examSessionsCache, created];
+    }
     return created;
   }
 
   async updateExamSession(id: string, data: Partial<ExamSession>): Promise<ExamSession | undefined> {
     const [updated] = await db.update(examSessions).set(data).where(eq(examSessions.id, id)).returning();
+    if (this.examSessionsCache && updated) {
+      this.examSessionsCache = this.examSessionsCache.map(s => s.id === id ? updated : s);
+    }
     return updated;
   }
 
   async deleteExamSession(id: string): Promise<void> {
     await db.delete(examSessions).where(eq(examSessions.id, id));
+    if (this.examSessionsCache) {
+      this.examSessionsCache = this.examSessionsCache.filter(s => s.id !== id);
+    }
   }
 
   async getResults(): Promise<Result[]> {
-    return await db.select().from(results);
+    const now = Date.now();
+    if (this.resultsCache && (now - this.resultsCacheTime < 60000)) {
+      return this.resultsCache;
+    }
+    if (this.resultsInFlight) {
+      return this.resultsInFlight;
+    }
+    this.resultsInFlight = (async () => {
+      try {
+        const rows = await db.select().from(results).orderBy(desc(results.completedAt));
+        this.resultsCache = rows;
+        this.resultsCacheTime = Date.now();
+        return rows;
+      } finally {
+        this.resultsInFlight = null;
+      }
+    })();
+    return this.resultsInFlight;
   }
 
   async getResult(id: string): Promise<Result | undefined> {
+    if (this.resultsCache) {
+      const cached = this.resultsCache.find(r => r.id === id);
+      if (cached) return cached;
+    }
     const [r] = await db.select().from(results).where(eq(results.id, id));
     return r;
   }
 
   async getResultBySessionId(sessionId: string): Promise<Result | undefined> {
+    if (this.resultsCache) {
+      const cached = this.resultsCache.find(r => r.sessionId === sessionId);
+      if (cached) return cached;
+    }
     const [r] = await db.select().from(results).where(eq(results.sessionId, sessionId));
     return r;
   }
 
   async createResult(result: InsertResult): Promise<Result> {
     const [created] = await db.insert(results).values(result).returning();
+    if (this.resultsCache && created) {
+      this.resultsCache = [created, ...this.resultsCache.filter(r => r.id !== created.id)];
+    }
     return created;
   }
 
   async deleteResult(id: string): Promise<void> {
     await db.delete(results).where(eq(results.id, id));
+    if (this.resultsCache) {
+      this.resultsCache = this.resultsCache.filter(r => r.id !== id);
+    }
   }
 
   async deleteResults(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     await db.delete(results).where(inArray(results.id, ids));
+    if (this.resultsCache) {
+      const set = new Set(ids);
+      this.resultsCache = this.resultsCache.filter(r => !set.has(r.id));
+    }
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
@@ -703,34 +916,62 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStudents(): Promise<Student[]> {
-    return await db.select().from(students);
+    const now = Date.now();
+    if (this.studentsCache && (now - this.studentsCacheTime < 60000)) {
+      return this.studentsCache;
+    }
+    if (this.studentsInFlight) {
+      return this.studentsInFlight;
+    }
+    this.studentsInFlight = (async () => {
+      try {
+        const rows = await db.select().from(students);
+        this.studentsCache = rows;
+        this.studentsCacheTime = Date.now();
+        return rows;
+      } finally {
+        this.studentsInFlight = null;
+      }
+    })();
+    return this.studentsInFlight;
   }
 
   async getStudentByStudentId(studentId: string): Promise<Student | undefined> {
     const cleanId = studentId.trim();
-    const [s] = await db.select().from(students).where(eq(students.studentId, cleanId));
-    if (s) return s;
     const all = await this.getStudents();
-    return all.find(item => item.studentId.trim().toLowerCase() === cleanId.toLowerCase());
+    return all.find(item => item.studentId.trim().toLowerCase() === cleanId.toLowerCase() || item.id === cleanId);
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {
     const [created] = await db.insert(students).values(student).returning();
+    if (this.studentsCache && created) {
+      this.studentsCache = [...this.studentsCache, created];
+    }
     return created;
   }
 
   async createStudents(insertStudents: InsertStudent[]): Promise<Student[]> {
     if (insertStudents.length === 0) return [];
-    return await db.insert(students).values(insertStudents).onConflictDoNothing().returning();
+    const created = await db.insert(students).values(insertStudents).onConflictDoNothing().returning();
+    if (this.studentsCache && created.length > 0) {
+      this.studentsCache = [...this.studentsCache, ...created];
+    }
+    return created;
   }
 
   async updateStudent(id: string, data: Partial<Student>): Promise<Student | undefined> {
     const [updated] = await db.update(students).set(data).where(eq(students.id, id)).returning();
+    if (this.studentsCache && updated) {
+      this.studentsCache = this.studentsCache.map(s => s.id === id ? updated : s);
+    }
     return updated;
   }
 
   async deleteStudent(id: string): Promise<void> {
     await db.delete(students).where(eq(students.id, id));
+    if (this.studentsCache) {
+      this.studentsCache = this.studentsCache.filter(s => s.id !== id);
+    }
   }
 
   async toggleStudentExamBlock(studentId: string, examId: string, blockState: boolean): Promise<void> {
@@ -749,6 +990,9 @@ export class DatabaseStorage implements IStorage {
       blocked = blocked.filter(id => id !== examId);
     }
     await db.update(students).set({ blockedExams: blocked }).where(eq(students.id, targetId!));
+    if (this.studentsCache) {
+      this.studentsCache = this.studentsCache.map(s => s.id === targetId ? { ...s, blockedExams: blocked } : s);
+    }
   }
 
   async deleteExamSessionsForStudent(studentId: string, examId: string): Promise<void> {
@@ -763,11 +1007,19 @@ export class DatabaseStorage implements IStorage {
   async purgeTestAttempts(): Promise<void> {
     await db.delete(results).where(eq(results.isTestAttempt, true));
     await db.delete(examSessions).where(eq(examSessions.isTestAttempt, true));
+    if (this.resultsCache) {
+      this.resultsCache = this.resultsCache.filter(r => !r.isTestAttempt);
+    }
   }
 
   async getSystemSettings(): Promise<SystemSettings> {
+    if (this.systemSettingsCache) {
+      return this.systemSettingsCache;
+    }
     const [settings] = await db.select().from(systemSettings).where(eq(systemSettings.id, "global"));
-    return (settings as unknown as SystemSettings) || defaultSystemSettings;
+    const finalSettings = (settings as unknown as SystemSettings) || defaultSystemSettings;
+    this.systemSettingsCache = finalSettings;
+    return finalSettings;
   }
 
   async saveSystemSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
@@ -778,6 +1030,7 @@ export class DatabaseStorage implements IStorage {
         target: systemSettings.id,
         set: updated
       });
+    this.systemSettingsCache = updated;
     return updated;
   }
 }

@@ -55,8 +55,8 @@ export default function StudentPortal() {
   });
 
   const { data: students = [] } = useQuery<Student[]>({
-    queryKey: ["/api/students"],
-    enabled: !!student,
+    queryKey: ["/api/students", { studentId: student?.studentId }],
+    enabled: !!student?.studentId,
   });
 
   const freshestStudent = useMemo(() => {
@@ -69,8 +69,8 @@ export default function StudentPortal() {
   }, [student, students]);
 
   const { data: results = [] } = useQuery<Result[]>({
-    queryKey: ["/api/results"],
-    enabled: !!student,
+    queryKey: ["/api/results", { studentId: student?.studentId }],
+    enabled: !!student?.studentId,
   });
 
   const getStudentResult = (examId: string) => {

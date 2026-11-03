@@ -1,8 +1,11 @@
 import express from "express";
 import session from "express-session";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 
 const app = express();
+
+app.use(compression());
 
 declare module 'http' {
     interface IncomingMessage {
