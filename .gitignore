@@ -9,6 +9,8 @@ vite.config.ts.*
 *.tar.gz
 .env
 .env.local
+/backenv.env
+.turbo/
 node_modules/
 old_node_modules/
 Walkthrough/
