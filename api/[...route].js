@@ -1495,7 +1495,7 @@ function summarizeDashboard(results2) {
 }
 
 // server/admin-dashboard.ts
-var bannerSchema = z2.string().max(1398127).regex(
+var bannerSchema = z2.string().max(Math.ceil(5 * 1024 * 1024 / 3) * 4 + 23).regex(
   /^(?:data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2})?$/
 );
 function registerAdminDashboard(app2, requireAdmin2) {
@@ -1547,7 +1547,7 @@ function registerAdminDashboard(app2, requireAdmin2) {
   app2.put("/api/admin/dashboard/banner", async (req, res) => {
     if (!requireAdmin2(req, res)) return;
     const image = bannerSchema.safeParse(req.body?.image);
-    if (!image.success) return res.status(400).json({ error: "Choose a JPEG, PNG, or WebP image up to 1 MB" });
+    if (!image.success) return res.status(400).json({ error: "Choose a JPEG, PNG, or WebP image up to 5 MB" });
     try {
       await pool.query(
         "insert into public.dashboard_branding (id, banner_image) values ('global', $1) on conflict (id) do update set banner_image = excluded.banner_image",

@@ -8,6 +8,7 @@ import { apiRequest } from "@/lib/queryClient";
 
 const endpoint = "/api/admin/dashboard/banner";
 const queryKey = [endpoint];
+const maxImageSize = 5 * 1024 * 1024;
 
 export function DashboardBannerSettings() {
   const queryClient = useQueryClient();
@@ -18,8 +19,8 @@ export function DashboardBannerSettings() {
     mutationFn: async (file: File | null) => {
       let image = "";
       if (file) {
-        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 1024 * 1024) {
-          throw new Error("Choose a JPEG, PNG, or WebP image up to 1 MB.");
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > maxImageSize) {
+          throw new Error("Choose a JPEG, PNG, or WebP image up to 5 MB.");
         }
         image = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -42,7 +43,7 @@ export function DashboardBannerSettings() {
     <Card className="rounded-2xl">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base"><ImagePlus size={18} /> Dashboard header image</CardTitle>
-        <CardDescription>Use a wide school photo, ideally 1600 × 400 pixels. JPEG, PNG, or WebP up to 1 MB. Changes save immediately.</CardDescription>
+        <CardDescription>Use a wide school photo, ideally 1600 × 400 pixels. JPEG, PNG, or WebP up to 5 MB. Changes save immediately.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {banner.data?.image && <img src={banner.data.image} alt="Current dashboard header" className="aspect-[4/1] w-full rounded-xl object-cover" />}

@@ -5,7 +5,7 @@ import { exams, examSessions, questions, results, students } from "../shared/sch
 import { db, pool } from './db';
 import { summarizeDashboard } from '../shared/admin-dashboard';
 
-const bannerSchema = z.string().max(1_398_127).regex(
+const bannerSchema = z.string().max(Math.ceil((5 * 1024 * 1024) / 3) * 4 + 23).regex(
   /^(?:data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2})?$/,
 );
 
@@ -54,7 +54,7 @@ export function registerAdminDashboard(app: Express, requireAdmin: (req: any, re
   app.put("/api/admin/dashboard/banner", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     const image = bannerSchema.safeParse(req.body?.image);
-    if (!image.success) return res.status(400).json({ error: "Choose a JPEG, PNG, or WebP image up to 1 MB" });
+    if (!image.success) return res.status(400).json({ error: "Choose a JPEG, PNG, or WebP image up to 5 MB" });
     try {
       await pool.query(
         "insert into public.dashboard_branding (id, banner_image) values ('global', $1) on conflict (id) do update set banner_image = excluded.banner_image",
