@@ -12,7 +12,7 @@ import {
   Bell
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import type { SystemSettings } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
@@ -97,26 +97,16 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { data: exams } = useQuery<any[]>({ queryKey: ["/api/exams"] });
-  const { data: students } = useQuery<any[]>({ queryKey: ["/api/students"] });
-  const { data: results } = useQuery<any[]>({ queryKey: ["/api/results"] });
-  const { data: sessions } = useQuery<any[]>({ queryKey: ["/api/exam-sessions"] });
-
-  const counts: Record<string, number | undefined> = {
-    Exams: exams?.length,
-    Students: students?.length,
-    Results: results?.length,
-    "Invigilator Hub": sessions?.filter((session) => !session.isCompleted).length,
-  };
+  const { data: settings } = useQuery<SystemSettings>({ queryKey: ['/api/settings'] });
 
   return (
-    <Sidebar className="border-r border-slate-100 dark:border-slate-800 bg-gradient-to-b from-white via-slate-50/30 to-white dark:from-slate-950 dark:via-slate-900/30 dark:to-slate-950">
-      <SidebarHeader className="p-6 border-b border-slate-50 dark:border-slate-800/50">
+    <Sidebar className="border-r border-blue-950">
+      <SidebarHeader className="border-b border-white/10 bg-[#061333] p-6">
         <Link href="/admin">
-          <LogoSlot />
+          <LogoSlot name={settings?.schoolName} logo={settings?.schoolLogo} />
         </Link>
       </SidebarHeader>
-      <SidebarContent className="px-4 py-4">
+      <SidebarContent className="bg-[#061333] px-4 py-4">
         <SidebarGroup>
           <SidebarGroupLabel className="text-slate-400 dark:text-slate-500 font-bold text-[10px] uppercase tracking-widest px-2 mb-2">
             Administration
@@ -132,25 +122,18 @@ export function AppSidebar() {
                       isActive={isActive}
                       data-testid={item.testId}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 relative group
-                        ${isActive 
-                          ? "bg-indigo-900 dark:bg-indigo-950 text-white shadow-md border-l-4 border-blue-500 font-bold pl-2" 
-                          : "text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-900 border-l-4 border-transparent pl-2"
+                        ${isActive
+                          ? "!bg-gradient-to-r from-blue-600 to-blue-800 !text-white shadow-md font-bold"
+                          : "!text-blue-100 hover:!bg-white/10 hover:!text-white"
                         }`}
                     >
                       <Link href={item.url} className="flex items-center gap-3 w-full justify-between">
                         <div className="flex items-center gap-3">
-                          <item.icon className={`h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110 
-                            ${isActive ? "text-blue-400" : "text-slate-400 group-hover:text-indigo-500"}`} 
+                          <item.icon className={`h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110
+                            ${isActive ? "text-white" : "text-blue-200/75"}`}
                           />
                           <span className="tracking-tight">{item.title}</span>
                         </div>
-                        {counts[item.title] !== undefined && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                            isActive ? "bg-blue-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                          }`}>
-                            {counts[item.title]!.toLocaleString()}
-                          </span>
-                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -159,33 +142,23 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <div className="mt-auto rounded-2xl border border-blue-500/25 bg-gradient-to-br from-blue-950 to-blue-800/60 p-4 text-center text-white">
+          <GraduationCap className="mx-auto mb-2 size-7 text-blue-200" />
+          <p className="text-sm font-bold">Academic excellence</p>
+          <p className="mt-1 text-xs text-blue-100">Building a smarter future together</p>
+        </div>
       </SidebarContent>
     </Sidebar>
   );
 }
 
-function LogoSlot() {
-  const [imageLoaded, setImageLoaded] = useState(false);
-
+function LogoSlot({ name, logo }: { name?: string; logo?: string }) {
   return (
-    <div className="flex items-center gap-3 group/logo cursor-pointer" data-testid="link-logo">
-      <div className="relative h-11 w-11 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-violet-600 text-white overflow-hidden flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover/logo:shadow-indigo-500/40 group-hover/logo:scale-105 transition-all duration-300 border border-indigo-400/20">
-        <GraduationCap className={`h-6 w-6 transition-transform duration-500 group-hover/logo:rotate-12 ${imageLoaded ? "opacity-0" : "opacity-100"}`} />
-        <img
-          src="/logo.png"
-          alt="Logo"
-          className={`absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover/logo:scale-110 ${imageLoaded ? "" : "hidden"}`}
-          onLoad={() => setImageLoaded(true)}
-          onError={() => setImageLoaded(false)}
-        />
-      </div>
+    <div className="flex items-center gap-3" data-testid="link-logo">
+      <img src={logo || "/logo.png"} alt="" className="size-12 shrink-0 object-contain" />
       <div>
-        <h1 className="text-sm font-black tracking-tight text-slate-800 dark:text-slate-100 group-hover/logo:text-indigo-600 dark:group-hover/logo:text-indigo-400 transition-colors duration-300 leading-tight">
-          Fia CBT Admin
-        </h1>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
-          Faith Immaculate Academy
-        </p>
+        <p className="text-sm font-bold leading-tight text-white">{name || "Faith Immaculate Academy"}</p>
+        <p className="mt-1 text-xs text-blue-200">CBT Administration</p>
       </div>
     </div>
   );

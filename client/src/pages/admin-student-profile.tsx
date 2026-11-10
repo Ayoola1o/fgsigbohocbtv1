@@ -43,7 +43,6 @@ import {
     ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import type { Result, Exam, Student } from "@shared/schema";
-import { getDocs, query, collection, where, getDoc, doc } from "firebase/firestore";
 import { getQuestionsByIds } from "@/lib/firebase-api";
 import { PrintStudyGuideTemplate } from "@/components/PrintStudyGuideTemplate";
 import { format } from "date-fns";
@@ -71,117 +70,53 @@ export default function AdminStudentProfile() {
     const { formatScore } = useScoreFormat();
     const [resettingResult, setResettingResult] = useState<Result | null>(null);
 
-    // 1. Fetch single target student profile
-    const { data: student, isLoading: studentLoading } = useQuery<Student | null>({
+    // Load profile records through the authenticated app API so this page uses the same database as the rest of the admin portal.
+    const { data: targetStudents = [], isLoading: studentLoading } = useQuery<Student[]>({
         queryKey: ["studentProfileTarget", studentId],
         queryFn: async () => {
-            if (!studentId) return null;
-            const { firebaseConfigured, getFirebaseDb } = await import("@/lib/firebase");
-            if (!firebaseConfigured) return null;
-            const db = getFirebaseDb();
-            const { getDoc, doc, query, collection, where, getDocs } = await import("firebase/firestore");
-            
-            try {
-                const docSnap = await getDoc(doc(db, "students", studentId));
-                if (docSnap.exists()) {
-                    return { id: docSnap.id, ...docSnap.data() } as Student;
-                }
-            } catch (e) {
-                // Ignore doc ID error and fall back to query
-            }
-
-            const q = query(collection(db, "students"), where("studentId", "==", studentId));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                return { id: snap.docs[0].id, ...snap.docs[0].data() } as Student;
-            }
-            return null;
+            if (!studentId) return [];
+            return apiRequest<Student[]>("GET", `/api/students?studentId=${encodeURIComponent(studentId)}`);
         }
     });
+    const student = targetStudents[0] ?? null;
 
-    // 2. Fetch scoped data for student & class analytics
+    // Fetch the student's results and class comparison data from the authenticated server API.
     const { data: scopedData, isLoading: scopedLoading } = useQuery({
         queryKey: ["studentScopedAnalyticsData", student?.id, student?.studentId, student?.classLevel],
         enabled: !!student,
         queryFn: async () => {
-            const { firebaseConfigured, getFirebaseDb } = await import("@/lib/firebase");
-            if (!firebaseConfigured) {
-                return { studentResults: [], classmates: student ? [student] : [], classResults: [], exams: [], questions: [] };
-            }
-            const db = getFirebaseDb();
-            // A. Student's own results
-            const studentResultsQuery = query(
-                collection(db, "results"),
-                where("studentId", "==", student!.studentId)
+            const [resultsByStudentId, resultsByRecordId, classmates, allClassResults, availableExams] = await Promise.all([
+                apiRequest<Result[]>("GET", `/api/results?studentId=${encodeURIComponent(student!.studentId)}`),
+                apiRequest<Result[]>("GET", `/api/results?studentId=${encodeURIComponent(student!.id)}`),
+                apiRequest<Student[]>("GET", `/api/students?classLevel=${encodeURIComponent(student!.classLevel)}`),
+                apiRequest<Result[]>("GET", "/api/results"),
+                apiRequest<Exam[]>("GET", "/api/exams"),
+            ]);
+            const studentResults = Array.from(
+                new Map([...resultsByStudentId, ...resultsByRecordId].map(result => [result.id, result])).values(),
             );
-            const studentResultsSnap = await getDocs(studentResultsQuery);
-            let studentResults = studentResultsSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Result);
-            
-            if (studentResults.length === 0 && student!.id) {
-                const studentDbIdQuery = query(
-                    collection(db, "results"),
-                    where("studentId", "==", student!.id)
-                );
-                const dbIdSnap = await getDocs(studentDbIdQuery);
-                studentResults = dbIdSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Result);
-            }
-
-            // B. Classmate student profiles
-            const classmatesQuery = query(
-                collection(db, "students"),
-                where("classLevel", "==", student!.classLevel)
-            );
-            const classmatesSnap = await getDocs(classmatesQuery);
-            const classmates = classmatesSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Student);
-
-            // C. Classmate results (batched by 30)
-            const classmateStudentIds = Array.from(new Set(
-                classmates.flatMap(c => [c.studentId, c.id]).filter(Boolean) as string[]
+            const classmateList = classmates.length ? classmates : [student!];
+            const classmateIds = new Set(classmateList.flatMap(classmate => [
+                classmate.studentId.trim().toLowerCase(), classmate.id.trim().toLowerCase(),
+            ]));
+            const classResults = allClassResults.filter(result => classmateIds.has(result.studentId.trim().toLowerCase()));
+            const relevantExamIds = new Set([
+                ...classResults.map(result => result.examId),
+                ...availableExams.filter(exam => {
+                    const matchesClass = exam.classLevel === student!.classLevel;
+                    const matchesDepartment = !exam.department || exam.department === "General" || exam.department === student!.department;
+                    return exam.isActive && matchesClass && matchesDepartment;
+                }).map(exam => exam.id),
+            ]);
+            const exams = availableExams.filter(exam => relevantExamIds.has(exam.id));
+            const uniqueQuestionIds = Array.from(new Set(
+                exams.flatMap(exam => exam.questionIds || []).filter(Boolean),
             ));
-
-            let classResults: Result[] = [];
-            if (classmateStudentIds.length > 0) {
-                const chunks: string[][] = [];
-                for (let i = 0; i < classmateStudentIds.length; i += 30) {
-                    chunks.push(classmateStudentIds.slice(i, i + 30));
-                }
-                const resultPromises = chunks.map(chunk => {
-                    const q = query(collection(db, "results"), where("studentId", "in", chunk));
-                    return getDocs(q);
-                });
-                const resultSnaps = await Promise.all(resultPromises);
-                resultSnaps.forEach(snap => {
-                    classResults.push(...snap.docs.map(d => ({ id: d.id, ...d.data() }) as Result));
-                });
-            }
-
-            // D. Referenced Exams only
-            const allReferencedResults = [...studentResults, ...classResults];
-            const uniqueExamIds = Array.from(new Set(allReferencedResults.map(r => r.examId).filter(Boolean)));
-            let exams: Exam[] = [];
-            if (uniqueExamIds.length > 0) {
-                const examPromises = uniqueExamIds.map(async (id) => {
-                    try {
-                        const docSnap = await getDoc(doc(db, "exams", id));
-                        return docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Exam) : null;
-                    } catch (e) {
-                        return null;
-                    }
-                });
-                const examResults = await Promise.all(examPromises);
-                exams = examResults.filter(Boolean) as Exam[];
-            }
-
-            // E. Referenced Questions only
-            const uniqueQuestionIds = Array.from(new Set(exams.flatMap(e => e.questionIds || [])));
-            let questions: any[] = [];
-            if (uniqueQuestionIds.length > 0) {
-                questions = await getQuestionsByIds(uniqueQuestionIds);
-            }
+            const questions = await getQuestionsByIds(uniqueQuestionIds);
 
             return {
                 studentResults,
-                classmates,
+                classmates: classmateList,
                 classResults,
                 exams,
                 questions

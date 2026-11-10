@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { registerAdminDashboard } from "./admin-dashboard";
 import { clearAuthCookie, issueAuthCookie } from "./auth-cookie";
 import { getFirestoreResults, getFirestoreQuestions, getFirestoreExams, getFirestoreSettings, saveFirestoreSettings } from "./firebase";
 import {
@@ -53,6 +54,7 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerAdminDashboard(app, requireAdmin);
   // Admin auth routes
 
   // Serve uploaded files statically

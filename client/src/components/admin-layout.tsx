@@ -142,8 +142,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const adminName = adminProfile?.name || "Sarah Johnson";
-  const adminEmail = adminProfile?.email || "sarah.johnson@faithimmaculate.edu.ng";
+  const adminName = adminProfile?.name || "Administrator";
+  const adminEmail = adminProfile?.email || "";
   const getInitials = (nameStr: string) => {
     const parts = nameStr.split(" ");
     return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : nameStr.slice(0, 2).toUpperCase();
@@ -379,7 +379,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-6 md:p-8 animate-fade-in-up bg-slate-50/20 dark:bg-slate-950/20">
+          <main className="flex-1 overflow-y-auto bg-[#f1f5ff] p-4 dark:bg-slate-950 md:p-6">
             {children}
           </main>
         </div>

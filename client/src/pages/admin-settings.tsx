@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { DashboardBannerSettings } from "@/components/dashboard-banner-settings";
 import { apiRequest } from "@/lib/queryClient";
 import { SystemSettings, defaultSystemSettings, defaultGradingScale } from "@shared/schema";
 import {
@@ -590,7 +591,7 @@ export default function AdminSettings() {
 
             {/* School Logo upload card */}
             <div className="md:col-span-1 space-y-6">
-              <Card className="border-none shadow-lg bg-white dark:bg-slate-900 rounded-2xl overflow-hidden flex flex-col justify-between h-full">
+              <Card className="border-none shadow-lg bg-white dark:bg-slate-900 rounded-2xl overflow-hidden flex flex-col justify-between">
                 <CardHeader>
                   <CardTitle className="text-sm font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-tight flex items-center gap-1.5">
                     <Layout className="h-4.5 w-4.5 text-blue-500" /> School Logo Emblem
@@ -626,6 +627,7 @@ export default function AdminSettings() {
                   )}
                 </CardContent>
               </Card>
+              <DashboardBannerSettings />
             </div>
           </div>
 

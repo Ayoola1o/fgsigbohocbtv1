@@ -1456,6 +1456,111 @@ if (!process.env.DATABASE_URL && process.env.NODE_ENV === "production") {
 }
 var storage = process.env.DATABASE_URL ? new DatabaseStorage() : new MemStorage();
 
+// server/admin-dashboard.ts
+import { and as and2, count, eq as eq2 } from "drizzle-orm";
+import { z as z2 } from "zod";
+
+// shared/admin-dashboard.ts
+var passRate = ({ passed, total }) => total ? Math.round(1e3 * passed / total) / 10 : 0;
+var monthFormat = new Intl.DateTimeFormat("en-NG", { month: "short", year: "numeric", timeZone: "Africa/Lagos" });
+function summarizeDashboard(results2) {
+  const sorted = [...results2].sort((a, b) => Date.parse(a.completedAt) - Date.parse(b.completedAt));
+  const months = /* @__PURE__ */ new Map();
+  const classes = /* @__PURE__ */ new Map();
+  const departments2 = /* @__PURE__ */ new Map();
+  const overall = { passed: 0, total: sorted.length };
+  function add(groups, label, passed) {
+    const entry = groups.get(label) ?? { total: 0, passed: 0 };
+    entry.total++;
+    if (passed) entry.passed++;
+    groups.set(label, entry);
+  }
+  for (const result of sorted) {
+    if (result.passed) overall.passed++;
+    add(months, monthFormat.format(new Date(result.completedAt)), result.passed);
+    if (result.classLevel) add(classes, result.classLevel, result.passed);
+    add(departments2, result.department || "Unassigned", result.passed);
+  }
+  const toSeries = (groups) => Array.from(groups, ([name, outcomes]) => {
+    const rate = passRate(outcomes);
+    return { name, Pass: rate, Fail: Math.round((100 - rate) * 10) / 10, total: outcomes.total };
+  });
+  return {
+    overall,
+    months: toSeries(months).slice(-6),
+    classes: toSeries(classes).sort((a, b) => b.Pass - a.Pass || b.total - a.total).slice(0, 5),
+    departments: toSeries(departments2),
+    recent: sorted.slice(-5).reverse()
+  };
+}
+
+// server/admin-dashboard.ts
+var bannerSchema = z2.string().max(1398127).regex(
+  /^(?:data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2})?$/
+);
+function registerAdminDashboard(app2, requireAdmin2) {
+  app2.get("/api/admin/dashboard", async (req, res) => {
+    if (!requireAdmin2(req, res)) return;
+    res.set("Cache-Control", "no-store");
+    try {
+      const [enrollment, activeExams, bank, activeAttempts, completed] = await Promise.all([
+        db.select({ total: count() }).from(students).where(eq2(students.isTestUser, false)),
+        db.select({ total: count() }).from(exams).where(eq2(exams.isActive, true)),
+        db.select({ total: count() }).from(questions),
+        db.select({ total: count() }).from(examSessions).innerJoin(exams, eq2(examSessions.examId, exams.id)).where(and2(eq2(examSessions.isCompleted, false), eq2(examSessions.isTestAttempt, false), eq2(exams.isActive, true))),
+        db.select({
+          id: results.id,
+          studentName: results.studentName,
+          title: exams.title,
+          classLevel: exams.classLevel,
+          department: exams.department,
+          percentage: results.percentage,
+          passed: results.passed,
+          completedAt: results.completedAt
+        }).from(results).leftJoin(exams, eq2(results.examId, exams.id)).where(eq2(results.isTestAttempt, false))
+      ]);
+      res.json({
+        students: enrollment[0].total,
+        activeExams: activeExams[0].total,
+        questions: bank[0].total,
+        activeAttempts: activeAttempts[0].total,
+        summary: summarizeDashboard(completed.map((result) => ({ ...result, completedAt: result.completedAt.toISOString() })))
+      });
+    } catch (error) {
+      console.error("Dashboard metrics failed", error);
+      res.status(500).json({ error: "Could not load dashboard metrics" });
+    }
+  });
+  app2.get("/api/admin/dashboard/banner", async (req, res) => {
+    if (!requireAdmin2(req, res)) return;
+    res.set("Cache-Control", "no-store");
+    try {
+      const { rows } = await pool.query(
+        "select banner_image from public.dashboard_branding where id = 'global'"
+      );
+      res.json({ image: rows[0]?.banner_image ?? "" });
+    } catch (error) {
+      console.error("Dashboard banner could not be loaded", error);
+      res.status(503).json({ error: "Dashboard banner storage is unavailable" });
+    }
+  });
+  app2.put("/api/admin/dashboard/banner", async (req, res) => {
+    if (!requireAdmin2(req, res)) return;
+    const image = bannerSchema.safeParse(req.body?.image);
+    if (!image.success) return res.status(400).json({ error: "Choose a JPEG, PNG, or WebP image up to 1 MB" });
+    try {
+      await pool.query(
+        "insert into public.dashboard_branding (id, banner_image) values ('global', $1) on conflict (id) do update set banner_image = excluded.banner_image",
+        [image.data]
+      );
+      res.json({ image: image.data });
+    } catch (error) {
+      console.error("Dashboard banner could not be saved", error);
+      res.status(503).json({ error: "Dashboard banner storage is unavailable" });
+    }
+  });
+}
+
 // server/auth-cookie.ts
 import { createHmac, timingSafeEqual } from "node:crypto";
 var COOKIE_NAME = "fia_auth";
@@ -1530,7 +1635,7 @@ function readAuthCookie(req) {
 }
 
 // server/routes.ts
-import { z as z2 } from "zod";
+import { z as z3 } from "zod";
 import multer from "multer";
 import path2 from "path";
 import express from "express";
@@ -1966,8 +2071,8 @@ function calculatePsychometrics(workerData) {
       }
     });
     const choicesPercentage = {};
-    Object.entries(selectionCounts).forEach(([choice, count]) => {
-      choicesPercentage[choice] = selections.length > 0 ? Math.round(count / selections.length * 100) : 0;
+    Object.entries(selectionCounts).forEach(([choice, count2]) => {
+      choicesPercentage[choice] = selections.length > 0 ? Math.round(count2 / selections.length * 100) : 0;
     });
     return {
       id: q.id,
@@ -2058,6 +2163,7 @@ var upload = multer({
   }
 });
 async function registerRoutes(app2) {
+  registerAdminDashboard(app2, requireAdmin);
   app2.use("/uploads", express.static(path2.join(process.cwd(), "uploads")));
   app2.post("/api/upload", upload.single("file"), (req, res) => {
     try {
@@ -2160,7 +2266,7 @@ async function registerRoutes(app2) {
       const question = await storage.createQuestion(validatedData);
       res.status(201).json(question);
     } catch (error) {
-      if (error instanceof z2.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create question" });
@@ -2599,7 +2705,7 @@ ${error.stack}` : String(error));
       const exam = await storage.createExam(examData);
       res.status(201).json(exam);
     } catch (error) {
-      if (error instanceof z2.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create exam" });
@@ -2762,8 +2868,8 @@ ${error.stack}` : String(error));
       } else if (exam.subjectConfig && Object.keys(exam.subjectConfig).length > 0) {
         const poolQuestions = await storage.getQuestionsByIds(exam.questionIds || []);
         let selectedIds = [];
-        for (const [subj, count] of Object.entries(exam.subjectConfig)) {
-          const limit = Number(count) || 0;
+        for (const [subj, count2] of Object.entries(exam.subjectConfig)) {
+          const limit = Number(count2) || 0;
           if (limit <= 0) continue;
           const subjQuestions = poolQuestions.filter((q) => (q.subject || "").toLowerCase() === subj.toLowerCase());
           for (let i = subjQuestions.length - 1; i > 0; i--) {
@@ -2790,7 +2896,7 @@ ${error.stack}` : String(error));
       const session = await storage.createExamSession(sessionData);
       res.status(201).json(session);
     } catch (error) {
-      if (error instanceof z2.ZodError) {
+      if (error instanceof z3.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error("Error creating exam session:", error);
@@ -3150,9 +3256,9 @@ Provide structured JSON with:
   app2.post("/api/ai/generate-questions", async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
-      const { subject, classLevel, term, topic, count, examType } = req.body;
+      const { subject, classLevel, term, topic, count: count2, examType } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
-      const numQuestions = Math.min(Math.max(Number(count) || 5, 1), 25);
+      const numQuestions = Math.min(Math.max(Number(count2) || 5, 1), 25);
       const isObjectives = !examType || examType.toLowerCase().includes("objective") || examType.toLowerCase().includes("mcq");
       if (!apiKey) {
         const mockQuestions = Array.from({ length: numQuestions }, (_, i) => ({
