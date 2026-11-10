@@ -418,6 +418,41 @@ export const deleteTestAttemptsBulk = async (): Promise<void> => {
 
 // --- Admin Personal Profile & Personal Settings API ---
 export const getAdminProfile = async (adminId: string = "default-admin"): Promise<AdminUser | null> => {
+    if (!firebaseConfigured) {
+        let username = "Administrator";
+        try {
+            const cachedAdmin = JSON.parse(localStorage.getItem("admin_user") || "null");
+            if (typeof cachedAdmin?.username === "string" && cachedAdmin.username.trim()) {
+                username = cachedAdmin.username.trim();
+            }
+        } catch {
+            // Ignore stale or malformed browser profile data.
+        }
+        return {
+            id: adminId,
+            name: username,
+            email: "",
+            phone: "",
+            avatarUrl: "",
+            role: "Super Admin",
+            theme: "system",
+            timezone: "Africa/Lagos",
+            landingPage: "/admin",
+            twoFactorEnabled: false,
+            notificationPreferences: {
+                results: true,
+                cheating: true,
+                questions: true,
+                messages: true,
+                exams: true,
+                system: true,
+                channels: { inApp: true, email: true, sms: false },
+            },
+            activeSessions: [],
+            permissions: [],
+            createdAt: new Date(),
+        } as AdminUser;
+    }
     try {
         const d = await getDoc(doc(getFirebaseDb(), "admin_users", adminId));
         if (!d.exists()) {
@@ -464,6 +499,9 @@ export const getAdminProfile = async (adminId: string = "default-admin"): Promis
 };
 
 export const updateAdminProfile = async (adminId: string = "default-admin", data: Partial<AdminUser>): Promise<AdminUser> => {
+    if (!firebaseConfigured) {
+        throw new Error("Admin profile editing requires Firebase configuration, which is not enabled for this deployment.");
+    }
     const db = getFirebaseDb();
     const adminRef = doc(db, "admin_users", adminId);
     const snap = await getDoc(adminRef);

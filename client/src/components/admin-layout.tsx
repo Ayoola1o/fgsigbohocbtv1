@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { ApiRequestError, apiRequest } from "@/lib/queryClient";
 import {
   getAdminProfile,
   subscribeToNotifications,
@@ -57,18 +57,32 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  // Authentication check
+  // Verify the signed server cookie before mounting protected admin pages.
+  const {
+    data: authenticatedAdmin,
+    isLoading: authLoading,
+    isError: authError,
+    error: authErrorValue,
+    refetch: retryAuth,
+  } = useQuery<{ id: string; username: string }>({
+    queryKey: ["/api/admin/me"],
+    queryFn: () => apiRequest("GET", "/api/admin/me"),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
   useEffect(() => {
-    const userStr = localStorage.getItem("admin_user");
-    if (!userStr) {
+    if (authErrorValue instanceof ApiRequestError && authErrorValue.status === 401) {
+      localStorage.removeItem("admin_user");
       setLocation("/admin/login");
     }
-  }, [setLocation]);
+  }, [authErrorValue, setLocation]);
 
   // Fetch Logged In Admin Profile
   const { data: adminProfile } = useQuery<AdminUser | null>({
     queryKey: ["adminProfile"],
     queryFn: () => getAdminProfile("default-admin"),
+    enabled: !!authenticatedAdmin,
   });
 
   // Subscribe to real-time notifications
@@ -140,6 +154,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const lastPart = pathParts[pathParts.length - 1] || "admin";
   const pageTitle = lastPart === "admin" ? "Dashboard Overview" 
     : lastPart.charAt(0).toUpperCase() + lastPart.slice(1).replace(/-/g, " ") + " Overview";
+
+  if (authLoading || (!authenticatedAdmin && !authError)) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">Checking administrator session…</div>;
+  }
+
+  if (!authenticatedAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm text-muted-foreground">Could not verify the administrator session.</p>
+        <Button variant="outline" onClick={() => void retryAuth()}>
+          Retry authentication
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>

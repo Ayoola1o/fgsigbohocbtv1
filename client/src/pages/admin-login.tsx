@@ -26,14 +26,14 @@ export default function AdminLoginPage() {
         }
         setLoading(true);
         try {
-            // Hardcoded credential check for username 'admin' and password 'admin2002'
-            if (username === "admin" && password === "admin2002") {
-                localStorage.setItem("admin_user", "true");
-                toast({ title: "Logged in", description: "Welcome back, Admin!" });
-                setLocation("/admin");
-            } else {
-                throw new Error("Invalid username or password");
-            }
+            const admin = await apiRequest<{ id: string; username: string }>(
+                "POST",
+                "/api/admin/login",
+                { username: username.trim(), password },
+                { timeoutMs: 20_000 },
+            );
+            toast({ title: "Logged in", description: `Welcome back, ${admin.username}!` });
+            setLocation("/admin");
         } catch (err: any) {
             toast({
                 title: "Login failed",

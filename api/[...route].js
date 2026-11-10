@@ -2079,11 +2079,16 @@ async function registerRoutes(app2) {
         return res.status(400).json({ error: "username and password required" });
       }
       const user = await storage.getUserByUsername(username);
-      if (!user || user.password !== password) {
+      const bootstrapUsername = (process.env.ADMIN_USERNAME || "admin").trim().toLowerCase();
+      const bootstrapPassword = process.env.ADMIN_PASSWORD || "admin2002";
+      const isBootstrapLogin = !user && username.trim().toLowerCase() === bootstrapUsername && password === bootstrapPassword;
+      if ((!user || user.password !== password) && !isBootstrapLogin) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      issueAuthCookie(res, { userId: user.id, role: "admin" });
-      res.json({ id: user.id, username: user.username });
+      const adminId = user?.id || "bootstrap-admin";
+      const adminUsername = user?.username || bootstrapUsername;
+      issueAuthCookie(res, { userId: adminId, role: "admin" });
+      res.json({ id: adminId, username: adminUsername });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({
