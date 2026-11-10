@@ -78,28 +78,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/login", async (req, res) => {
     try {
-      const { username, password } = req.body as { username?: string; password?: string };
-      if (!username || !password) {
-        return res.status(400).json({ error: "username and password required" });
+      const { email, password } = req.body as { email?: string; password?: string };
+      if (!email || !password) {
+        return res.status(400).json({ error: "email and password required" });
+      }
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !supabaseKey) {
+        console.error("Supabase Auth login is not configured on the server");
+        return res.status(503).json({ error: "Admin login is temporarily unavailable" });
       }
 
-      const user = await storage.getUserByUsername(username);
-      const bootstrapUsername = (process.env.ADMIN_USERNAME || "admin").trim().toLowerCase();
-      const bootstrapPassword = process.env.ADMIN_PASSWORD || "admin2002";
-      const isBootstrapLogin = !user && username.trim().toLowerCase() === bootstrapUsername && password === bootstrapPassword;
-      if ((!user || user.password !== password) && !isBootstrapLogin) {
+      const authResponse = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { apikey: supabaseKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!authResponse.ok) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      const adminId = user?.id || "bootstrap-admin";
-      const adminUsername = user?.username || bootstrapUsername;
-      issueAuthCookie(res, { userId: adminId, role: "admin" });
-      res.json({ id: adminId, username: adminUsername });
+      const authResult = await authResponse.json() as {
+        user?: { id?: string; email?: string; app_metadata?: { role?: string } };
+      };
+      const authUser = authResult.user;
+      if (!authUser?.id || !authUser.email) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      issueAuthCookie(res, { userId: authUser.id, role: "admin" });
+      res.json({ id: authUser.id, username: authUser.email });
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({
-        error: "Failed to login",
-        details: error instanceof Error ? error.message : String(error)
-      });
+      res.status(error instanceof Error && error.name === "TimeoutError" ? 504 : 500).json({ error: "Failed to login" });
     }
   });
 
@@ -117,9 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const auth = (req as any).auth;
       const uid = auth?.role === "admin" ? auth.userId : null;
       if (!uid) return res.status(401).json({ error: "Not authenticated" });
-      const user = await storage.getUserByUsername((await storage.getUserByUsername("Admin"))?.username || "");
-      // return minimal info
-      res.json({ id: uid, username: user?.username || "Admin" });
+      res.json({ id: uid, username: uid });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch user" });
     }

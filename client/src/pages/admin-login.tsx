@@ -10,16 +10,16 @@ import { useToast } from "@/hooks/use-toast";
 export default function AdminLoginPage() {
     const [, setLocation] = useLocation();
     const { toast } = useToast();
-    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username || !password) {
+        if (!email || !password) {
             toast({
                 title: "Error",
-                description: "Please enter both username and password",
+                description: "Please enter your Supabase email and password",
                 variant: "destructive",
             });
             return;
@@ -29,7 +29,7 @@ export default function AdminLoginPage() {
             const admin = await apiRequest<{ id: string; username: string }>(
                 "POST",
                 "/api/admin/login",
-                { username: username.trim(), password },
+                { email: email.trim(), password },
                 { timeoutMs: 20_000 },
             );
             toast({ title: "Logged in", description: `Welcome back, ${admin.username}!` });
@@ -61,14 +61,16 @@ export default function AdminLoginPage() {
                         <p className="text-gray-200 text-center mb-8">Sign in to manage the system</p>
                         <form onSubmit={handleSubmit}>
                             <div className="mb-4">
-                                <Label htmlFor="username" className="text-white">Username</Label>
+                                <Label htmlFor="email" className="text-white">Email</Label>
                                 <Input
-                                    id="username"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    placeholder="Enter username"
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter your Supabase email"
                                     className="mt-1 bg-white/20 border-white/20 text-white placeholder:text-gray-300 focus-visible:ring-white/50"
                                     autoCapitalize="none"
+                                    autoComplete="username"
                                 />
                             </div>
                             <div className="mb-6">
