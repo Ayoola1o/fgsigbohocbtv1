@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { clearAuthCookie, issueAuthCookie } from "./auth-cookie";
 import { getFirestoreResults, getFirestoreQuestions, getFirestoreExams, getFirestoreSettings, saveFirestoreSettings } from "./firebase";
 import {
   insertQuestionSchema,
@@ -8,6 +9,7 @@ import {
   insertExamSessionSchema,
   systemSettingsSchema,
   type Question,
+  type Student,
   type SystemSettings,
 } from "../shared/schema";
 import { z } from "zod";
@@ -19,6 +21,12 @@ import { extractTextFromFile } from "./docx-reader";
 import { GoogleGenAI } from "@google/genai";
 // @ts-ignore
 import { calculatePsychometrics } from "../workers/psychometricWorker.js";
+
+function requireAdmin(req: any, res: any): boolean {
+  if (req.auth?.role === "admin") return true;
+  res.status(401).json({ error: "Administrator authentication required" });
+  return false;
+}
 
 // Configure multer for local storage
 // Configure multer for local storage
@@ -53,6 +61,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // File upload endpoint
   app.post("/api/upload", upload.single("file"), (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
@@ -74,25 +83,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "username and password required" });
       }
 
-      console.log("Processing login for:", username);
-
-      console.log("Calling storage.getUserByUsername...");
       const user = await storage.getUserByUsername(username);
-      console.log("Storage returned:", user);
       if (!user || user.password !== password) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-
-      // store minimal session info
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any).session = (req as any).session || {};
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any).session.userId = user.id;
-      } catch (e) {
-        // ignore session set failure
-      }
-
+      issueAuthCookie(res, { userId: user.id, role: "admin" });
       res.json({ id: user.id, username: user.username });
     } catch (error) {
       console.error("Login error:", error);
@@ -105,17 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/logout", async (req, res) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const s = (req as any).session;
-      if (s && typeof s.destroy === "function") {
-        s.destroy(() => {
-          res.json({ ok: true });
-        });
-      } else {
-        // clear userId if possible
-        if (s) s.userId = undefined;
-        res.json({ ok: true });
-      }
+      clearAuthCookie(res);
+      res.json({ ok: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to logout" });
     }
@@ -123,9 +109,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/me", async (req, res) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const s = (req as any).session;
-      const uid = s && s.userId;
+      const auth = (req as any).auth;
+      const uid = auth?.role === "admin" ? auth.userId : null;
       if (!uid) return res.status(401).json({ error: "Not authenticated" });
       const user = await storage.getUserByUsername((await storage.getUserByUsername("Admin"))?.username || "");
       // return minimal info
@@ -135,8 +120,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   // Questions API
-  app.get("/api/questions/count", async (_req, res) => {
+  app.get("/api/questions/count", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const questions = await storage.getQuestions();
       res.json({ count: questions.length });
     } catch (error) {
@@ -146,6 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const questions = await storage.getQuestions();
       res.json(questions);
     } catch (error) {
@@ -155,6 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/questions/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const question = await storage.getQuestion(req.params.id);
       if (!question) {
         return res.status(404).json({ error: "Question not found" });
@@ -167,6 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const validatedData = insertQuestionSchema.parse(req.body);
       const question = await storage.createQuestion(validatedData);
       res.status(201).json(question);
@@ -181,6 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk questions import (accepts JSON array of questions)
   app.post("/api/questions/bulk", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const payload = req.body;
       if (!Array.isArray(payload)) {
         return res.status(400).json({ error: "Expected an array of questions" });
@@ -228,6 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Smart AI Question Importer Route
   app.post("/api/questions/import-ai", upload.single("file"), async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       // Metadata fallback from query / body
       const defaultMeta = {
         classLevel: req.query.classLevel || req.body.classLevel || "SS3",
@@ -513,6 +504,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.patch("/api/questions/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const updated = await storage.updateQuestion(req.params.id, req.body);
       if (!updated) {
         return res.status(404).json({ error: "Question not found" });
@@ -525,6 +517,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.patch("/api/questions/bulk", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { ids, updates } = req.body as { ids?: string[]; updates?: Partial<Question> };
       if (!ids || !Array.isArray(ids)) {
         return res.status(400).json({ error: "Invalid request body: 'ids' array is required." });
@@ -538,6 +531,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/questions/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       await storage.deleteQuestion(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -547,6 +541,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { ids } = req.body as { ids?: string[] };
       if (!ids || !Array.isArray(ids)) {
         return res.status(400).json({ error: "Invalid request body" });
@@ -561,6 +556,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   // Bulk fetch questions by IDs
   app.post("/api/questions/bulk-fetch", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { ids } = req.body as { ids?: string[] };
       if (!ids || !Array.isArray(ids)) {
         return res.status(400).json({ error: "Invalid request body: 'ids' array is required." });
@@ -572,23 +568,45 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
     }
   });
 
+  // Candidate question payload: never send answer keys to the browser during an exam.
+  app.post("/api/questions/student-bulk-fetch", async (req, res) => {
+    try {
+      const ids = req.body?.ids;
+      const requestedSessionId = req.body?.sessionId;
+      if (!Array.isArray(ids) || ids.length > 500 || ids.some((id: unknown) => typeof id !== "string") || typeof requestedSessionId !== "string") {
+        return res.status(400).json({ error: "ids must be an array of at most 500 question IDs" });
+      }
+      const session = await storage.getExamSession(requestedSessionId);
+      const auth = (req as any).auth;
+      const authenticatedStudentId = auth?.role === "student" ? auth.userId : null;
+      if (!session || !authenticatedStudentId) return res.status(401).json({ error: "Active student session required" });
+      const student = (await storage.getStudents()).find(s => s.id === authenticatedStudentId);
+      if (!student || student.studentId.trim().toLowerCase() !== session.studentId.trim().toLowerCase()) {
+        return res.status(403).json({ error: "Exam session does not belong to this student" });
+      }
+      const allowedIds = new Set(session.sessionQuestionIds || []);
+      if (session.isCompleted || ids.some((id: string) => !allowedIds.has(id))) {
+        return res.status(403).json({ error: "Requested questions are not assigned to this active exam session" });
+      }
+      const questions = await storage.getQuestionsByIds(Array.from(new Set(ids)));
+      const questionsById = new Map(questions.map(q => [q.id, q]));
+      res.json(ids.map((id: string) => questionsById.get(id)).filter(Boolean).map(({ correctAnswer: _answer, ...question }: any) => question));
+    } catch {
+      res.status(500).json({ error: "Failed to fetch exam questions" });
+    }
+  });
+
   // Exams API
   app.get("/api/exams", async (req, res) => {
     try {
       const { classLevel } = req.query;
-      // If a student is logged in, force filter to student's class level
+      // A student's signed cookie, not a caller-supplied query, determines their class.
       let effectiveClassLevel = classLevel as string | undefined;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const s = (req as any).session;
-        if (s && s.studentId) {
-          const student = await storage.getStudentByStudentId(s.studentId);
-          if (student && (student as any).classLevel) {
-            effectiveClassLevel = (student as any).classLevel;
-          }
-        }
-      } catch (e) {
-        // ignore session errors
+      const auth = (req as any).auth;
+      if (auth?.role === "student") {
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student) return res.status(401).json({ error: "Student session expired" });
+        effectiveClassLevel = student.classLevel || undefined;
       }
       const exams = await storage.getExams(effectiveClassLevel);
       res.json(exams);
@@ -611,6 +629,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.get("/api/exams/:id/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const exam = await storage.getExam(req.params.id);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
@@ -625,6 +644,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.post("/api/exams", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const validatedData = insertExamSchema.parse(req.body);
 
       // If numberOfQuestionsToDisplay is provided but questionIds not provided,
@@ -665,28 +685,13 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         return res.status(400).json({ error: "Student name and ID are required" });
       }
 
-      // Get all students and perform case-insensitive search
-      const allStudents = await storage.getStudents();
-      const student = allStudents.find(s =>
-        s.name.toLowerCase().trim() === name.toLowerCase().trim() &&
-        s.studentId.toLowerCase().trim() === sid.toLowerCase().trim()
-      );
+      const student = await storage.getStudentForLogin(name, sid);
 
       if (!student) {
-        console.log(`Login failed for name: "${name}", ID: "${sid}"`);
-        console.log(`Available students:`, allStudents.map(s => ({ name: s.name, id: s.studentId })));
         return res.status(401).json({ error: "Invalid student name or ID. Please check your credentials." });
       }
 
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any).session = (req as any).session || {};
-        // store student internal id
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any).session.studentId = student.id;
-      } catch (e) {
-        // ignore session set failure
-      }
+      issueAuthCookie(res, { userId: student.id, role: "student" });
 
       res.json({
         id: student.id,
@@ -702,8 +707,14 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
     }
   });
 
+  app.post("/api/students/logout", (_req, res) => {
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  });
+
   app.patch("/api/exams/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const exam = await storage.updateExam(req.params.id, req.body);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
@@ -716,6 +727,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/exams/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       await storage.deleteExam(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -726,6 +738,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   // Exam Sessions API
   app.get("/api/exam-sessions", async (req, res) => {
     try {
+      if ((req as any).auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       const sessions = await storage.getExamSessions();
       res.json(sessions);
     } catch (error) {
@@ -739,6 +754,14 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       if (!session) {
         return res.status(404).json({ error: "Exam session not found" });
       }
+      const auth = (req as any).auth;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student || student.studentId.trim().toLowerCase() !== session.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+      }
       res.json({ ...session, serverTime: new Date().toISOString() });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch exam session" });
@@ -748,11 +771,32 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   app.post("/api/exam-sessions", async (req, res) => {
     try {
       const validatedData = insertExamSessionSchema.parse(req.body);
+      const auth = (req as any).auth;
+      if (auth?.role !== "admin" && auth?.role !== "student") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      let sessionInput = validatedData;
+      if (auth.role === "student") {
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student) return res.status(401).json({ error: "Student session expired" });
+        if (student.studentId.trim().toLowerCase() !== validatedData.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+        sessionInput = {
+          ...validatedData,
+          studentName: student.name,
+          studentId: student.studentId,
+        };
+      }
+
       const exam = await storage.getExam(validatedData.examId);
 
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
       }
+
+      const existingSession = await storage.getActiveExamSession(exam.id, sessionInput.studentId);
+      if (existingSession) return res.status(200).json(existingSession);
 
       let sessionQuestionIds = [...exam.questionIds];
 
@@ -761,8 +805,8 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         // Dynamic subject slots configured
         const allStudents = await storage.getStudents();
         const student = allStudents.find(s => 
-          s.studentId.toLowerCase().trim() === validatedData.studentId.toLowerCase().trim() ||
-          s.name.toLowerCase().trim() === validatedData.studentName.toLowerCase().trim()
+          s.studentId.toLowerCase().trim() === sessionInput.studentId.toLowerCase().trim() ||
+          s.name.toLowerCase().trim() === sessionInput.studentName.toLowerCase().trim()
         );
 
         const studentDept = student?.department ? student.department.trim() : null;
@@ -847,7 +891,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       }
 
       const sessionData = {
-        ...validatedData,
+        ...sessionInput,
         sessionQuestionIds,
       }
 
@@ -864,10 +908,25 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.patch("/api/exam-sessions/:id", async (req, res) => {
     try {
-      const session = await storage.updateExamSession(req.params.id, req.body);
-      if (!session) {
+      const existingSession = await storage.getExamSession(req.params.id);
+      if (!existingSession) {
         return res.status(404).json({ error: "Exam session not found" });
       }
+      const auth = (req as any).auth;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student || student.studentId.trim().toLowerCase() !== existingSession.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+        const allowedKeys = new Set([
+          "answers", "currentQuestionIndex", "timeRemaining", "tabSwitches", "windowBlurs", "isFlagged",
+        ]);
+        const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedKeys.has(key)));
+        const session = await storage.updateExamSession(req.params.id, updates);
+        return res.json(session);
+      }
+      const session = await storage.updateExamSession(req.params.id, req.body);
       res.json(session);
     } catch (error) {
       res.status(500).json({ error: "Failed to update exam session" });
@@ -876,6 +935,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/exam-sessions/:id", async (req, res) => {
     try {
+      if ((req as any).auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       await storage.deleteExamSession(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -888,6 +950,14 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       const session = await storage.getExamSession(req.params.id);
       if (!session) {
         return res.status(404).json({ error: "Exam session not found" });
+      }
+      const auth = (req as any).auth;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student || student.studentId.trim().toLowerCase() !== session.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
       }
 
       if (session.isCompleted) {
@@ -963,13 +1033,25 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   app.get("/api/results", async (req, res) => {
     try {
       const { studentId, examId } = req.query;
+      const auth = (req as any).auth;
+      let scopedStudent: string | undefined;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student) return res.status(401).json({ error: "Student session expired" });
+        scopedStudent = student.studentId;
+      }
       let results = await storage.getResults();
-      if (studentId) {
-        const cleanSid = String(studentId).toLowerCase().trim();
+      const effectiveStudentId = scopedStudent || (studentId ? String(studentId) : undefined);
+      if (effectiveStudentId) {
+        const cleanSid = effectiveStudentId.toLowerCase().trim();
         results = results.filter(r => r.studentId?.toLowerCase().trim() === cleanSid);
       }
       if (examId) {
         results = results.filter(r => r.examId === String(examId));
+      }
+      if (scopedStudent) {
+        return res.json(results.map(({ answers: _answers, correctAnswers: _correctAnswers, ...result }) => result));
       }
       res.json(results);
     } catch (error) {
@@ -979,9 +1061,21 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.get("/api/results/:id", async (req, res) => {
     try {
+      const auth = (req as any).auth;
+      if (auth?.role !== "admin" && auth?.role !== "student") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       const result = await storage.getResult(req.params.id);
       if (!result) {
         return res.status(404).json({ error: "Result not found" });
+      }
+      if (auth.role === "student") {
+        const student = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!student || result.studentId.trim().toLowerCase() !== student.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Result does not belong to this student" });
+        }
+        const { answers: _answers, correctAnswers: _correctAnswers, ...publicResult } = result;
+        return res.json(publicResult);
       }
       res.json(result);
     } catch (error) {
@@ -991,6 +1085,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/results/:id", async (req, res) => {
     try {
+      if ((req as any).auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       await storage.deleteResult(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -1000,6 +1097,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/results", async (req, res) => {
     try {
+      if ((req as any).auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       const { ids } = req.body as { ids?: string[] };
       if (ids && Array.isArray(ids)) {
         await storage.deleteResults(ids);
@@ -1012,6 +1112,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.post("/api/results/:id/reset", async (req, res) => {
     try {
+      if ((req as any).auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       const result = await storage.getResult(req.params.id);
       if (result) {
         await storage.deleteResult(result.id);
@@ -1027,8 +1130,17 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   app.get("/api/students", async (req, res) => {
     try {
       const { studentId, classLevel } = req.query;
+      const auth = (req as any).auth;
+      let scopedStudent: Student | undefined;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        scopedStudent = (await storage.getStudents()).find(s => s.id === auth.userId);
+        if (!scopedStudent) return res.status(401).json({ error: "Student session expired" });
+      }
       let students = await storage.getStudents();
-      if (studentId) {
+      if (scopedStudent) {
+        students = [scopedStudent];
+      } else if (studentId) {
         const cleanSid = String(studentId).toLowerCase().trim();
         students = students.filter(s =>
           s.studentId.toLowerCase().trim() === cleanSid ||
@@ -1046,6 +1158,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.get("/api/students/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const id = req.params.id;
       const student = await storage.getStudentByStudentId(id);
       if (!student) {
@@ -1059,6 +1172,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.post("/api/students", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const payload = req.body;
 
       if (Array.isArray(payload)) {
@@ -1093,6 +1207,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.patch("/api/students/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const id = req.params.id;
       const data = req.body as { name?: string; studentId?: string };
       const updated = await storage.updateStudent(id, data as any);
@@ -1105,6 +1220,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.delete("/api/students/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const id = req.params.id;
       await storage.deleteStudent(id);
       res.status(204).send();
@@ -1115,6 +1231,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
   app.post("/api/students/:id/toggle-block", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { examId, blockState } = req.body as { examId?: string; blockState?: boolean };
       if (!examId) {
         return res.status(400).json({ error: "examId is required" });
@@ -1132,6 +1249,10 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   // Live Gemini AI Remedial Study Recommendation API Endpoint
   app.post("/api/ai/remedial", async (req, res) => {
     try {
+      const role = (req as any).auth?.role;
+      if (role !== "admin" && role !== "student") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       const { candidateName, examTitle, score, totalPoints, percentage, incorrectQuestions } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
 
@@ -1182,6 +1303,7 @@ Provide structured JSON with:
   // 1. AI Bulk Question & Exam Generator Endpoint
   app.post("/api/ai/generate-questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { subject, classLevel, term, topic, count, examType } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       const numQuestions = Math.min(Math.max(Number(count) || 5, 1), 25);
@@ -1247,6 +1369,7 @@ Each question object must include:
   // 2. AI Student Early Risk Analysis Endpoint
   app.post("/api/ai/student-risk-analysis", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { studentName, classLevel, averageScore, recentScores, tabSwitches } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
 
@@ -1287,6 +1410,7 @@ Return JSON with:
   // 3. AI Report Card Comment Generator Endpoint
   app.post("/api/ai/generate-comment", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { studentName, averageScore, classLevel, role, strengths, weaknesses } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       const isPrincipal = role === "principal";
@@ -1325,6 +1449,7 @@ Return JSON with a single key "comment" containing a warm 2-sentence formal rema
   // 4. AI Curriculum & Teacher Rigor Diagnostic Endpoint
   app.post("/api/ai/diagnose-curriculum", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { meanScore, stdDev, skewness, hardQuestionCount, easyQuestionCount } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
 
@@ -1369,6 +1494,7 @@ Return JSON with:
   // Bulk purge QA test attempt data
   app.post("/api/admin/purge-test-data", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       console.log("[routes.ts] Initiating bulk purge of QA test attempts...");
       
       // 1. Purge from local MemStorage
@@ -1414,6 +1540,7 @@ Return JSON with:
   // ─── Server-Side Psychometric Analytics Engine ───
   // Moves ALL heavy computation off the browser thread to eliminate client freezing.
   app.get("/api/analytics", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
     try {
       const selectedExamId = (req.query.examId as string) || "__all__";
       const termFilter = (req.query.term as string) || "__all__";
@@ -1613,6 +1740,7 @@ Return JSON with:
 
   app.post("/api/settings", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const parsed = systemSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({

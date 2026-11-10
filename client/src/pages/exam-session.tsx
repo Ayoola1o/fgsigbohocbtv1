@@ -39,7 +39,7 @@ import {
   updateExamSession,
   submitExamSession,
   sendSessionHeartbeat
-} from "@/lib/firebase-api";
+} from "@/lib/cbt-api";
 import { cn } from "@/lib/utils";
 
 interface TheorySlot {
@@ -211,7 +211,7 @@ export default function ExamSessionPage() {
   const lastQuestionTimeRef = useRef<number>(Date.now());
   const prevIndexRef = useRef<number>(0);
 
-  const { data: session, isLoading: sessionLoading } = useQuery<(ExamSession & { serverTime?: string }) | null>({
+  const { data: session, isLoading: sessionLoading, isError: sessionError, error: sessionErrorValue, refetch: refetchSession } = useQuery<(ExamSession & { serverTime?: string }) | null>({
     queryKey: ["/api/exam-sessions", sessionId],
     queryFn: async () => {
       if (!sessionId) return null;
@@ -222,7 +222,7 @@ export default function ExamSessionPage() {
     enabled: !!sessionId,
   });
 
-  const { data: exam } = useQuery<Exam>({
+  const { data: exam, isError: examError, error: examErrorValue, refetch: refetchExam } = useQuery<Exam>({
     queryKey: ["/api/exams", examId],
     queryFn: async () => {
       const data = await getExam(examId);
@@ -259,27 +259,23 @@ export default function ExamSessionPage() {
 
 
 
-  const { data: questions, isLoading: questionsLoading } = useQuery<Question[]>({
+  const { data: questions, isLoading: questionsLoading, isError: questionsError, error: questionsErrorValue, refetch: refetchQuestions } = useQuery<Question[]>({
     queryKey: ["sessionQuestions", session?.id, exam?.id],
     queryFn: async () => {
+      // The server assigns the candidate's exact question set. Keep that order and
+      // avoid fetching the full exam pool when a stream/elective subset was assigned.
       let idsToFetch = session?.sessionQuestionIds || [];
       const displayLimit = exam?.numberOfQuestionsToDisplay;
 
-      if (exam?.questionIds && exam.questionIds.length > 0) {
-        if (!displayLimit || displayLimit <= 0) {
-          idsToFetch = exam.questionIds;
-        } else if (idsToFetch.length > displayLimit) {
-          idsToFetch = idsToFetch.slice(0, displayLimit);
-        } else if (idsToFetch.length < displayLimit && idsToFetch.length < exam.questionIds.length) {
-          const limit = Math.min(displayLimit, exam.questionIds.length);
-          idsToFetch = exam.questionIds.slice(0, limit);
-        }
+      if (idsToFetch.length === 0 && exam?.questionIds?.length) {
+        idsToFetch = exam.questionIds;
       }
+      if (displayLimit && displayLimit > 0 && idsToFetch.length > displayLimit) idsToFetch = idsToFetch.slice(0, displayLimit);
 
       if (!idsToFetch || idsToFetch.length === 0) {
         return [];
       }
-      return getStudentQuestionsByIds(idsToFetch);
+      return getStudentQuestionsByIds(idsToFetch, session!.id);
     },
     enabled: !!session && !!exam,
   });
@@ -354,7 +350,6 @@ export default function ExamSessionPage() {
           sendSessionHeartbeat(sessionId, {
             tabSwitches: tabSwitchesRef.current,
             isFlagged: true,
-            justFlagged: true,
           }).catch(console.error);
         }
       }
@@ -419,34 +414,18 @@ export default function ExamSessionPage() {
       answers: Record<string, string>,
       telemetry?: { tabSwitches: number; revisions: number; timeSpentPerQuestion: Record<string, number> }
     }) => {
-      console.log("submitExamMutation: Starting submission...");
-
-      // Save localized submission intent immediately to block re-entry
-      if (session?.studentId && session?.examId) {
-        const key = `fia_submitted_exam_${session.studentId.trim().toLowerCase()}_${session.examId}`;
-        localStorage.setItem(key, "true");
-        console.log(`Saved local submission intent: ${key}`);
-      }
-
-      // 10 second timeout for the UI to wait before assuming success (local save)
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("SUBMISSION_TIMEOUT")), 10000);
-      });
-
-      const submitPromise = submitExamSession(sessionId, vars.answers, vars.submissionType, vars.telemetry);
-
-      try {
-        return await Promise.race([submitPromise, timeoutPromise]);
-      } catch (err: any) {
-        if (err.message === "SUBMISSION_TIMEOUT") {
-          console.warn("submitExamMutation: Timeout reached, but proceeding as if successful (local-first)");
-          return { id: "offline-result" }; // Dummy result to trigger onSuccess
-        }
-        throw err;
-      }
+      if (!session) throw new Error("Exam session is still loading.");
+      const pendingKey = `fia_pending_submission_${sessionId}`;
+      localStorage.setItem(pendingKey, JSON.stringify(vars));
+      const result = await submitExamSession(sessionId, vars.answers, vars.submissionType, vars.telemetry);
+      if (!result?.id) throw new Error("The server did not confirm the exam submission.");
+      localStorage.removeItem(pendingKey);
+      localStorage.removeItem(`fia_session_answers_${sessionId}`);
+      const submittedKey = `fia_submitted_exam_${session.studentId.trim().toLowerCase()}_${session.examId}`;
+      localStorage.setItem(submittedKey, "true");
+      return result;
     },
     onSuccess: (result) => {
-      console.log("submitExamMutation: Success/Proceeding", result);
       queryClient.invalidateQueries({ queryKey: ["/api/exam-sessions"] });
       toast({
         title: "Exam Submitted",
@@ -456,10 +435,9 @@ export default function ExamSessionPage() {
     },
     onError: (error) => {
       console.error("Failed to submit exam:", error);
-      submitExamMutation.reset(); // Reset to allow retry if it really failed
       toast({
-        title: "Submission Status",
-        description: "Submission encountered an issue, but your answers are saved locally. You can try submitting again or leave the page.",
+        title: "Submission not confirmed",
+        description: "Your answers remain saved on this device. Stay on this page and retry when your connection is stable.",
         variant: "destructive",
       });
     }
@@ -491,10 +469,19 @@ export default function ExamSessionPage() {
   // Effect 1: Initialize local state from session data (Run only once per session load)
   useEffect(() => {
     if (session && !isInitialized.current) {
-      setAnswers(session.answers || {});
+      let savedAnswers = session.answers || {};
+      try {
+        const localAnswers = localStorage.getItem(`fia_session_answers_${sessionId}`);
+        if (localAnswers) savedAnswers = { ...savedAnswers, ...JSON.parse(localAnswers) };
+      } catch (error) {
+        console.warn("Could not restore locally saved exam answers", error);
+      }
+      setAnswers(savedAnswers);
       // Only set index if it's explicitly saved, otherwise default to 0
       if (typeof session.currentQuestionIndex === 'number') {
-        setCurrentQuestionIndex(session.currentQuestionIndex);
+        const localIndexRaw = localStorage.getItem(`fia_session_question_${sessionId}`);
+        const localIndex = localIndexRaw === null ? NaN : Number(localIndexRaw);
+        setCurrentQuestionIndex(Number.isInteger(localIndex) && localIndex >= 0 ? localIndex : session.currentQuestionIndex);
       }
       isInitialized.current = true;
     }
@@ -544,6 +531,16 @@ export default function ExamSessionPage() {
   useEffect(() => {
     const handleReconnect = async () => {
       if (!sessionId) return;
+      const pending = localStorage.getItem(`fia_pending_submission_${sessionId}`);
+      if (pending && !submitExamMutation.isPending) {
+        try {
+          const payload = JSON.parse(pending);
+          submitExamMutation.mutate(payload);
+          return;
+        } catch (err) {
+          console.warn("Could not retry pending exam submission:", err);
+        }
+      }
       const cachedAnswersStr = localStorage.getItem(`fia_session_answers_${sessionId}`);
       if (cachedAnswersStr) {
         try {
@@ -564,7 +561,7 @@ export default function ExamSessionPage() {
 
     window.addEventListener("online", handleReconnect);
     return () => window.removeEventListener("online", handleReconnect);
-  }, [sessionId, currentQuestionIndex, toast]);
+  }, [sessionId, currentQuestionIndex, toast, submitExamMutation]);
 
   const debouncedSaveProgress = useCallback(
     (newAnswers: Record<string, string>, qIndex: number) => {
@@ -596,6 +593,7 @@ export default function ExamSessionPage() {
       if (sessionId) {
         try {
           localStorage.setItem(`fia_session_answers_${sessionId}`, JSON.stringify(newAnswers));
+          localStorage.setItem(`fia_session_question_${sessionId}`, String(currentQuestionIndex));
         } catch (e) {
           console.error("Failed to write answer to localStorage", e);
         }
@@ -608,10 +606,11 @@ export default function ExamSessionPage() {
 
   const handleNavigate = useCallback(
     (index: number) => {
+      localStorage.setItem(`fia_session_question_${sessionId}`, String(index));
       debouncedSaveProgress(answers, index);
       setCurrentQuestionIndex(index);
     },
-    [answers, debouncedSaveProgress]
+    [answers, debouncedSaveProgress, sessionId]
   );
 
   const toggleFlag = useCallback(
@@ -694,6 +693,22 @@ export default function ExamSessionPage() {
   const progress = totalSteps > 0 ? ((currentQuestionIndex + 1) / totalSteps) * 100 : 0;
   const answeredCount = Object.keys(answers).length;
 
+  if (sessionError || examError || questionsError) {
+    const errorMessage = String(sessionErrorValue || examErrorValue || questionsErrorValue || "Request failed");
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-xl"><CardContent className="space-y-4 p-6">
+          <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertDescription>
+            {isOnline ? `We could not load your exam: ${errorMessage}` : "You are offline. Your answers saved on this device will be restored when you reconnect."}
+          </AlertDescription></Alert>
+          <Button onClick={() => { void refetchSession(); void refetchExam(); void refetchQuestions(); }} disabled={!isOnline}>
+            Retry loading exam
+          </Button>
+        </CardContent></Card>
+      </div>
+    );
+  }
+
   if (sessionLoading || !session || !exam || questionsLoading || !questions) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -703,6 +718,10 @@ export default function ExamSessionPage() {
         </div>
       </div>
     );
+  }
+
+  if (questions.length === 0) {
+    return <div className="min-h-screen p-6"><Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertDescription>This exam has no assigned questions. Please contact the exam administrator; do not submit an empty exam.</AlertDescription></Alert></div>;
   }
 
   if (session.isCompleted) {
@@ -725,6 +744,20 @@ export default function ExamSessionPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 pb-16 font-sans">
+      {submitExamMutation.isError && (
+        <div className="mx-auto max-w-5xl px-4 pt-4">
+          <Alert variant="destructive" className="flex items-center justify-between gap-4">
+            <AlertDescription>Server has not confirmed your submission. Your answers are saved on this device.</AlertDescription>
+            <Button variant="outline" size="sm" disabled={submitExamMutation.isPending || !isOnline} onClick={() => {
+              const pending = localStorage.getItem(`fia_pending_submission_${sessionId}`);
+              if (pending) {
+                try { submitExamMutation.mutate(JSON.parse(pending)); }
+                catch { toast({ title: "Unable to retry", description: "Saved submission data could not be read.", variant: "destructive" }); }
+              }
+            }}>Retry submission</Button>
+          </Alert>
+        </div>
+      )}
       {/* Top Header Bar */}
       <div className="bg-[#1e293b] text-white px-6 py-3.5 flex items-center justify-between shadow-md border-b border-slate-700">
         <div className="flex items-center gap-3.5">

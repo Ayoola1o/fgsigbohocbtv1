@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -36,14 +37,12 @@ const menuItems = [
     title: "Exams",
     url: "/admin/exams",
     icon: FileText,
-    badge: "34",
     testId: "link-exams",
   },
   {
     title: "Invigilator Hub",
     url: "/admin/invigilator",
     icon: Radio,
-    badge: "45",
     testId: "link-invigilator",
   },
   {
@@ -56,14 +55,12 @@ const menuItems = [
     title: "Students",
     url: "/admin/students",
     icon: GraduationCap,
-    badge: "12,300",
     testId: "link-students",
   },
   {
     title: "Results",
     url: "/admin/results",
     icon: BarChart3,
-    badge: "15k+",
     testId: "link-results",
   },
   {
@@ -100,6 +97,17 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { data: exams } = useQuery<any[]>({ queryKey: ["/api/exams"] });
+  const { data: students } = useQuery<any[]>({ queryKey: ["/api/students"] });
+  const { data: results } = useQuery<any[]>({ queryKey: ["/api/results"] });
+  const { data: sessions } = useQuery<any[]>({ queryKey: ["/api/exam-sessions"] });
+
+  const counts: Record<string, number | undefined> = {
+    Exams: exams?.length,
+    Students: students?.length,
+    Results: results?.length,
+    "Invigilator Hub": sessions?.filter((session) => !session.isCompleted).length,
+  };
 
   return (
     <Sidebar className="border-r border-slate-100 dark:border-slate-800 bg-gradient-to-b from-white via-slate-50/30 to-white dark:from-slate-950 dark:via-slate-900/30 dark:to-slate-950">
@@ -136,11 +144,11 @@ export function AppSidebar() {
                           />
                           <span className="tracking-tight">{item.title}</span>
                         </div>
-                        {item.badge && (
+                        {counts[item.title] !== undefined && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
                             isActive ? "bg-blue-500 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                           }`}>
-                            {item.badge}
+                            {counts[item.title]!.toLocaleString()}
                           </span>
                         )}
                       </Link>

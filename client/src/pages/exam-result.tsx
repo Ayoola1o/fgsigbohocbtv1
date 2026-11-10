@@ -16,7 +16,7 @@ import { CheckCircle, XCircle, Award, TrendingUp, Sparkles, BookOpen, Clock, Cal
 import { createRoot } from "react-dom/client";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import type { Result, Question, Exam, Student } from "@shared/schema";
-import { getResult, getExam, getQuestionsByIds, getStudents } from "@/lib/firebase-api";
+import { getResult, getExam, getQuestionsByIds, getStudents } from "@/lib/cbt-api";
 import { useScoreFormat } from "@/hooks/use-score-format";
 import { cn } from "@/lib/utils";
 

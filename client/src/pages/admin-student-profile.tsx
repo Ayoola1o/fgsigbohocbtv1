@@ -43,7 +43,6 @@ import {
     ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import type { Result, Exam, Student } from "@shared/schema";
-import { db } from "@/lib/firebase";
 import { getDocs, query, collection, where, getDoc, doc } from "firebase/firestore";
 import { getQuestionsByIds } from "@/lib/firebase-api";
 import { PrintStudyGuideTemplate } from "@/components/PrintStudyGuideTemplate";
@@ -77,7 +76,9 @@ export default function AdminStudentProfile() {
         queryKey: ["studentProfileTarget", studentId],
         queryFn: async () => {
             if (!studentId) return null;
-            const { db } = await import("@/lib/firebase");
+            const { firebaseConfigured, getFirebaseDb } = await import("@/lib/firebase");
+            if (!firebaseConfigured) return null;
+            const db = getFirebaseDb();
             const { getDoc, doc, query, collection, where, getDocs } = await import("firebase/firestore");
             
             try {
@@ -103,6 +104,11 @@ export default function AdminStudentProfile() {
         queryKey: ["studentScopedAnalyticsData", student?.id, student?.studentId, student?.classLevel],
         enabled: !!student,
         queryFn: async () => {
+            const { firebaseConfigured, getFirebaseDb } = await import("@/lib/firebase");
+            if (!firebaseConfigured) {
+                return { studentResults: [], classmates: student ? [student] : [], classResults: [], exams: [], questions: [] };
+            }
+            const db = getFirebaseDb();
             // A. Student's own results
             const studentResultsQuery = query(
                 collection(db, "results"),
@@ -575,14 +581,29 @@ export default function AdminStudentProfile() {
         return { diagnosis, planSteps };
     }, [studentResults, subjectDiagnostics, academicTrajectory, averageScore, forensicIncidents]);
 
+    const toValidDate = (value: unknown): Date | null => {
+        if (value && typeof value === "object" && "toDate" in value && typeof (value as any).toDate === "function") {
+            const date = (value as any).toDate();
+            return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+        }
+        if (value && typeof value === "object" && "seconds" in value) {
+            const date = new Date(Number((value as any).seconds) * 1000);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+        if (value == null || value === "") return null;
+        const date = new Date(value as any);
+        return Number.isNaN(date.getTime()) ? null : date;
+    };
+
     const historicalTimeline = useMemo(() => {
-        const sorted = [...studentResults].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+        const sorted = [...studentResults].sort((a, b) => (toValidDate(a.completedAt)?.getTime() ?? 0) - (toValidDate(b.completedAt)?.getTime() ?? 0));
         return sorted.map((r, idx) => {
             const exam = exams.find(e => e.id === r.examId);
+            const completedAt = toValidDate(r.completedAt);
             return {
                 name: exam?.title || `Exam #${idx + 1}`,
                 score: r.percentage,
-                date: format(new Date(r.completedAt), "MMM dd")
+                date: completedAt ? format(completedAt, "MMM dd") : "—"
             };
         });
     }, [studentResults, exams]);
@@ -673,24 +694,7 @@ export default function AdminStudentProfile() {
         };
     }, [student, averageScore, subjectDiagnostics, academicTrajectory, pedagogicalAnalysis]);
 
-    useEffect(() => {
-        if (!student || !analyticsToSave) return;
-        
-        // Only update if there is a real change in values to avoid infinite loops
-        const hasChange = 
-            student.averageScore !== analyticsToSave.averageScore ||
-            student.academicStanding !== analyticsToSave.academicStanding ||
-            JSON.stringify(student.strengths) !== JSON.stringify(analyticsToSave.strengths) ||
-            JSON.stringify(student.weaknesses) !== JSON.stringify(analyticsToSave.weaknesses) ||
-            student.academicTrajectory !== analyticsToSave.academicTrajectory ||
-            student.diagnosis !== analyticsToSave.diagnosis ||
-            JSON.stringify(student.actionPlan) !== JSON.stringify(analyticsToSave.actionPlan);
-
-        if (hasChange && !syncAnalysisMutation.isPending) {
-            console.log("Syncing updated student analysis data back to Firestore profile...", analyticsToSave);
-            syncAnalysisMutation.mutate(analyticsToSave);
-        }
-    }, [student, analyticsToSave, syncAnalysisMutation.isPending]);
+    // Analysis is calculated for display only. Viewing a profile must not mutate student records.
 
     const getGradeRemark = (percentage: number) => {
         if (percentage >= 75) return { label: "Excellent", color: "text-emerald-700 bg-emerald-50 border-emerald-100" };
@@ -934,7 +938,7 @@ export default function AdminStudentProfile() {
                             <div>
                                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tests Completed Today</p>
                                 <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">
-                                    {studentResults.length > 0 ? studentResults.length : 12}
+                                    {studentResults.length}
                                 </span>
                                 <p className="text-[9px] text-slate-400 font-semibold mt-1">Total Recent Sessions</p>
                             </div>
@@ -945,7 +949,7 @@ export default function AdminStudentProfile() {
                         <div className="flex items-start justify-between">
                             <div>
                                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Records</p>
-                                <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">12,345</span>
+                                <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">{studentResults.length}</span>
                                 <p className="text-[9px] text-slate-400 font-semibold mt-1">Total Exams Processed.</p>
                             </div>
                             <FileText className="h-4 w-4 text-slate-400 mt-0.5" />
@@ -956,7 +960,7 @@ export default function AdminStudentProfile() {
                         <div className="flex items-start justify-between">
                             <div>
                                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Result Inquiries</p>
-                                <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">2,105</span>
+                                <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">—</span>
                                 <p className="text-[9px] text-slate-400 font-semibold mt-1">Flagged for Review.</p>
                             </div>
                             <ShieldAlert className="h-4 w-4 text-slate-400 mt-0.5" />
@@ -967,7 +971,7 @@ export default function AdminStudentProfile() {
                         <div className="flex items-start justify-between">
                             <div>
                                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Centers</p>
-                                <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">28</span>
+                                <span className="text-2xl font-black text-slate-900 leading-none mt-1 block">—</span>
                                 <p className="text-[9px] text-slate-400 font-semibold mt-1">Current Session Data.</p>
                             </div>
                             <GraduationCap className="h-4 w-4 text-slate-400 mt-0.5" />
@@ -1014,12 +1018,12 @@ export default function AdminStudentProfile() {
                             <div className="flex justify-between items-baseline">
                                 <span className="text-slate-500 font-medium text-[11px]">Contact:</span>
                                 <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px] text-right truncate max-w-[150px]">
-                                    {(student as any).email || "michael.c@email.com"}
+                                    {(student as any).email || "Not provided"}
                                 </span>
                             </div>
                             <div className="flex justify-between items-baseline">
                                 <span className="text-slate-500 font-medium text-[11px]">Enrollment Date:</span>
-                                <span className="font-bold text-slate-800 dark:text-slate-200 text-right">Jan 15, 2022</span>
+                                <span className="font-bold text-slate-800 dark:text-slate-200 text-right">{(student as any).enrollmentDate || "Not provided"}</span>
                             </div>
                         </div>
                     </Card>
@@ -1034,11 +1038,11 @@ export default function AdminStudentProfile() {
                             <div className="space-y-1.5">
                                 <div className="flex items-center justify-between font-bold">
                                     <span className="text-slate-700 dark:text-slate-300">Performance</span>
-                                    <span className="text-emerald-600 font-extrabold">{averageScore > 0 ? averageScore : 82.1}%</span>
+                                    <span className="text-emerald-600 font-extrabold">{studentResults.length ? `${averageScore}%` : "—"}</span>
                                 </div>
                                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                                     <div 
-                                        style={{ width: `${averageScore > 0 ? averageScore : 82.1}%` }} 
+                                        style={{ width: `${studentResults.length ? averageScore : 0}%` }}
                                         className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
                                     />
                                 </div>
@@ -1046,11 +1050,11 @@ export default function AdminStudentProfile() {
 
                             <div className="space-y-1.5">
                                 <div className="flex items-center justify-between font-bold">
-                                    <span className="text-slate-700 dark:text-slate-300">{student.department || "Engineering"}</span>
-                                    <span className="text-rose-500 font-extrabold">42.0%</span>
+                                    <span className="text-slate-700 dark:text-slate-300">{student.department || "Department"}</span>
+                                    <span className="text-rose-500 font-extrabold">—</span>
                                 </div>
                                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                                    <div style={{ width: `42.0%` }} className="h-full bg-rose-500 rounded-full transition-all duration-500" />
+                                    <div style={{ width: `0%` }} className="h-full bg-rose-500 rounded-full transition-all duration-500" />
                                 </div>
                             </div>
 
@@ -1124,7 +1128,7 @@ export default function AdminStudentProfile() {
                                                         </td>
                                                         <td className="px-2 py-3 text-slate-600 dark:text-slate-400 font-medium text-[11px]">
                                                             <div className="flex items-center gap-1.5">
-                                                                <span>45m 12s</span>
+                                                                <span>—</span>
                                                                 {isFlagged && <AlertTriangle className="h-3.5 w-3.5 text-rose-600 fill-rose-500 shrink-0" />}
                                                             </div>
                                                         </td>
@@ -1135,7 +1139,8 @@ export default function AdminStudentProfile() {
                                                 );
                                             })
                                         ) : (
-                                            [
+                                            <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No exam results are available for this student.</td></tr>
+                                            /*[
                                                 { id: "056", exam: "JAMB-2023", dept: "Science", score: "82.1% (Pass)", passed: true, time: "45m 12s", flagged: false, date: "Oct 29, 2023" },
                                                 { id: "057", exam: "Pre-MOCK", dept: "Engineering", score: "78.5% (Pass)", passed: true, time: "45m 12s", flagged: false, date: "Oct 29, 2023" },
                                                 { id: "038", exam: "Pre-MOCK", dept: "Engineering", score: "78.5% (Pass)", passed: true, time: "45m 12s", flagged: false, date: "Oct 29, 2023" },
@@ -1161,7 +1166,7 @@ export default function AdminStudentProfile() {
                                                     </td>
                                                     <td className="px-3 py-3 text-slate-500 text-[11px] font-medium">{row.date}</td>
                                                 </tr>
-                                            ))
+                                            ))*/
                                         )}
                                     </tbody>
                                 </table>

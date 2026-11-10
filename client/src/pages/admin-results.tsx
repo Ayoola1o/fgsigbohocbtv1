@@ -121,7 +121,7 @@ export default function AdminResults() {
     localStorage.setItem("fia_published_result_ids", JSON.stringify(Array.from(next)));
     toast({
       title: next.has(id) ? "Result Published" : "Result Held",
-      description: next.has(id) ? "Candidate can now view result in portal." : "Result withheld from candidate view.",
+      description: next.has(id) ? "Marked published on this device only; candidate portal visibility is not changed." : "Marked held on this device only; candidate portal visibility is not changed.",
     });
   };
 
@@ -135,7 +135,7 @@ export default function AdminResults() {
     localStorage.setItem("fia_published_result_ids", JSON.stringify(Array.from(next)));
     toast({
       title: publish ? "Selected Results Published" : "Selected Results Withheld",
-      description: `${selectedResultIds.size} records updated.`,
+      description: `${selectedResultIds.size} records updated on this device only. Candidate portal visibility is unchanged.`,
     });
   };
 

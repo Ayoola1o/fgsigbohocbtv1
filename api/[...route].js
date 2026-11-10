@@ -117,7 +117,6 @@ var init_firebase = __esm({
 
 // server/app.ts
 import express2 from "express";
-import session from "express-session";
 import compression from "compression";
 
 // server/routes.ts
@@ -570,7 +569,7 @@ var appNotifications = pgTable("app_notifications", {
 });
 
 // server/storage.ts
-import { eq, inArray, and, desc } from "drizzle-orm";
+import { eq, inArray, and, desc, sql as sql2 } from "drizzle-orm";
 
 // server/db.ts
 import "dotenv/config";
@@ -658,6 +657,13 @@ var MemStorage = class {
   }
   async getStudentByStudentId(studentId) {
     return Array.from(this.students.values()).find((s) => s.studentId === studentId);
+  }
+  async getStudentForLogin(name, studentId) {
+    const cleanName = name.trim().toLowerCase();
+    const cleanStudentId = studentId.trim().toLowerCase();
+    return Array.from(this.students.values()).find(
+      (student) => student.name.trim().toLowerCase() === cleanName && student.studentId.trim().toLowerCase() === cleanStudentId
+    );
   }
   async getStudentById(id) {
     return this.students.get(id);
@@ -788,9 +794,15 @@ var MemStorage = class {
   async getExamSession(id) {
     return this.examSessions.get(id);
   }
+  async getActiveExamSession(examId, studentId) {
+    const cleanStudentId = studentId.trim().toLowerCase();
+    return Array.from(this.examSessions.values()).filter(
+      (session) => session.examId === examId && !session.isCompleted && session.studentId.trim().toLowerCase() === cleanStudentId
+    ).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
+  }
   async createExamSession(insertSession) {
     const id = randomUUID();
-    const session2 = {
+    const session = {
       ...insertSession,
       id,
       startedAt: /* @__PURE__ */ new Date(),
@@ -809,13 +821,13 @@ var MemStorage = class {
       isFlagged: false,
       isTestAttempt: insertSession.isTestAttempt || false
     };
-    this.examSessions.set(id, session2);
-    return session2;
+    this.examSessions.set(id, session);
+    return session;
   }
   async updateExamSession(id, data) {
-    const session2 = this.examSessions.get(id);
-    if (!session2) return void 0;
-    const updatedSession = { ...session2, ...data };
+    const session = this.examSessions.get(id);
+    if (!session) return void 0;
+    const updatedSession = { ...session, ...data };
     this.examSessions.set(id, updatedSession);
     return updatedSession;
   }
@@ -1228,8 +1240,17 @@ var DatabaseStorage = class {
     const [s] = await db.select().from(examSessions).where(eq(examSessions.id, id));
     return s;
   }
-  async createExamSession(session2) {
-    const [created] = await db.insert(examSessions).values(session2).returning();
+  async getActiveExamSession(examId, studentId) {
+    const cleanStudentId = studentId.trim().toLowerCase();
+    const [session] = await db.select().from(examSessions).where(and(
+      eq(examSessions.examId, examId),
+      eq(examSessions.isCompleted, false),
+      sql2`lower(trim(${examSessions.studentId})) = ${cleanStudentId}`
+    )).orderBy(desc(examSessions.startedAt)).limit(1);
+    return session;
+  }
+  async createExamSession(session) {
+    const [created] = await db.insert(examSessions).values(session).returning();
     if (this.examSessionsCache && created) {
       this.examSessionsCache = [...this.examSessionsCache, created];
     }
@@ -1338,6 +1359,15 @@ var DatabaseStorage = class {
     const all = await this.getStudents();
     return all.find((item) => item.studentId.trim().toLowerCase() === cleanId.toLowerCase() || item.id === cleanId);
   }
+  async getStudentForLogin(name, studentId) {
+    const cleanName = name.trim().toLowerCase();
+    const cleanStudentId = studentId.trim().toLowerCase();
+    const [student] = await db.select().from(students).where(sql2`
+      lower(trim(${students.studentId})) = ${cleanStudentId}
+      and lower(trim(${students.name})) = ${cleanName}
+    `).limit(1);
+    return student;
+  }
   async createStudent(student) {
     const [created] = await db.insert(students).values(student).returning();
     if (this.studentsCache && created) {
@@ -1421,7 +1451,83 @@ var DatabaseStorage = class {
     return updated;
   }
 };
+if (!process.env.DATABASE_URL && process.env.NODE_ENV === "production") {
+  throw new Error("DATABASE_URL is required in production; refusing to start with volatile in-memory storage.");
+}
 var storage = process.env.DATABASE_URL ? new DatabaseStorage() : new MemStorage();
+
+// server/auth-cookie.ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+var COOKIE_NAME = "fia_auth";
+var SESSION_TTL_MS = 24 * 60 * 60 * 1e3;
+function signingKey() {
+  const key = process.env.SESSION_SECRET || process.env.DATABASE_URL;
+  if (key) return key;
+  if (process.env.NODE_ENV !== "production") return "faith-immaculate-local-session-key";
+  throw new Error("SESSION_SECRET or DATABASE_URL is required to sign sessions");
+}
+function signature(payload) {
+  return createHmac("sha256", signingKey()).update(`fia-auth-v1.${payload}`).digest();
+}
+function cookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_TTL_MS
+  };
+}
+function getCookie(req, name) {
+  const header = req.headers?.cookie;
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    if (part.slice(0, separator).trim() === name) return part.slice(separator + 1).trim();
+  }
+  return null;
+}
+function issueAuthCookie(res, claims) {
+  const fullClaims = {
+    ...claims,
+    expiresAt: Date.now() + SESSION_TTL_MS
+  };
+  const payload = Buffer.from(JSON.stringify(fullClaims)).toString("base64url");
+  const token = `${payload}.${signature(payload).toString("base64url")}`;
+  res.cookie(COOKIE_NAME, token, cookieOptions());
+  return fullClaims;
+}
+function clearAuthCookie(res) {
+  const { maxAge: _maxAge, ...options } = cookieOptions();
+  res.clearCookie(COOKIE_NAME, options);
+}
+function readAuthCookie(req) {
+  const token = getCookie(req, COOKIE_NAME);
+  if (!token) return null;
+  const separator = token.lastIndexOf(".");
+  if (separator <= 0) return null;
+  const payload = token.slice(0, separator);
+  let providedSignature;
+  try {
+    providedSignature = Buffer.from(token.slice(separator + 1), "base64url");
+  } catch {
+    return null;
+  }
+  const expectedSignature = signature(payload);
+  if (providedSignature.length !== expectedSignature.length || !timingSafeEqual(providedSignature, expectedSignature)) {
+    return null;
+  }
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!claims.userId || claims.role !== "admin" && claims.role !== "student" || !Number.isFinite(claims.expiresAt) || claims.expiresAt <= Date.now()) {
+      return null;
+    }
+    return claims;
+  } catch {
+    return null;
+  }
+}
 
 // server/routes.ts
 import { z as z2 } from "zod";
@@ -1579,9 +1685,9 @@ function calculatePsychometrics(workerData) {
   let fatiguedCount = 0;
   const pacingRecords = [];
   filteredResults.forEach((r) => {
-    const session2 = sessionMap.get(r.sessionId);
+    const session = sessionMap.get(r.sessionId);
     const exam = examMap.get(r.examId);
-    const qIds = session2?.sessionQuestionIds || exam?.questionIds || [];
+    const qIds = session?.sessionQuestionIds || exam?.questionIds || [];
     if (qIds.length < 4) return;
     const segmentCount = Math.max(1, Math.floor(qIds.length * 0.25));
     const firstQIds = qIds.slice(0, segmentCount);
@@ -1926,6 +2032,11 @@ try {
 }
 
 // server/routes.ts
+function requireAdmin(req, res) {
+  if (req.auth?.role === "admin") return true;
+  res.status(401).json({ error: "Administrator authentication required" });
+  return false;
+}
 var upload = multer({
   storage: process.env.VERCEL ? multer.memoryStorage() : multer.diskStorage({
     destination: (req, file, cb) => {
@@ -1950,6 +2061,7 @@ async function registerRoutes(app2) {
   app2.use("/uploads", express.static(path2.join(process.cwd(), "uploads")));
   app2.post("/api/upload", upload.single("file"), (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
@@ -1966,18 +2078,11 @@ async function registerRoutes(app2) {
       if (!username || !password) {
         return res.status(400).json({ error: "username and password required" });
       }
-      console.log("Processing login for:", username);
-      console.log("Calling storage.getUserByUsername...");
       const user = await storage.getUserByUsername(username);
-      console.log("Storage returned:", user);
       if (!user || user.password !== password) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      try {
-        req.session = req.session || {};
-        req.session.userId = user.id;
-      } catch (e) {
-      }
+      issueAuthCookie(res, { userId: user.id, role: "admin" });
       res.json({ id: user.id, username: user.username });
     } catch (error) {
       console.error("Login error:", error);
@@ -1989,23 +2094,16 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/admin/logout", async (req, res) => {
     try {
-      const s = req.session;
-      if (s && typeof s.destroy === "function") {
-        s.destroy(() => {
-          res.json({ ok: true });
-        });
-      } else {
-        if (s) s.userId = void 0;
-        res.json({ ok: true });
-      }
+      clearAuthCookie(res);
+      res.json({ ok: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to logout" });
     }
   });
   app2.get("/api/admin/me", async (req, res) => {
     try {
-      const s = req.session;
-      const uid = s && s.userId;
+      const auth = req.auth;
+      const uid = auth?.role === "admin" ? auth.userId : null;
       if (!uid) return res.status(401).json({ error: "Not authenticated" });
       const user = await storage.getUserByUsername((await storage.getUserByUsername("Admin"))?.username || "");
       res.json({ id: uid, username: user?.username || "Admin" });
@@ -2013,8 +2111,9 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to fetch user" });
     }
   });
-  app2.get("/api/questions/count", async (_req, res) => {
+  app2.get("/api/questions/count", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const questions2 = await storage.getQuestions();
       res.json({ count: questions2.length });
     } catch (error) {
@@ -2023,6 +2122,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const questions2 = await storage.getQuestions();
       res.json(questions2);
     } catch (error) {
@@ -2031,6 +2131,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/questions/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const question = await storage.getQuestion(req.params.id);
       if (!question) {
         return res.status(404).json({ error: "Question not found" });
@@ -2042,6 +2143,7 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const validatedData = insertQuestionSchema.parse(req.body);
       const question = await storage.createQuestion(validatedData);
       res.status(201).json(question);
@@ -2054,6 +2156,7 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/questions/bulk", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const payload = req.body;
       if (!Array.isArray(payload)) {
         return res.status(400).json({ error: "Expected an array of questions" });
@@ -2090,6 +2193,7 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/questions/import-ai", upload.single("file"), async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const defaultMeta = {
         classLevel: req.query.classLevel || req.body.classLevel || "SS3",
         term: req.query.term || req.body.term || "First Term",
@@ -2339,6 +2443,7 @@ ${error.stack}` : String(error));
   }
   app2.patch("/api/questions/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const updated = await storage.updateQuestion(req.params.id, req.body);
       if (!updated) {
         return res.status(404).json({ error: "Question not found" });
@@ -2350,6 +2455,7 @@ ${error.stack}` : String(error));
   });
   app2.patch("/api/questions/bulk", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { ids, updates } = req.body;
       if (!ids || !Array.isArray(ids)) {
         return res.status(400).json({ error: "Invalid request body: 'ids' array is required." });
@@ -2362,6 +2468,7 @@ ${error.stack}` : String(error));
   });
   app2.delete("/api/questions/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       await storage.deleteQuestion(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -2370,6 +2477,7 @@ ${error.stack}` : String(error));
   });
   app2.delete("/api/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { ids } = req.body;
       if (!ids || !Array.isArray(ids)) {
         return res.status(400).json({ error: "Invalid request body" });
@@ -2382,6 +2490,7 @@ ${error.stack}` : String(error));
   });
   app2.post("/api/questions/bulk-fetch", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { ids } = req.body;
       if (!ids || !Array.isArray(ids)) {
         return res.status(400).json({ error: "Invalid request body: 'ids' array is required." });
@@ -2392,19 +2501,41 @@ ${error.stack}` : String(error));
       res.status(500).json({ error: "Failed to fetch questions by IDs" });
     }
   });
+  app2.post("/api/questions/student-bulk-fetch", async (req, res) => {
+    try {
+      const ids = req.body?.ids;
+      const requestedSessionId = req.body?.sessionId;
+      if (!Array.isArray(ids) || ids.length > 500 || ids.some((id) => typeof id !== "string") || typeof requestedSessionId !== "string") {
+        return res.status(400).json({ error: "ids must be an array of at most 500 question IDs" });
+      }
+      const session = await storage.getExamSession(requestedSessionId);
+      const auth = req.auth;
+      const authenticatedStudentId = auth?.role === "student" ? auth.userId : null;
+      if (!session || !authenticatedStudentId) return res.status(401).json({ error: "Active student session required" });
+      const student = (await storage.getStudents()).find((s) => s.id === authenticatedStudentId);
+      if (!student || student.studentId.trim().toLowerCase() !== session.studentId.trim().toLowerCase()) {
+        return res.status(403).json({ error: "Exam session does not belong to this student" });
+      }
+      const allowedIds = new Set(session.sessionQuestionIds || []);
+      if (session.isCompleted || ids.some((id) => !allowedIds.has(id))) {
+        return res.status(403).json({ error: "Requested questions are not assigned to this active exam session" });
+      }
+      const questions2 = await storage.getQuestionsByIds(Array.from(new Set(ids)));
+      const questionsById = new Map(questions2.map((q) => [q.id, q]));
+      res.json(ids.map((id) => questionsById.get(id)).filter(Boolean).map(({ correctAnswer: _answer, ...question }) => question));
+    } catch {
+      res.status(500).json({ error: "Failed to fetch exam questions" });
+    }
+  });
   app2.get("/api/exams", async (req, res) => {
     try {
       const { classLevel } = req.query;
       let effectiveClassLevel = classLevel;
-      try {
-        const s = req.session;
-        if (s && s.studentId) {
-          const student = await storage.getStudentByStudentId(s.studentId);
-          if (student && student.classLevel) {
-            effectiveClassLevel = student.classLevel;
-          }
-        }
-      } catch (e) {
+      const auth = req.auth;
+      if (auth?.role === "student") {
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student) return res.status(401).json({ error: "Student session expired" });
+        effectiveClassLevel = student.classLevel || void 0;
       }
       const exams2 = await storage.getExams(effectiveClassLevel);
       res.json(exams2);
@@ -2425,6 +2556,7 @@ ${error.stack}` : String(error));
   });
   app2.get("/api/exams/:id/questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const exam = await storage.getExam(req.params.id);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
@@ -2437,6 +2569,7 @@ ${error.stack}` : String(error));
   });
   app2.post("/api/exams", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const validatedData = insertExamSchema.parse(req.body);
       let questionIds = validatedData.questionIds ?? [];
       if ((!questionIds || questionIds.length === 0) && validatedData.numberOfQuestionsToDisplay && validatedData.numberOfQuestionsToDisplay > 0) {
@@ -2468,20 +2601,11 @@ ${error.stack}` : String(error));
       if (!name || !sid) {
         return res.status(400).json({ error: "Student name and ID are required" });
       }
-      const allStudents = await storage.getStudents();
-      const student = allStudents.find(
-        (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim() && s.studentId.toLowerCase().trim() === sid.toLowerCase().trim()
-      );
+      const student = await storage.getStudentForLogin(name, sid);
       if (!student) {
-        console.log(`Login failed for name: "${name}", ID: "${sid}"`);
-        console.log(`Available students:`, allStudents.map((s) => ({ name: s.name, id: s.studentId })));
         return res.status(401).json({ error: "Invalid student name or ID. Please check your credentials." });
       }
-      try {
-        req.session = req.session || {};
-        req.session.studentId = student.id;
-      } catch (e) {
-      }
+      issueAuthCookie(res, { userId: student.id, role: "student" });
       res.json({
         id: student.id,
         name: student.name,
@@ -2495,8 +2619,13 @@ ${error.stack}` : String(error));
       res.status(500).json({ error: "Failed to login" });
     }
   });
+  app2.post("/api/students/logout", (_req, res) => {
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  });
   app2.patch("/api/exams/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const exam = await storage.updateExam(req.params.id, req.body);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
@@ -2508,6 +2637,7 @@ ${error.stack}` : String(error));
   });
   app2.delete("/api/exams/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       await storage.deleteExam(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -2516,6 +2646,9 @@ ${error.stack}` : String(error));
   });
   app2.get("/api/exam-sessions", async (req, res) => {
     try {
+      if (req.auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       const sessions = await storage.getExamSessions();
       res.json(sessions);
     } catch (error) {
@@ -2524,11 +2657,19 @@ ${error.stack}` : String(error));
   });
   app2.get("/api/exam-sessions/:id", async (req, res) => {
     try {
-      const session2 = await storage.getExamSession(req.params.id);
-      if (!session2) {
+      const session = await storage.getExamSession(req.params.id);
+      if (!session) {
         return res.status(404).json({ error: "Exam session not found" });
       }
-      res.json({ ...session2, serverTime: (/* @__PURE__ */ new Date()).toISOString() });
+      const auth = req.auth;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student || student.studentId.trim().toLowerCase() !== session.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+      }
+      res.json({ ...session, serverTime: (/* @__PURE__ */ new Date()).toISOString() });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch exam session" });
     }
@@ -2536,16 +2677,35 @@ ${error.stack}` : String(error));
   app2.post("/api/exam-sessions", async (req, res) => {
     try {
       const validatedData = insertExamSessionSchema.parse(req.body);
+      const auth = req.auth;
+      if (auth?.role !== "admin" && auth?.role !== "student") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      let sessionInput = validatedData;
+      if (auth.role === "student") {
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student) return res.status(401).json({ error: "Student session expired" });
+        if (student.studentId.trim().toLowerCase() !== validatedData.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+        sessionInput = {
+          ...validatedData,
+          studentName: student.name,
+          studentId: student.studentId
+        };
+      }
       const exam = await storage.getExam(validatedData.examId);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
       }
+      const existingSession = await storage.getActiveExamSession(exam.id, sessionInput.studentId);
+      if (existingSession) return res.status(200).json(existingSession);
       let sessionQuestionIds = [...exam.questionIds];
       const slots = exam.subjectSlots;
       if (Array.isArray(slots) && slots.length > 0) {
         const allStudents = await storage.getStudents();
         const student = allStudents.find(
-          (s) => s.studentId.toLowerCase().trim() === validatedData.studentId.toLowerCase().trim() || s.name.toLowerCase().trim() === validatedData.studentName.toLowerCase().trim()
+          (s) => s.studentId.toLowerCase().trim() === sessionInput.studentId.toLowerCase().trim() || s.name.toLowerCase().trim() === sessionInput.studentName.toLowerCase().trim()
         );
         const studentDept = student?.department ? student.department.trim() : null;
         const poolQuestions = await storage.getQuestionsByIds(exam.questionIds || []);
@@ -2612,11 +2772,11 @@ ${error.stack}` : String(error));
         }
       }
       const sessionData = {
-        ...validatedData,
+        ...sessionInput,
         sessionQuestionIds
       };
-      const session2 = await storage.createExamSession(sessionData);
-      res.status(201).json(session2);
+      const session = await storage.createExamSession(sessionData);
+      res.status(201).json(session);
     } catch (error) {
       if (error instanceof z2.ZodError) {
         return res.status(400).json({ error: error.errors });
@@ -2627,17 +2787,40 @@ ${error.stack}` : String(error));
   });
   app2.patch("/api/exam-sessions/:id", async (req, res) => {
     try {
-      const session2 = await storage.updateExamSession(req.params.id, req.body);
-      if (!session2) {
+      const existingSession = await storage.getExamSession(req.params.id);
+      if (!existingSession) {
         return res.status(404).json({ error: "Exam session not found" });
       }
-      res.json(session2);
+      const auth = req.auth;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student || student.studentId.trim().toLowerCase() !== existingSession.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+        const allowedKeys = /* @__PURE__ */ new Set([
+          "answers",
+          "currentQuestionIndex",
+          "timeRemaining",
+          "tabSwitches",
+          "windowBlurs",
+          "isFlagged"
+        ]);
+        const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedKeys.has(key)));
+        const session2 = await storage.updateExamSession(req.params.id, updates);
+        return res.json(session2);
+      }
+      const session = await storage.updateExamSession(req.params.id, req.body);
+      res.json(session);
     } catch (error) {
       res.status(500).json({ error: "Failed to update exam session" });
     }
   });
   app2.delete("/api/exam-sessions/:id", async (req, res) => {
     try {
+      if (req.auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       await storage.deleteExamSession(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -2646,23 +2829,31 @@ ${error.stack}` : String(error));
   });
   app2.post("/api/exam-sessions/:id/submit", async (req, res) => {
     try {
-      const session2 = await storage.getExamSession(req.params.id);
-      if (!session2) {
+      const session = await storage.getExamSession(req.params.id);
+      if (!session) {
         return res.status(404).json({ error: "Exam session not found" });
       }
-      if (session2.isCompleted) {
-        const existingResult = await storage.getResultBySessionId(session2.id);
+      const auth = req.auth;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student || student.studentId.trim().toLowerCase() !== session.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Exam session does not belong to this student" });
+        }
+      }
+      if (session.isCompleted) {
+        const existingResult = await storage.getResultBySessionId(session.id);
         if (existingResult) {
           return res.json(existingResult);
         }
       }
-      const exam = await storage.getExam(session2.examId);
+      const exam = await storage.getExam(session.examId);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
       }
-      const questionIdsToGrade = session2.sessionQuestionIds || exam.questionIds;
+      const questionIdsToGrade = session.sessionQuestionIds || exam.questionIds;
       const questions2 = await storage.getQuestionsByIds(questionIdsToGrade);
-      const answers = req.body.answers || session2.answers || {};
+      const answers = req.body.answers || session.answers || {};
       const correctAnswers = {};
       let score = 0;
       let sessionTotalPoints = 0;
@@ -2677,17 +2868,17 @@ ${error.stack}` : String(error));
       }
       const percentage = sessionTotalPoints > 0 ? Math.round(score / sessionTotalPoints * 100) : 0;
       const passed = percentage >= exam.passingScore;
-      await storage.updateExamSession(session2.id, {
+      await storage.updateExamSession(session.id, {
         isCompleted: true,
         endedAt: /* @__PURE__ */ new Date(),
         answers
       });
       const submissionType = req.body.submissionType || "student";
       const result = await storage.createResult({
-        sessionId: session2.id,
+        sessionId: session.id,
         examId: exam.id,
-        studentName: session2.studentName,
-        studentId: session2.studentId,
+        studentName: session.studentName,
+        studentId: session.studentId,
         score,
         totalPoints: sessionTotalPoints,
         percentage,
@@ -2704,13 +2895,25 @@ ${error.stack}` : String(error));
   app2.get("/api/results", async (req, res) => {
     try {
       const { studentId, examId } = req.query;
+      const auth = req.auth;
+      let scopedStudent;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student) return res.status(401).json({ error: "Student session expired" });
+        scopedStudent = student.studentId;
+      }
       let results2 = await storage.getResults();
-      if (studentId) {
-        const cleanSid = String(studentId).toLowerCase().trim();
+      const effectiveStudentId = scopedStudent || (studentId ? String(studentId) : void 0);
+      if (effectiveStudentId) {
+        const cleanSid = effectiveStudentId.toLowerCase().trim();
         results2 = results2.filter((r) => r.studentId?.toLowerCase().trim() === cleanSid);
       }
       if (examId) {
         results2 = results2.filter((r) => r.examId === String(examId));
+      }
+      if (scopedStudent) {
+        return res.json(results2.map(({ answers: _answers, correctAnswers: _correctAnswers, ...result }) => result));
       }
       res.json(results2);
     } catch (error) {
@@ -2719,9 +2922,21 @@ ${error.stack}` : String(error));
   });
   app2.get("/api/results/:id", async (req, res) => {
     try {
+      const auth = req.auth;
+      if (auth?.role !== "admin" && auth?.role !== "student") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       const result = await storage.getResult(req.params.id);
       if (!result) {
         return res.status(404).json({ error: "Result not found" });
+      }
+      if (auth.role === "student") {
+        const student = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!student || result.studentId.trim().toLowerCase() !== student.studentId.trim().toLowerCase()) {
+          return res.status(403).json({ error: "Result does not belong to this student" });
+        }
+        const { answers: _answers, correctAnswers: _correctAnswers, ...publicResult } = result;
+        return res.json(publicResult);
       }
       res.json(result);
     } catch (error) {
@@ -2730,6 +2945,9 @@ ${error.stack}` : String(error));
   });
   app2.delete("/api/results/:id", async (req, res) => {
     try {
+      if (req.auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       await storage.deleteResult(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -2738,6 +2956,9 @@ ${error.stack}` : String(error));
   });
   app2.delete("/api/results", async (req, res) => {
     try {
+      if (req.auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       const { ids } = req.body;
       if (ids && Array.isArray(ids)) {
         await storage.deleteResults(ids);
@@ -2749,6 +2970,9 @@ ${error.stack}` : String(error));
   });
   app2.post("/api/results/:id/reset", async (req, res) => {
     try {
+      if (req.auth?.role !== "admin") {
+        return res.status(401).json({ error: "Administrator authentication required" });
+      }
       const result = await storage.getResult(req.params.id);
       if (result) {
         await storage.deleteResult(result.id);
@@ -2762,8 +2986,17 @@ ${error.stack}` : String(error));
   app2.get("/api/students", async (req, res) => {
     try {
       const { studentId, classLevel } = req.query;
+      const auth = req.auth;
+      let scopedStudent;
+      if (auth?.role !== "admin") {
+        if (auth?.role !== "student") return res.status(401).json({ error: "Authentication required" });
+        scopedStudent = (await storage.getStudents()).find((s) => s.id === auth.userId);
+        if (!scopedStudent) return res.status(401).json({ error: "Student session expired" });
+      }
       let students2 = await storage.getStudents();
-      if (studentId) {
+      if (scopedStudent) {
+        students2 = [scopedStudent];
+      } else if (studentId) {
         const cleanSid = String(studentId).toLowerCase().trim();
         students2 = students2.filter(
           (s) => s.studentId.toLowerCase().trim() === cleanSid || s.id.toLowerCase().trim() === cleanSid
@@ -2779,6 +3012,7 @@ ${error.stack}` : String(error));
   });
   app2.get("/api/students/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const id = req.params.id;
       const student = await storage.getStudentByStudentId(id);
       if (!student) {
@@ -2791,6 +3025,7 @@ ${error.stack}` : String(error));
   });
   app2.post("/api/students", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const payload = req.body;
       if (Array.isArray(payload)) {
         const rows = payload;
@@ -2818,6 +3053,7 @@ ${error.stack}` : String(error));
   });
   app2.patch("/api/students/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const id = req.params.id;
       const data = req.body;
       const updated = await storage.updateStudent(id, data);
@@ -2829,6 +3065,7 @@ ${error.stack}` : String(error));
   });
   app2.delete("/api/students/:id", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const id = req.params.id;
       await storage.deleteStudent(id);
       res.status(204).send();
@@ -2838,6 +3075,7 @@ ${error.stack}` : String(error));
   });
   app2.post("/api/students/:id/toggle-block", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { examId, blockState } = req.body;
       if (!examId) {
         return res.status(400).json({ error: "examId is required" });
@@ -2851,6 +3089,10 @@ ${error.stack}` : String(error));
   const analyticsResponseCache = /* @__PURE__ */ new Map();
   app2.post("/api/ai/remedial", async (req, res) => {
     try {
+      const role = req.auth?.role;
+      if (role !== "admin" && role !== "student") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       const { candidateName, examTitle, score, totalPoints, percentage, incorrectQuestions } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -2895,6 +3137,7 @@ Provide structured JSON with:
   });
   app2.post("/api/ai/generate-questions", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { subject, classLevel, term, topic, count, examType } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       const numQuestions = Math.min(Math.max(Number(count) || 5, 1), 25);
@@ -2953,6 +3196,7 @@ Each question object must include:
   });
   app2.post("/api/ai/student-risk-analysis", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { studentName, classLevel, averageScore, recentScores, tabSwitches } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -2985,6 +3229,7 @@ Return JSON with:
   });
   app2.post("/api/ai/generate-comment", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { studentName, averageScore, classLevel, role, strengths, weaknesses } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       const isPrincipal = role === "principal";
@@ -3015,6 +3260,7 @@ Return JSON with a single key "comment" containing a warm 2-sentence formal rema
   });
   app2.post("/api/ai/diagnose-curriculum", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const { meanScore, stdDev, skewness, hardQuestionCount, easyQuestionCount } = req.body;
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -3053,6 +3299,7 @@ Return JSON with:
   });
   app2.post("/api/admin/purge-test-data", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       console.log("[routes.ts] Initiating bulk purge of QA test attempts...");
       await storage.purgeTestAttempts();
       try {
@@ -3085,6 +3332,7 @@ Return JSON with:
     }
   });
   app2.get("/api/analytics", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
     try {
       const selectedExamId = req.query.examId || "__all__";
       const termFilter = req.query.term || "__all__";
@@ -3254,6 +3502,7 @@ Return JSON with:
   });
   app2.post("/api/settings", async (req, res) => {
     try {
+      if (!requireAdmin(req, res)) return;
       const parsed = systemSettingsSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({
@@ -3285,35 +3534,17 @@ app.use(express2.json({
   }
 }));
 app.use(express2.urlencoded({ extended: false }));
-var SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret";
-app.use(
-  session({
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1e3 }
-  })
-);
+app.use((req, _res, next) => {
+  req.auth = readAuthCookie(req);
+  next();
+});
 app.use((req, res, next) => {
   const start = Date.now();
   const path3 = req.path;
-  let capturedJsonResponse = void 0;
-  const originalResJson = res.json;
-  res.json = function(bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path3.startsWith("/api")) {
-      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "\u2026";
-      }
-      console.log(logLine);
+      console.log(`${req.method} ${path3} ${res.statusCode} in ${duration}ms`);
     }
   });
   next();

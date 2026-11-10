@@ -22,7 +22,7 @@ import {
   type SystemSettings,
   defaultSystemSettings
 } from "../shared/schema";
-import { eq, inArray, and, desc } from "drizzle-orm";
+import { eq, inArray, and, desc, sql } from "drizzle-orm";
 import { db } from "./db";
 import { randomUUID } from "crypto";
 import fs from "fs";
@@ -50,6 +50,7 @@ export interface IStorage {
   // Exam Sessions
   getExamSessions(): Promise<ExamSession[]>;
   getExamSession(id: string): Promise<ExamSession | undefined>;
+  getActiveExamSession(examId: string, studentId: string): Promise<ExamSession | undefined>;
   createExamSession(session: InsertExamSession): Promise<ExamSession>;
   updateExamSession(
     id: string,
@@ -71,6 +72,7 @@ export interface IStorage {
   // Students
   getStudents(): Promise<Student[]>;
   getStudentByStudentId(studentId: string): Promise<Student | undefined>;
+  getStudentForLogin(name: string, studentId: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   createStudents(students: InsertStudent[]): Promise<Student[]>;
   updateStudent(id: string, data: Partial<Student>): Promise<Student | undefined>;
@@ -160,6 +162,15 @@ export class MemStorage implements IStorage {
 
   async getStudentByStudentId(studentId: string): Promise<Student | undefined> {
     return Array.from(this.students.values()).find((s) => s.studentId === studentId);
+  }
+
+  async getStudentForLogin(name: string, studentId: string): Promise<Student | undefined> {
+    const cleanName = name.trim().toLowerCase();
+    const cleanStudentId = studentId.trim().toLowerCase();
+    return Array.from(this.students.values()).find(student =>
+      student.name.trim().toLowerCase() === cleanName &&
+      student.studentId.trim().toLowerCase() === cleanStudentId
+    );
   }
 
   async getStudentById(id: string): Promise<Student | undefined> {
@@ -312,6 +323,17 @@ export class MemStorage implements IStorage {
 
   async getExamSession(id: string): Promise<ExamSession | undefined> {
     return this.examSessions.get(id);
+  }
+
+  async getActiveExamSession(examId: string, studentId: string): Promise<ExamSession | undefined> {
+    const cleanStudentId = studentId.trim().toLowerCase();
+    return Array.from(this.examSessions.values())
+      .filter(session =>
+        session.examId === examId &&
+        !session.isCompleted &&
+        session.studentId.trim().toLowerCase() === cleanStudentId
+      )
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
   }
 
   async createExamSession(
@@ -819,6 +841,16 @@ export class DatabaseStorage implements IStorage {
     return s;
   }
 
+  async getActiveExamSession(examId: string, studentId: string): Promise<ExamSession | undefined> {
+    const cleanStudentId = studentId.trim().toLowerCase();
+    const [session] = await db.select().from(examSessions).where(and(
+      eq(examSessions.examId, examId),
+      eq(examSessions.isCompleted, false),
+      sql`lower(trim(${examSessions.studentId})) = ${cleanStudentId}`,
+    )).orderBy(desc(examSessions.startedAt)).limit(1);
+    return session;
+  }
+
   async createExamSession(session: InsertExamSession): Promise<ExamSession> {
     const [created] = await db.insert(examSessions).values(session).returning();
     if (this.examSessionsCache && created) {
@@ -942,6 +974,16 @@ export class DatabaseStorage implements IStorage {
     return all.find(item => item.studentId.trim().toLowerCase() === cleanId.toLowerCase() || item.id === cleanId);
   }
 
+  async getStudentForLogin(name: string, studentId: string): Promise<Student | undefined> {
+    const cleanName = name.trim().toLowerCase();
+    const cleanStudentId = studentId.trim().toLowerCase();
+    const [student] = await db.select().from(students).where(sql`
+      lower(trim(${students.studentId})) = ${cleanStudentId}
+      and lower(trim(${students.name})) = ${cleanName}
+    `).limit(1);
+    return student;
+  }
+
   async createStudent(student: InsertStudent): Promise<Student> {
     const [created] = await db.insert(students).values(student).returning();
     if (this.studentsCache && created) {
@@ -1033,6 +1075,10 @@ export class DatabaseStorage implements IStorage {
     this.systemSettingsCache = updated;
     return updated;
   }
+}
+
+if (!process.env.DATABASE_URL && process.env.NODE_ENV === "production") {
+  throw new Error("DATABASE_URL is required in production; refusing to start with volatile in-memory storage.");
 }
 
 export const storage: IStorage = process.env.DATABASE_URL ? new DatabaseStorage() : new MemStorage();

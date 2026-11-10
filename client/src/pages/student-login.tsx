@@ -39,7 +39,7 @@ export default function StudentLoginPage() {
     }
     setLoading(true);
     try {
-      await apiRequest("POST", "/api/students/login", { name: cleanName, studentId: cleanId });
+      await apiRequest("POST", "/api/students/login", { name: cleanName, studentId: cleanId }, { retries: 2, timeoutMs: 20_000 });
       // on success, redirect to student portal
       setLocation("/student-portal");
     } catch (err: any) {

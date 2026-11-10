@@ -1,4 +1,4 @@
-import { db } from "./firebase";
+import { firebaseConfigured, getFirebaseDb } from "./firebase";
 import {
     collection,
     getDocs,
@@ -99,12 +99,9 @@ export const getQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
 };
 
 // Sanitized question getter for active candidate exam sessions (strips correctAnswer from memory/network payload)
-export const getStudentQuestionsByIds = async (ids: string[]): Promise<Question[]> => {
-    const questions = await getQuestionsByIds(ids);
-    return questions.map(q => ({
-        ...q,
-        correctAnswer: "" // Hide answer key from student browser inspect / devtools during session
-    }));
+export const getStudentQuestionsByIds = async (ids: string[], sessionId: string): Promise<Question[]> => {
+    if (!ids?.length) return [];
+    return apiRequest<Question[]>("POST", "/api/questions/student-bulk-fetch", { ids, sessionId });
 };
 
 export const createQuestion = async (question: InsertQuestion): Promise<Question> => {
@@ -422,7 +419,7 @@ export const deleteTestAttemptsBulk = async (): Promise<void> => {
 // --- Admin Personal Profile & Personal Settings API ---
 export const getAdminProfile = async (adminId: string = "default-admin"): Promise<AdminUser | null> => {
     try {
-        const d = await getDoc(doc(db, "admin_users", adminId));
+        const d = await getDoc(doc(getFirebaseDb(), "admin_users", adminId));
         if (!d.exists()) {
             return {
                 id: adminId,
@@ -467,6 +464,7 @@ export const getAdminProfile = async (adminId: string = "default-admin"): Promis
 };
 
 export const updateAdminProfile = async (adminId: string = "default-admin", data: Partial<AdminUser>): Promise<AdminUser> => {
+    const db = getFirebaseDb();
     const adminRef = doc(db, "admin_users", adminId);
     const snap = await getDoc(adminRef);
     if (!snap.exists()) {
@@ -484,7 +482,7 @@ export const updateAdminProfile = async (adminId: string = "default-admin", data
 // --- Real-time Notifications System API ---
 export const getAppNotifications = async (): Promise<AppNotification[]> => {
     try {
-        const q = query(collection(db, "app_notifications"), orderBy("createdAt", "desc"), limit(50));
+        const q = query(collection(getFirebaseDb(), "app_notifications"), orderBy("createdAt", "desc"), limit(50));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(d => docToData<AppNotification>(d));
     } catch (e) {
@@ -506,7 +504,7 @@ export const createAppNotification = async (notification: {
         // Deduplication: Avoid notification spam if an unread notification with the same batchId exists
         if (notification.batchId) {
             const existingQuery = query(
-                collection(db, "app_notifications"),
+                collection(getFirebaseDb(), "app_notifications"),
                 where("batchId", "==", notification.batchId),
                 where("isRead", "==", false),
                 limit(1)
@@ -529,7 +527,7 @@ export const createAppNotification = async (notification: {
             createdAt: new Date()
         });
 
-        const ref = await addDoc(collection(db, "app_notifications"), cleanPayload);
+        const ref = await addDoc(collection(getFirebaseDb(), "app_notifications"), cleanPayload);
         return { id: ref.id, ...cleanPayload } as AppNotification;
     } catch (e) {
         console.error("createAppNotification error:", e);
@@ -539,7 +537,7 @@ export const createAppNotification = async (notification: {
 
 export const markNotificationAsRead = async (id: string): Promise<void> => {
     try {
-        await updateDoc(doc(db, "app_notifications", id), { isRead: true });
+        await updateDoc(doc(getFirebaseDb(), "app_notifications", id), { isRead: true });
     } catch (e) {
         console.warn("markNotificationAsRead error:", e);
     }
@@ -547,6 +545,7 @@ export const markNotificationAsRead = async (id: string): Promise<void> => {
 
 export const markAllNotificationsAsRead = async (): Promise<void> => {
     try {
+        const db = getFirebaseDb();
         const snapshot = await getDocs(query(collection(db, "app_notifications"), where("isRead", "==", false)));
         if (snapshot.empty) return;
         const batch = writeBatch(db);
@@ -560,6 +559,11 @@ export const markAllNotificationsAsRead = async (): Promise<void> => {
 };
 
 export const subscribeToNotifications = (callback: (notifications: AppNotification[]) => void) => {
+    if (!firebaseConfigured) {
+        callback([]);
+        return () => {};
+    }
+    const db = getFirebaseDb();
     const q = query(collection(db, "app_notifications"), orderBy("createdAt", "desc"), limit(40));
     return onSnapshot(q, (snapshot) => {
         const list = snapshot.docs.map(d => docToData<AppNotification>(d));

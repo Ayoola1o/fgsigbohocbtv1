@@ -1710,8 +1710,9 @@ export default function AdminQuestions() {
                         const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
                         if (!isLocalhost) {
                           try {
-                            const { storage: fbStorage } = await import("@/lib/firebase");
+                            const { getFirebaseStorage } = await import("@/lib/firebase");
                             const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+                            const fbStorage = getFirebaseStorage();
                             if (fbStorage) {
                               const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
                               const snapshot = await uploadBytes(storageRef, file);
@@ -2618,8 +2619,9 @@ function QuestionForm({ onSuccess, initialData }: { onSuccess: () => void; initi
       const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
       if (!isLocalhost) {
         try {
-          const { storage: fbStorage } = await import("@/lib/firebase");
+          const { getFirebaseStorage } = await import("@/lib/firebase");
           const { ref: fbRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+          const fbStorage = getFirebaseStorage();
           if (fbStorage) {
             const storageRef = fbRef(fbStorage, `question_images/${Date.now()}-${file.name}`);
             const snapshot = await uploadBytes(storageRef, file);

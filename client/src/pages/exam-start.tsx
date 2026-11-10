@@ -9,7 +9,7 @@ import { Clock, BookOpen, AlertTriangle, CheckCircle, Sparkles, ArrowRight, Chev
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Exam, ExamSession, Student, Result } from "@shared/schema";
-import { createExamSession, getExam } from "@/lib/firebase-api";
+import { createExamSession, getExam } from "@/lib/cbt-api";
 import { Badge } from "@/components/ui/badge";
 
 export default function ExamStart() {
@@ -69,56 +69,27 @@ export default function ExamStart() {
 
   const startExamMutation = useMutation({
     mutationFn: async () => {
-      console.log("startExamMutation: Starting creation of session...");
-
-      // Create a promise that rejects after 15 seconds to prevent indefinite hang
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Request timed out. Please check your connection and try again.")), 15000);
-      });
-
-      const createPromise = createExamSession({
+      return createExamSession({
         examId: examId!,
         studentName,
         studentId,
         answers: {},
         currentQuestionIndex: 0,
       });
-
-      try {
-        return await Promise.race([createPromise, timeoutPromise]) as ExamSession;
-      } catch (err: any) {
-        if (err.message.includes("timed out")) {
-          console.warn("startExamMutation: Timeout reached, but proceeding as if successful (local-first)");
-          // The creation is likely queued in Firestore's local cache. 
-          // We can't return a dummy here because we need a real session ID to redirect.
-          // However, the createExamSession in firebase-api.ts now returns the ID early.
-        }
-        throw err;
-      }
     },
     onSuccess: (session) => {
-      console.log("startExamMutation: Success", session);
       if (!session || !session.id) {
-        console.error("Failed to start session: Server did not return a valid session id.");
         toast({ title: "Error", description: "Invalid session ID returned", variant: "destructive" });
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["/api/exam-sessions"] });
-      console.log("Redirecting to session:", session.id);
       setLocation(`/exam/${examId}/session/${session.id}`);
     },
     onError: (error) => {
-      console.error("Failed to start exam session:", error);
-      startExamMutation.reset(); // Allow retrying immediately
-
-      const isTimeout = error instanceof Error && error.message.includes("timed out");
-
       toast({
-        title: isTimeout ? "Network is Slow" : "Failed to Start Exam",
-        description: isTimeout
-          ? "Your connection is weak. If you continue to see this, try refreshing. However, we'll try to start anyway if possible."
-          : (error instanceof Error ? error.message : "There was an error starting your exam. Please try again."),
-        variant: isTimeout ? "default" : "destructive",
+        title: "Exam Not Started Yet",
+        description: `${error instanceof Error ? error.message : "The server did not confirm your session."} Your answers are not being submitted; reconnect and retry. If the session was created, retrying will reopen it.`,
+        variant: "destructive",
       });
     },
   });

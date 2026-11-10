@@ -7,7 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Clock, BookOpen, CheckCircle, LogOut, Lock, Sparkles, Award, ShieldAlert, User, ArrowRight } from "lucide-react";
 import type { Exam, Student, Result } from "@shared/schema";
-import { getExams, getSubjectDepartment } from "@/lib/firebase-api";
+import { getExams, getSubjectDepartment } from "@/lib/cbt-api";
+import { apiRequest } from "@/lib/queryClient";
 import { useScoreFormat } from "@/hooks/use-score-format";
 
 export default function StudentPortal() {
@@ -101,7 +102,8 @@ export default function StudentPortal() {
     return currentStudent?.blockedExams?.includes(examId) || false;
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await apiRequest("POST", "/api/students/logout").catch(() => {});
     localStorage.removeItem("student_user");
     setLocation("/student-login");
   };
@@ -142,7 +144,7 @@ export default function StudentPortal() {
             </div>
             <Button
               variant="outline"
-              onClick={handleLogout}
+              onClick={() => void handleLogout()}
               className="rounded-xl border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-355 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 dark:hover:text-rose-455 font-bold h-9 px-4.5 transition-colors"
               data-testid="button-logout"
             >

@@ -70,13 +70,12 @@ import {
   Users,
   Sparkles
 } from "lucide-react";
-import { getDocs, collection, updateDoc, doc, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import {
   submitExamSession,
   deleteExamSession,
+  updateExamSession,
   updateSessionExtraTime,
   sendStudentMessage,
   broadcastInvigilatorMessage
@@ -394,23 +393,18 @@ export default function AdminInvigilatorPage() {
   // Add extra time mutation
   const addTimeMutation = useMutation({
     mutationFn: async ({ sessionId, extraMinutes }: { sessionId: string; extraMinutes: number }) => {
-      const sessionRef = doc(db, "exam_sessions", sessionId);
       const currentSession = sessions.find(s => s.id === sessionId);
-      if (!currentSession) return;
-
-      const startDate = safeParseDate(currentSession.startedAt) || new Date();
-      const newStartedAt = new Date(startDate.getTime() + extraMinutes * 60 * 1000);
-
-      await updateDoc(sessionRef, {
-        startedAt: newStartedAt
-      });
+      if (!currentSession) throw new Error("Session not found");
+      await updateExamSession(sessionId, {
+        extendedMinutes: Number((currentSession as any).extendedMinutes || 0) + extraMinutes,
+      } as any);
     },
     onSuccess: () => {
       toast({
         title: "Extra Time Granted",
         description: `Candidate exam timer extended by ${extraTimeMinutes} minutes.`,
       });
-      queryClient.invalidateQueries({ queryKey: ["invigilatorExamSessions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/exam-sessions"] });
       setSelectedSessionForAction(null);
       setActionType(null);
     },
@@ -433,7 +427,7 @@ export default function AdminInvigilatorPage() {
         title: "Session Force Submitted",
         description: "The exam session has been finalized and graded.",
       });
-      queryClient.invalidateQueries({ queryKey: ["invigilatorExamSessions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/exam-sessions"] });
       setSelectedSessionForAction(null);
       setActionType(null);
     },
@@ -456,7 +450,7 @@ export default function AdminInvigilatorPage() {
         title: "Session Purged",
         description: "Session record deleted from live invigilator monitor.",
       });
-      queryClient.invalidateQueries({ queryKey: ["invigilatorExamSessions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/exam-sessions"] });
       setSelectedSessionForAction(null);
       setActionType(null);
     },
@@ -577,6 +571,10 @@ export default function AdminInvigilatorPage() {
 
   const handleBulkForceSubmit = async () => {
     const targetSessions = enrichedSessions.filter(s => selectedSessionIds.has(s.id) && !s.isCompleted);
+    if (targetSessions.length === 0) return;
+    const candidates = targetSessions.slice(0, 5).map(s => s.studentName).join(", ");
+    const additional = targetSessions.length > 5 ? ` and ${targetSessions.length - 5} more` : "";
+    if (!window.confirm(`Force submit and grade ${targetSessions.length} exam session(s) for ${candidates}${additional}? This cannot be undone.`)) return;
     for (const s of targetSessions) {
       await forceSubmitMutation.mutateAsync(s);
     }

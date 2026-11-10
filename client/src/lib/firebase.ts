@@ -1,90 +1,74 @@
-import { initializeApp } from "firebase/app";
+import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
 import {
-    getFirestore,
-    initializeFirestore,
-    persistentLocalCache,
-    persistentMultipleTabManager,
-    Firestore
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
 } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-const getEnvVar = (key: string) => {
-    if (import.meta.env && import.meta.env[key]) {
-        return import.meta.env[key];
-    }
-    if (typeof process !== 'undefined' && process.env && process.env[key]) {
-        return process.env[key];
-    }
-    return undefined;
+const getEnvVar = (key: string): string | undefined => {
+  const viteEnv = import.meta.env as Record<string, string | undefined>;
+  if (viteEnv[key]) return viteEnv[key];
+  if (typeof process !== "undefined" && process.env?.[key]) return process.env[key];
+  return undefined;
 };
 
 const firebaseConfig = {
-    apiKey: getEnvVar('VITE_FIREBASE_API_KEY'),
-    authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN'),
-    projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID'),
-    storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET'),
-    messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-    appId: getEnvVar('VITE_FIREBASE_APP_ID')
+  apiKey: getEnvVar("VITE_FIREBASE_API_KEY"),
+  authDomain: getEnvVar("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: getEnvVar("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: getEnvVar("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: getEnvVar("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: getEnvVar("VITE_FIREBASE_APP_ID"),
 };
 
-// Validate config
-const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
-const missingKeys = requiredKeys.filter(key => !firebaseConfig[key as keyof typeof firebaseConfig]);
+const requiredKeys = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"] as const;
+export const firebaseConfigured = requiredKeys.every(key => Boolean(firebaseConfig[key]));
 
-console.log("🔥 Firebase Config Debug:", {
-    projectId: firebaseConfig.projectId,
-    apiKey: firebaseConfig.apiKey ? "Set" : "Missing",
-    env: import.meta.env
-});
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
+let auth: Auth | null = null;
+let storage: FirebaseStorage | null = null;
 
-if (missingKeys.length > 0) {
-    console.error(`Missing Firebase configuration keys: ${missingKeys.join(', ')}`);
-    console.error("Please check your .env file.");
+function requireFirebaseConfig(): void {
+  if (firebaseConfigured) return;
+  throw new Error("Firebase-only features are unavailable because the VITE_FIREBASE_* settings are not configured.");
 }
 
-if (!firebaseConfig.projectId) {
-    throw new Error("Firebase project ID is not defined. Please set VITE_FIREBASE_PROJECT_ID in your environment variables.");
+export function getFirebaseApp(): FirebaseApp {
+  requireFirebaseConfig();
+  if (!app) app = getApps().find(existing => existing.name === "[DEFAULT]") || initializeApp(firebaseConfig);
+  return app;
 }
 
-const app = initializeApp(firebaseConfig);
-
-// Initialize Firestore with offline persistence and long-polling to prevent QUIC protocol errors
-let db: Firestore;
-
-try {
-    db = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager()
-        }),
-        experimentalForceLongPolling: true
+export function getFirebaseDb(): Firestore {
+  if (db) return db;
+  const firebaseApp = getFirebaseApp();
+  try {
+    db = initializeFirestore(firebaseApp, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      experimentalForceLongPolling: true,
     });
-    console.log("Firestore initialized with offline persistence and long-polling enabled.");
-} catch (error) {
-    console.error("Failed to initialize Firestore with offline persistence:", error);
-    // Fallback to default initialization with long-polling if persistence fails
+  } catch (error) {
+    console.warn("Firestore offline persistence is unavailable; using the default Firestore client.", error);
     try {
-        db = initializeFirestore(app, {
-            experimentalForceLongPolling: true
-        });
-    } catch (fallbackError) {
-        db = getFirestore(app);
+      db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true });
+    } catch {
+      db = getFirestore(firebaseApp);
     }
+  }
+  return db;
 }
 
-
-let auth: any;
-
-try {
-    auth = getAuth(app);
-} catch (error) {
-    console.warn("Firebase Auth not initialized. This is expected if you haven't enabled Authentication in Firebase Console.", error);
-    auth = null;
+export function getFirebaseAuth(): Auth {
+  if (!auth) auth = getAuth(getFirebaseApp());
+  return auth;
 }
 
-import { getStorage } from "firebase/storage";
-
-// ... existing code ...
-
-const storage = getStorage(app);
-
-export { app, db, auth, storage };
+export function getFirebaseStorage(): FirebaseStorage {
+  if (!storage) storage = getStorage(getFirebaseApp());
+  return storage;
+}

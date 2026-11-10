@@ -1,7 +1,7 @@
 import express from "express";
-import session from "express-session";
 import compression from "compression";
 import { registerRoutes } from "./routes";
+import { readAuthCookie } from "./auth-cookie";
 
 const app = express();
 
@@ -20,41 +20,19 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
-// Basic session setup for admin login
-const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret";
-app.use(
-    session({
-        secret: SESSION_SECRET,
-        resave: false,
-        saveUninitialized: false,
-        cookie: { maxAge: 24 * 60 * 60 * 1000 },
-    })
-);
+// Stateless signed cookies work across Vercel serverless instances.
+app.use((req, _res, next) => {
+    (req as any).auth = readAuthCookie(req);
+    next();
+});
 
 app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
-    let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-        capturedJsonResponse = bodyJson;
-        return originalResJson.apply(res, [bodyJson, ...args]);
-    };
-
     res.on("finish", () => {
         const duration = Date.now() - start;
         if (path.startsWith("/api")) {
-            let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-            if (capturedJsonResponse) {
-                logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-            }
-
-            if (logLine.length > 80) {
-                logLine = logLine.slice(0, 79) + "…";
-            }
-
-            console.log(logLine);
+            console.log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
         }
     });
 
