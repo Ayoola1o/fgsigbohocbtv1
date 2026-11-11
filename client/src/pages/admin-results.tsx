@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Search, Eye, CheckCircle, XCircle, Printer, Filter, Calendar as CalendarIcon, Award, TrendingUp, Sparkles, Clock, ChevronRight, User, BarChart3, FileSpreadsheet } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
-import { Result, Exam, Student, defaultSystemSettings } from "@shared/schema";
+import { Result, Exam, ExamSession, Student, defaultSystemSettings } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { PrintReportTemplate } from "@/components/PrintReportTemplate";
 import { createRoot } from "react-dom/client";
@@ -222,6 +222,7 @@ export default function AdminResults() {
 
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
   const { data: students } = useQuery<Student[]>({ queryKey: ["/api/students"] });
+  const { data: examSessions = [] } = useQuery<ExamSession[]>({ queryKey: ["/api/exam-sessions"] });
 
   const isQAUerOrTestRecord = (record: any) => {
     if (!record) return false;
@@ -374,6 +375,19 @@ export default function AdminResults() {
   const totalPages = Math.ceil(activeResultsList.length / pageSize);
   const activePage = Math.min(currentPage, Math.max(1, totalPages));
   const displayedResults = activeResultsList.slice((activePage - 1) * pageSize, activePage * pageSize);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const validResults = (results || []).filter(result => !isQAUerOrTestRecord(result));
+  const completedToday = validResults.filter(result => new Date(result.completedAt).getTime() >= todayStart.getTime()).length;
+  const activeSessions = examSessions.filter(session => {
+    if (session.isCompleted || isQAUerOrTestRecord(session)) return false;
+    const student = students?.find(item =>
+      item.studentId?.trim().toLowerCase() === session.studentId?.trim().toLowerCase() ||
+      item.id?.trim().toLowerCase() === session.studentId?.trim().toLowerCase()
+    );
+    return !isQAUerOrTestRecord(student);
+  }).length;
+  const passedResultsCount = validResults.filter(result => result.passed).length;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1766,23 +1780,23 @@ export default function AdminResults() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
             <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Tests Completed Today</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{displayedResults?.length || 12}</span>
-            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Total Recent Sessions</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{completedToday.toLocaleString()}</span>
+            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Completed today</span>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
             <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Total Records</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{(results?.length || 0).toLocaleString()}</span>
-            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Total Exams Processed</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{validResults.length.toLocaleString()}</span>
+            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Real student result records</span>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Result Inquiries</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">2,105</span>
-            <span className="block text-[10px] text-rose-300 font-bold mt-0.5">Flagged for Review</span>
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Passed Results</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{passedResultsCount.toLocaleString()}</span>
+            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Met the exam pass threshold</span>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Active Centers</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">28</span>
-            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Current Session Data</span>
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Active Sessions</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{activeSessions.toLocaleString()}</span>
+            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Uncompleted exam attempts</span>
           </div>
         </div>
       </div>

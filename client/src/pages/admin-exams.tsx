@@ -43,7 +43,7 @@ import {
   HelpCircle,
   FileSpreadsheet
 } from "lucide-react";
-import type { Exam, Question, SubjectSlot, SlotType, DepartmentSubjectMapping } from "@shared/schema";
+import type { Exam, ExamSession, Question, Student, SubjectSlot, SlotType, DepartmentSubjectMapping } from "@shared/schema";
 import { departments } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TheoryStructureEditor, generateStructure, type TheorySlot } from "@/components/theory-structure-editor";
@@ -70,6 +70,15 @@ export default function AdminExams() {
   const { data: questions = [] } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
   });
+
+  const { data: students = [] } = useQuery<Student[]>({ queryKey: ["/api/students"] });
+  const { data: examSessions = [] } = useQuery<ExamSession[]>({ queryKey: ["/api/exam-sessions"] });
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const sessionsStartedToday = examSessions.filter(session =>
+    !session.isTestAttempt && new Date(session.startedAt).getTime() >= todayStart.getTime()
+  ).length;
+  const activeExamsCount = exams.filter(exam => exam.isActive).length;
 
   const deleteExamMutation = useMutation({
     mutationFn: (examId: string) => apiRequest("DELETE", `/api/exams/${examId}`, {}),
@@ -180,13 +189,13 @@ export default function AdminExams() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
             <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Active Exams</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{exams.filter(e => e.isActive).length}</span>
-            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Exam Sessions Today</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{activeExamsCount.toLocaleString()}</span>
+            <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Active examinations</span>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
             <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Registered Students</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">12,345</span>
-            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Active Proctors</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{students.length.toLocaleString()}</span>
+            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Registered students</span>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
             <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Questions Bank</span>
@@ -194,9 +203,9 @@ export default function AdminExams() {
             <span className="block text-[10px] text-emerald-300 font-bold mt-0.5">Registered Items</span>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Exam Centres</span>
-            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">28</span>
-            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Current Session</span>
+            <span className="block text-[10px] text-indigo-200 font-extrabold uppercase tracking-wider">Sessions Today</span>
+            <span className="block text-2xl sm:text-3xl font-black text-white mt-1">{sessionsStartedToday.toLocaleString()}</span>
+            <span className="block text-[10px] text-indigo-200 font-bold mt-0.5">Exam attempts started today</span>
           </div>
         </div>
       </div>
