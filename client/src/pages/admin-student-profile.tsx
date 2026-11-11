@@ -689,21 +689,17 @@ export default function AdminStudentProfile() {
 
         const printWindow = window.open('', '_blank');
         if (printWindow) {
-            printWindow.document.write('<html><head><title>Print Result</title>');
+            printWindow.document.open();
+            printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Print Result</title></head><body><div id="print-root"></div></body></html>');
+            printWindow.document.close();
             const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
             styles.forEach(style => {
-                printWindow.document.head.appendChild(style.cloneNode(true));
+                try { printWindow.document.head.appendChild(style.cloneNode(true)); } catch { /* ignore individual style clone failures */ }
             });
-            printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
-            printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
-            printWindow.document.close();
-
-            printWindow.onload = () => {
-                setTimeout(() => {
-                    const container = printWindow.document.getElementById('print-root');
-                    if (container) {
-                        const root = createRoot(container);
-                        root.render(<PrintReportTemplate
+            const container = printWindow.document.getElementById('print-root');
+            if (container) {
+                const root = createRoot(container);
+                root.render(<PrintReportTemplate
                             reportType="result-report"
                             schoolInfo={{
                                 name: "FAITH IMMACULATE ACADEMY",
@@ -715,20 +711,22 @@ export default function AdminStudentProfile() {
                                  class: printData.candidate.gradeLevel,
                                  exam: printData.examTitle,
                                  date: printData.candidate.date,
-                                 session: "2025/2026 ACADEMIC SESSION"
+                                 session: "2025/2026 ACADEMIC SESSION",
+                                 studentName: printData.candidate.name,
+                                 studentId: printData.candidate.studentId,
                              }}
                              results={printData.subjectBreakdown.map((b: any) => ({
-                                 id: b.questions.toString(),
+                                 id: b.subject,
                                  name: b.subject,
                                  class: printData.candidate.gradeLevel,
-                                 subject: b.correct.toString(),
-                                 score: b.percentage
+                                 subject: b.subject,
+                                 score: b.correct,
+                                 total: b.questions,
+                                 percentage: b.percentage,
                              }))}
-                             onPrint={() => printWindow.print()}
+                             onPrint={() => void printWindow.document.fonts?.ready.then(() => printWindow.print())}
                           />);
-                      }
-                  }, 500);
-              };
+            }
           }
       };
 

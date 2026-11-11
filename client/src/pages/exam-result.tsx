@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link, useRoute } from "wouter";
 import { useState, useMemo } from "react";
+import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,24 @@ import type { Result, Question, Exam, Student } from "@shared/schema";
 import { getResult, getExam, getQuestionsByIds, getStudents } from "@/lib/cbt-api";
 import { useScoreFormat } from "@/hooks/use-score-format";
 import { cn } from "@/lib/utils";
+
+async function waitForPrintStyles(doc: Document): Promise<void> {
+  const stylesheetLoads = Array.from(doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).map(link =>
+    link.sheet
+      ? Promise.resolve()
+      : new Promise<void>(resolve => {
+          link.addEventListener("load", () => resolve(), { once: true });
+          link.addEventListener("error", () => resolve(), { once: true });
+        }),
+  );
+  const images = Array.from(doc.images).map(image =>
+    typeof image.decode === "function" ? image.decode().catch(() => undefined) : Promise.resolve(),
+  );
+  await Promise.race([
+    Promise.all([...stylesheetLoads, ...images, doc.fonts?.ready || Promise.resolve()]).then(() => undefined),
+    new Promise<void>(resolve => window.setTimeout(resolve, 3000)),
+  ]);
+}
 
 export default function ExamResult() {
   const { formatScore } = useScoreFormat();
@@ -196,7 +215,7 @@ export default function ExamResult() {
 
   const correctCount = Object.values(result.correctAnswers).filter(Boolean).length;
   
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     
@@ -220,11 +239,11 @@ export default function ExamResult() {
       } catch {}
     });
 
-    setTimeout(() => {
+    try {
       const container = printWindow.document.getElementById("print-root");
-      if (container) {
-        const root = createRoot(container);
-        root.render(
+      if (!container) throw new Error("Print document is not ready.");
+      const root = createRoot(container);
+      flushSync(() => root.render(
           <PrintReportTemplate
             reportType="result-report"
             schoolInfo={{
@@ -238,20 +257,27 @@ export default function ExamResult() {
               class: student?.classLevel || "General",
               exam: exam?.title || "Exam Result",
               date: new Date(result.completedAt).toLocaleDateString(),
-              session: "2025/2026 ACADEMIC SESSION"
+              session: "2025/2026 ACADEMIC SESSION",
+              studentName: result.studentName,
+              studentId: result.studentId,
             }}
             results={subjectBreakdown.map(b => ({
-              id: b.questions.toString(),
+              id: b.subject,
               name: b.subject,
               class: student?.classLevel || "General",
-              subject: b.correct.toString(),
-              score: b.percentage
+              subject: b.subject,
+              score: b.correct,
+              total: b.questions,
+              percentage: b.percentage,
             }))}
-            onPrint={() => printWindow.print()}
+            onPrint={() => void waitForPrintStyles(printWindow.document).then(() => printWindow.print())}
           />
-        );
-      }
-    }, 600);
+      ));
+      await waitForPrintStyles(printWindow.document);
+    } catch (error) {
+      console.error("Failed to prepare result for printing:", error);
+      printWindow.close();
+    }
   };
   const examSetQuestionCount = Math.max(
     questions?.length || 0,

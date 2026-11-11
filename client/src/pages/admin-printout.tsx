@@ -167,7 +167,9 @@ export default function AdminPrintout() {
                 class: data.candidate.gradeLevel,
                 exam: data.examTitle,
                 date: data.candidate.date,
-                session: "2025/2026 ACADEMIC SESSION"
+                session: "2025/2026 ACADEMIC SESSION",
+                studentName: data.candidate.name,
+                studentId: data.candidate.studentId,
               }}
               results={data.subjectBreakdown.map((b: any) => ({
                 id: b.subject,

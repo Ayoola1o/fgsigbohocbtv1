@@ -15,14 +15,18 @@ export const ResultTemplate = ({ data, onPrint, showPrintButton = true }: { data
                 class: data.candidate.gradeLevel,
                 exam: data.examTitle,
                 date: data.candidate.date,
-                session: "2025/2026 ACADEMIC SESSION"
+                session: data.session || "2025/2026 ACADEMIC SESSION",
+                studentName: data.candidate.name,
+                studentId: data.candidate.studentId,
             }}
             results={data.subjectBreakdown.map((b: any) => ({
                 id: b.questions.toString(),
                 name: b.subject,
                 class: data.candidate.gradeLevel,
-                subject: b.correct.toString(),
-                score: b.percentage
+                subject: b.subject,
+                score: b.correct,
+                total: b.questions,
+                percentage: b.percentage,
             }))}
             onPrint={onPrint}
             showPrintButton={showPrintButton}

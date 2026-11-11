@@ -60,6 +60,7 @@ export interface IStorage {
 
   // Results
   getResults(): Promise<Result[]>;
+  getResultsByStudentId(studentId: string): Promise<Result[]>;
   getResult(id: string): Promise<Result | undefined>;
   getResultBySessionId(sessionId: string): Promise<Result | undefined>;
   createResult(result: InsertResult): Promise<Result>;
@@ -382,6 +383,13 @@ export class MemStorage implements IStorage {
   // Results
   async getResults(): Promise<Result[]> {
     return Array.from(this.results.values());
+  }
+
+  async getResultsByStudentId(studentId: string): Promise<Result[]> {
+    const normalizedId = studentId.trim().toLowerCase();
+    return Array.from(this.results.values()).filter(
+      result => result.studentId.trim().toLowerCase() === normalizedId
+    );
   }
 
   async getResult(id: string): Promise<Result | undefined> {
@@ -893,6 +901,13 @@ export class DatabaseStorage implements IStorage {
       }
     })();
     return this.resultsInFlight;
+  }
+
+  async getResultsByStudentId(studentId: string): Promise<Result[]> {
+    const normalizedId = studentId.trim().toLowerCase();
+    return db.select().from(results)
+      .where(sql`lower(trim(${results.studentId})) = ${normalizedId}`)
+      .orderBy(desc(results.completedAt));
   }
 
   async getResult(id: string): Promise<Result | undefined> {

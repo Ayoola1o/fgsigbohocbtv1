@@ -838,6 +838,12 @@ var MemStorage = class {
   async getResults() {
     return Array.from(this.results.values());
   }
+  async getResultsByStudentId(studentId) {
+    const normalizedId = studentId.trim().toLowerCase();
+    return Array.from(this.results.values()).filter(
+      (result) => result.studentId.trim().toLowerCase() === normalizedId
+    );
+  }
   async getResult(id) {
     return this.results.get(id);
   }
@@ -1288,6 +1294,10 @@ var DatabaseStorage = class {
       }
     })();
     return this.resultsInFlight;
+  }
+  async getResultsByStudentId(studentId) {
+    const normalizedId = studentId.trim().toLowerCase();
+    return db.select().from(results).where(sql2`lower(trim(${results.studentId})) = ${normalizedId}`).orderBy(desc(results.completedAt));
   }
   async getResult(id) {
     if (this.resultsCache) {
@@ -2141,6 +2151,58 @@ function requireAdmin(req, res) {
   if (req.auth?.role === "admin") return true;
   res.status(401).json({ error: "Administrator authentication required" });
   return false;
+}
+var analyticsResponseCache = /* @__PURE__ */ new Map();
+async function refreshStudentAnalysis(result) {
+  if (result.isTestAttempt) return;
+  const [student, studentResults, exams2] = await Promise.all([
+    storage.getStudentByStudentId(result.studentId),
+    storage.getResultsByStudentId(result.studentId),
+    storage.getExams()
+  ]);
+  if (!student) return;
+  const validResults = studentResults.filter((item) => !item.isTestAttempt);
+  if (validResults.length === 0) return;
+  const averageScore = Math.round(
+    validResults.reduce((sum, item) => sum + (Number(item.percentage) || 0), 0) / validResults.length
+  );
+  const examById = new Map(exams2.map((exam) => [exam.id, exam]));
+  const subjectTotals = /* @__PURE__ */ new Map();
+  validResults.forEach((item) => {
+    const subject = examById.get(item.examId)?.subject?.trim();
+    if (!subject) return;
+    const entry = subjectTotals.get(subject) || { total: 0, count: 0 };
+    entry.total += Number(item.percentage) || 0;
+    entry.count += 1;
+    subjectTotals.set(subject, entry);
+  });
+  const subjectAverages = Array.from(subjectTotals, ([subject, scores]) => ({
+    subject,
+    percentage: scores.total / scores.count
+  }));
+  const strengths = subjectAverages.filter((item) => item.percentage >= 70).map((item) => item.subject);
+  const weaknesses = subjectAverages.filter((item) => item.percentage < 55).map((item) => item.subject);
+  const chronological = [...validResults].sort(
+    (a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+  );
+  const recent = chronological.slice(-3);
+  const trajectory = recent.length < 2 ? "Insufficient result history" : recent[recent.length - 1].percentage > recent[0].percentage + 3 ? "Improving" : recent[recent.length - 1].percentage < recent[0].percentage - 3 ? "Declining" : "Stable";
+  const standing = averageScore >= 75 ? "Excellent" : averageScore >= 50 ? "Satisfactory" : "Needs Help";
+  const actionPlan = [
+    ...weaknesses.length ? [`Prioritize revision in ${weaknesses.join(", ")}.`] : [],
+    ...strengths.length ? [`Continue enrichment work in ${strengths.join(", ")}.`] : [],
+    ...trajectory === "Declining" ? ["Review recent results with the student and agree on a support plan."] : []
+  ];
+  await storage.updateStudent(student.id, {
+    averageScore,
+    academicStanding: standing,
+    strengths,
+    weaknesses,
+    academicTrajectory: trajectory,
+    diagnosis: weaknesses.length ? `Current results show areas for additional support in ${weaknesses.join(", ")}.` : "Current results show consistent progress across recorded subjects.",
+    actionPlan,
+    lastAnalyzed: (/* @__PURE__ */ new Date()).toISOString()
+  });
 }
 var upload = multer({
   storage: process.env.VERCEL ? multer.memoryStorage() : multer.diskStorage({
@@ -3005,6 +3067,12 @@ ${error.stack}` : String(error));
         answers,
         correctAnswers
       });
+      try {
+        await refreshStudentAnalysis(result);
+      } catch (analysisError) {
+        console.error("Failed to refresh student analysis after result submission:", analysisError);
+      }
+      analyticsResponseCache.clear();
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to submit exam" });
@@ -3067,6 +3135,7 @@ ${error.stack}` : String(error));
         return res.status(401).json({ error: "Administrator authentication required" });
       }
       await storage.deleteResult(req.params.id);
+      analyticsResponseCache.clear();
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete result" });
@@ -3081,6 +3150,7 @@ ${error.stack}` : String(error));
       if (ids && Array.isArray(ids)) {
         await storage.deleteResults(ids);
       }
+      analyticsResponseCache.clear();
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete results" });
@@ -3095,6 +3165,7 @@ ${error.stack}` : String(error));
       if (result) {
         await storage.deleteResult(result.id);
         await storage.deleteExamSessionsForStudent(result.studentId, result.examId);
+        analyticsResponseCache.clear();
       }
       res.json({ ok: true });
     } catch (error) {
@@ -3204,7 +3275,17 @@ ${error.stack}` : String(error));
       res.status(500).json({ error: "Failed to toggle block status" });
     }
   });
-  const analyticsResponseCache = /* @__PURE__ */ new Map();
+  const analyticsCacheTtlMs = 3e4;
+  const maxAnalyticsCacheEntries = 50;
+  const cacheAnalyticsResponse = (key, data) => {
+    analyticsResponseCache.delete(key);
+    analyticsResponseCache.set(key, { data, expiresAt: Date.now() + analyticsCacheTtlMs });
+    while (analyticsResponseCache.size > maxAnalyticsCacheEntries) {
+      const oldestKey = analyticsResponseCache.keys().next().value;
+      if (oldestKey === void 0) break;
+      analyticsResponseCache.delete(oldestKey);
+    }
+  };
   app2.post("/api/ai/remedial", async (req, res) => {
     try {
       const role = req.auth?.role;
@@ -3457,6 +3538,14 @@ Return JSON with:
       const classFilter = req.query.classLevel || "__all__";
       const subjectFilter = req.query.subject || "__all__";
       const studentFilter = req.query.studentId || "__all__";
+      const cacheKey = `${selectedExamId}:${termFilter}:${classFilter}:${subjectFilter}:${studentFilter}`;
+      const cachedEntry = analyticsResponseCache.get(cacheKey);
+      if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+        analyticsResponseCache.delete(cacheKey);
+        analyticsResponseCache.set(cacheKey, cachedEntry);
+        return res.json(cachedEntry.data);
+      }
+      if (cachedEntry) analyticsResponseCache.delete(cacheKey);
       let allResults = [];
       let allQuestions = [];
       let allExams = [];
@@ -3527,14 +3616,6 @@ Return JSON with:
       if (allExamSessions.length === 0) allExamSessions = await storage.getExamSessions();
       allResults = allResults.filter((r) => r.isTestAttempt !== true && r.isTestAttempt !== "true");
       allExamSessions = allExamSessions.filter((s) => s.isTestAttempt !== true && s.isTestAttempt !== "true");
-      const lastResultTime = allResults.length > 0 ? allResults[allResults.length - 1]?.completedAt || "" : "";
-      const cacheHash = `${allResults.length}_${lastResultTime}`;
-      const cacheKey = `${selectedExamId}:${termFilter}:${classFilter}:${subjectFilter}:${studentFilter}`;
-      const cachedEntry = analyticsResponseCache.get(cacheKey);
-      if (cachedEntry && cachedEntry.cacheHash === cacheHash) {
-        console.log(`[routes.ts] Instant Analytics Cache Hit for key: ${cacheKey}`);
-        return res.json(cachedEntry.data);
-      }
       const workerPayload = {
         selectedExamId,
         termFilter,
@@ -3551,6 +3632,7 @@ Return JSON with:
         if (res.headersSent) return;
         try {
           const computedData = calculatePsychometrics(workerPayload);
+          cacheAnalyticsResponse(cacheKey, computedData);
           res.json(computedData);
         } catch (calcError) {
           console.error("Inline psychometrics computation failed:", calcError);
@@ -3580,7 +3662,7 @@ Return JSON with:
           if (computedData.error) {
             res.status(500).json({ error: computedData.error });
           } else {
-            analyticsResponseCache.set(cacheKey, { data: computedData, cacheHash });
+            cacheAnalyticsResponse(cacheKey, computedData);
             res.json(computedData);
           }
         });
