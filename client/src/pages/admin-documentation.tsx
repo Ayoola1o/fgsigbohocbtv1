@@ -68,7 +68,7 @@ export default function AdminDocumentation() {
           <div className="mt-3 flex items-center justify-between">
             <span className="text-[10px] text-indigo-300 font-bold">Active Build</span>
             <Badge className="bg-indigo-500/30 text-indigo-300 hover:bg-indigo-500/30 font-black border border-indigo-500/20 text-[10px] py-0.5 px-2">
-              V 8.0.0
+              V 11.02.239
             </Badge>
           </div>
         </div>
@@ -487,14 +487,14 @@ export default function AdminDocumentation() {
             </p>
 
             <div className="relative border-l border-slate-200 dark:border-slate-800 pl-6 space-y-8 ml-2 mt-4">
-              {/* Release v8.0.0 */}
+              {/* Release v11.02.239 */}
               <div className="relative">
                 <span className="absolute -left-[30px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 ring-4 ring-white dark:ring-slate-950">
                   <span className="h-2 w-2 rounded-full bg-white"></span>
                 </span>
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <h3 className="font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
-                    Build v8.0.0 <Badge className="bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">Active Build</Badge>
+                    Build v11.02.239 <Badge className="bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">Active Build</Badge>
                   </h3>
                   <span className="text-xs font-bold text-slate-400">June 2026</span>
                 </div>
