@@ -1,3 +1,5 @@
+import { printDocument } from "@/lib/print-document";
+import { resultBreakdown, latestAttempts, termScores, annualScores, studentKey } from "@/lib/report-data";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -643,31 +645,9 @@ export default function AdminStudentProfile() {
         const exam = exams.find(e => e.id === result.examId);
 
         // Calculate breakdown
-        const breakdown: any[] = [];
-        if (questions && exam) {
-            const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
-            const subjects = Array.from(new Set(examQuestions.map(q => q.subject)));
+        const breakdown = resultBreakdown(result, questions || [], exam);
 
-            subjects.forEach(subject => {
-                const subjectQuestions = examQuestions.filter(q => q.subject === subject);
-                let correctCount = 0;
-
-                subjectQuestions.forEach(q => {
-                    if (result.correctAnswers && result.correctAnswers[q.id]) {
-                        correctCount++;
-                    }
-                });
-
-                breakdown.push({
-                    subject,
-                    questions: subjectQuestions.length,
-                    correct: correctCount,
-                    percentage: subjectQuestions.length > 0 ? (correctCount / subjectQuestions.length) * 100 : 0
-                });
-            });
-        }
-
-        const printData = {
+const printData = {
             schoolName: "Faith Immaculate Academy",
             schoolLogoUrl: "/logo.png",
             examTitle: exam?.title || "Exam Result",
@@ -724,7 +704,7 @@ export default function AdminStudentProfile() {
                                  total: b.questions,
                                  percentage: b.percentage,
                              }))}
-                             onPrint={() => void printWindow.document.fonts?.ready.then(() => printWindow.print())}
+                             onPrint={() => void printWindow.document.fonts?.ready.then(() => void printDocument(printWindow))}
                           />);
             }
           }
@@ -739,12 +719,9 @@ export default function AdminStudentProfile() {
               styles.forEach(style => {
                   printWindow.document.head.appendChild(style.cloneNode(true));
               });
-              printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
               printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
               printWindow.document.close();
 
-              printWindow.onload = () => {
-                  setTimeout(() => {
                       const container = printWindow.document.getElementById('print-root');
                       if (container) {
                           const root = createRoot(container);
@@ -755,12 +732,11 @@ export default function AdminStudentProfile() {
                               weaknesses={subjectDiagnostics.weaknesses}
                               diagnosis={pedagogicalAnalysis.diagnosis}
                               actionPlan={pedagogicalAnalysis.planSteps}
-                              onPrint={() => printWindow.print()}
+                              onPrint={() => void printDocument(printWindow)}
                               showPrintButton={true}
                           />);
                       }
-                  }, 500);
-              };
+
           }
       };
 
@@ -850,7 +826,7 @@ export default function AdminStudentProfile() {
                             <Brain className="h-3.5 w-3.5" /> Study Guide
                         </Button>
                         <Button 
-                            onClick={() => window.print()} 
+                            onClick={() => void printDocument(window)}
                             variant="outline" 
                             className="bg-white/15 hover:bg-white/25 text-white border-white/20 font-bold px-3.5 h-9 rounded-xl text-xs gap-1.5 backdrop-blur-sm shadow-none"
                         >

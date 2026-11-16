@@ -1,3 +1,4 @@
+import { printDocument } from "@/lib/print-document";
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useParams } from "wouter";
@@ -218,7 +219,6 @@ export default function AdminExamDetails() {
     styles.forEach(style => {
       printWindow.document.head.appendChild(style.cloneNode(true));
     });
-    printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\\/script>');
     printWindow.document.write('</head><body><div id="print-root"></div></body></html>');
     printWindow.document.close();
 
@@ -228,13 +228,14 @@ export default function AdminExamDetails() {
       class: q.classLevel,
       subject: q.examType || "Objectives",
       options: q.options || [],
+      imageUrl: q.imageUrl,
       score: 0
     }));
 
-    const printInterval = setInterval(() => {
+    {
       const container = printWindow.document.getElementById('print-root');
       if (container) {
-        clearInterval(printInterval);
+
         const root = createRoot(container);
         root.render(
           <PrintReportTemplate
@@ -253,12 +254,12 @@ export default function AdminExamDetails() {
             }}
             results={results}
             onPrint={() => {
-              setTimeout(() => printWindow.print(), 500);
+              void printDocument(printWindow);
             }}
           />
         );
       }
-    }, 100);
+    }
   };
 
   if (isLoading || !formData) return (

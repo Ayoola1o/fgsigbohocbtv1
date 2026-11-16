@@ -1,3 +1,5 @@
+import { resultBreakdown } from "@/lib/report-data";
+import { printDocument } from "@/lib/print-document";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link, useRoute } from "wouter";
 import { useState, useMemo } from "react";
@@ -213,7 +215,7 @@ export default function ExamResult() {
     );
   }
 
-  const correctCount = Object.values(result.correctAnswers).filter(Boolean).length;
+  const correctCount = Object.values(result.correctAnswers || {}).filter(Boolean).length;
   
   const handlePrint = async () => {
     const printWindow = window.open('', '_blank');
@@ -261,7 +263,7 @@ export default function ExamResult() {
               studentName: result.studentName,
               studentId: result.studentId,
             }}
-            results={subjectBreakdown.map(b => ({
+            results={resultBreakdown(result, questions || [], exam).map(b => ({
               id: b.subject,
               name: b.subject,
               class: student?.classLevel || "General",
@@ -270,7 +272,7 @@ export default function ExamResult() {
               total: b.questions,
               percentage: b.percentage,
             }))}
-            onPrint={() => void waitForPrintStyles(printWindow.document).then(() => printWindow.print())}
+            onPrint={() => void waitForPrintStyles(printWindow.document).then(() => void printDocument(printWindow))}
           />
       ));
       await waitForPrintStyles(printWindow.document);

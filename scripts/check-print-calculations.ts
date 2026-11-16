@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { latestAttempts, resultBreakdown, annualScores } from '../client/src/lib/report-data';
+const questions: any[] = [{ id: 'a', subject: 'Math', points: 3 }, { id: 'b', subject: 'Math', points: 1 }, { id: 'unused', subject: 'Math', points: 20 }];
+const exam: any = { id: 'e', title: 'Math paper', subject: 'Math', term: 'First Term' };
+const result: any = { id: 'r', examId: 'e', studentId: 'S1', completedAt: '2026-01-01', score: 3, totalPoints: 4, percentage: 75, correctAnswers: { a: true, b: false } };
+assert.deepEqual(resultBreakdown(result, questions, exam), [{ subject: 'Math', questions: 4, correct: 3, percentage: 75 }]);
+assert.equal(resultBreakdown(result, [], exam)[0].percentage, 75);
+const retry = { ...result, id: 'r2', completedAt: '2026-01-02', percentage: 25 };
+assert.equal(latestAttempts([retry, result])[0].id, 'r2');
+assert.equal(latestAttempts([{ ...result, isTestAttempt: true }]).length, 0);
+const second = { ...result, id: 'r3', examId: 'e2', score: 1, percentage: 25, correctAnswers: { a: false, b: true } };
+const annual = annualScores([result, second], [exam, { ...exam, id: 'e2', term: 'Second Term' }], questions);
+assert.equal(annual[0].percentage, 50);
+assert.equal(annual[0].rows.length, 2);
+assert.equal(annualScores([result], [exam], questions)[0].percentage, 75);
+console.log('Report calculations passed: assigned questions, weighted points, historical fallback, latest attempts, QA exclusion, available-term averages.');

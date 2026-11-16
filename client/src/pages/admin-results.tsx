@@ -1,3 +1,5 @@
+import { printDocument } from "@/lib/print-document";
+import { resultBreakdown, latestAttempts, termScores, annualScores, studentKey } from "@/lib/report-data";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -216,13 +218,14 @@ export default function AdminResults() {
     }
   });
 
+  const { data: reportSettings } = useQuery<typeof defaultSystemSettings>({ queryKey: ["/api/settings"] });
   const { data: exams } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
 
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
   const { data: students } = useQuery<Student[]>({ queryKey: ["/api/students"] });
-  const { data: examSessions = [] } = useQuery<ExamSession[]>({ queryKey: ["/api/exam-sessions"] });
+  const { data: examSessions } = useQuery<ExamSession[]>({ queryKey: ["/api/exam-sessions"] });
 
   const isQAUerOrTestRecord = (record: any) => {
     if (!record) return false;
@@ -379,7 +382,7 @@ export default function AdminResults() {
   todayStart.setHours(0, 0, 0, 0);
   const validResults = (results || []).filter(result => !isQAUerOrTestRecord(result));
   const completedToday = validResults.filter(result => new Date(result.completedAt).getTime() >= todayStart.getTime()).length;
-  const activeSessions = examSessions.filter(session => {
+  const activeSessions = (examSessions || []).filter(session => {
     if (session.isCompleted || isQAUerOrTestRecord(session)) return false;
     const student = students?.find(item =>
       item.studentId?.trim().toLowerCase() === session.studentId?.trim().toLowerCase() ||
@@ -467,32 +470,9 @@ export default function AdminResults() {
     );
 
     // Calculate breakdown
-    const breakdown: any[] = [];
-    if (questions && exam) {
-      const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
-      const subjects = Array.from(new Set(examQuestions.map(q => q.subject)));
+    const breakdown = resultBreakdown(result, questions || [], exam);
 
-      subjects.forEach(subject => {
-        const subjectQuestions = examQuestions.filter(q => q.subject === subject);
-        const totalQuestions = subjectQuestions.length;
-        let correctCount = 0;
-
-        subjectQuestions.forEach(q => {
-          if (result.correctAnswers && result.correctAnswers[q.id]) {
-            correctCount++;
-          }
-        });
-
-        breakdown.push({
-          subject,
-          questions: totalQuestions,
-          correct: correctCount,
-          percentage: totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
-        });
-      });
-    }
-
-    const printData = {
+const printData = {
       schoolName: "Faith Immaculate Academy",
       schoolLogoUrl: "/logo.png",
       examTitle: exam?.title || "Exam Result",
@@ -554,7 +534,7 @@ export default function AdminResults() {
           }))}
           onPrint={() => {
             console.log("handlePrint: Component triggered onPrint");
-            setTimeout(() => printWindow.print(), 500);
+            void printDocument(printWindow);
           }}
         />);
       } catch (err) {
@@ -582,7 +562,7 @@ export default function AdminResults() {
     }
     writePrintWindowDocument(printWindow, "Score Sheet");
 
-    const sorted = [...filteredResults].sort((a, b) => a.studentName.localeCompare(b.studentName));
+    const sorted = latestAttempts(filteredResults).sort((a, b) => a.studentName.localeCompare(b.studentName));
     const studentResults = sorted.map(r => {
       const student = students?.find(s => 
         s.studentId?.trim().toLowerCase() === r.studentId?.trim().toLowerCase() ||
@@ -622,7 +602,7 @@ export default function AdminResults() {
           }}
           results={studentResults}
           onPrint={() => {
-            setTimeout(() => printWindow.print(), 500);
+            void printDocument(printWindow);
           }}
         />
       );
@@ -641,7 +621,7 @@ export default function AdminResults() {
 
     const examTitlesSet = new Set<string>();
     filteredResults.forEach(r => {
-      examTitlesSet.add(getExamTitle(r.examId));
+      examTitlesSet.add(`${getExamTitle(r.examId)} [${r.examId}]`);
     });
     const matrixHeaders = Array.from(examTitlesSet);
 
@@ -649,6 +629,7 @@ export default function AdminResults() {
       studentId: string;
       name: string;
       class: string;
+      department?: string;
       scores: Record<string, { score: number; total: number; percentage: number }>;
       cumulativeTotalScore: number;
       cumulativeTotalPoints: number;
@@ -656,7 +637,7 @@ export default function AdminResults() {
       passed: boolean;
     }> = {};
 
-    filteredResults.forEach(r => {
+    latestAttempts(filteredResults).forEach(r => {
       const student = students?.find(s => 
         s.studentId?.trim().toLowerCase() === r.studentId?.trim().toLowerCase() ||
         s.id?.trim().toLowerCase() === r.studentId?.trim().toLowerCase()
@@ -667,6 +648,7 @@ export default function AdminResults() {
           studentId,
           name: r.studentName,
           class: student?.classLevel || filterClassLevel || "-",
+          department: student?.department || "General",
           scores: {},
           cumulativeTotalScore: 0,
           cumulativeTotalPoints: 0,
@@ -675,7 +657,7 @@ export default function AdminResults() {
         };
       }
 
-      const examTitle = getExamTitle(r.examId);
+      const examTitle = `${getExamTitle(r.examId)} [${r.examId}]`;
       studentGroupMap[studentId].scores[examTitle] = {
         score: r.score,
         total: r.totalPoints,
@@ -696,7 +678,7 @@ export default function AdminResults() {
         cumulativeTotalScore: totalScore,
         cumulativeTotalPoints: totalPoints,
         cumulativePercentage: avgPercentage,
-        passed: avgPercentage >= 40  // Pass threshold: 40%
+        passed: avgPercentage >= (reportSettings?.passingThreshold ?? 50)
       };
     });
 
@@ -706,7 +688,9 @@ export default function AdminResults() {
       if (i === 0) row.rank = 1;
       else if (row.cumulativePercentage === (matrixRows as any[])[i - 1].cumulativePercentage) row.rank = (matrixRows as any[])[i - 1].rank;
       else row.rank = i + 1;
-      row.position = `${formatRankPosition(row.rank)} of ${matrixRows.length}`;
+      const peers = matrixRows.filter(peer => peer.class === row.class && (rankingScope !== 'department' || peer.department === row.department));
+            row.rank = 1 + peers.filter(peer => peer.cumulativePercentage > row.cumulativePercentage).length;
+            row.position = `${formatRankPosition(row.rank)} of ${peers.length}`;
     });
 
     const printWindow = window.open('', '_blank');
@@ -740,7 +724,7 @@ export default function AdminResults() {
           matrixHeaders={matrixHeaders}
           matrixRows={matrixRows}
           onPrint={() => {
-            setTimeout(() => printWindow.print(), 500);
+            void printDocument(printWindow);
           }}
         />
       );
@@ -926,52 +910,15 @@ export default function AdminResults() {
       return;
     }
 
-    const subjectQuestions = questions.filter(q =>
-      exam.questionIds.includes(q.id) &&
-      (q.subject || "General").trim().toLowerCase() === selectedMultiSubject.toLowerCase()
-    );
-
-    let totalSubjCount = exam.subjectConfig?.[selectedMultiSubject]
-      ? Number(exam.subjectConfig[selectedMultiSubject])
-      : subjectQuestions.length || 1;
-
-    if (Array.isArray((exam as any).subjectSlots)) {
-      const slot = (exam as any).subjectSlots.find((sl: any) => 
-        sl.subject?.toLowerCase() === selectedMultiSubject.toLowerCase() ||
-        (sl.departmentMappings?.some((m: any) => 
-          m.subjects?.some((sub: string) => sub.toLowerCase() === selectedMultiSubject.toLowerCase())
-        ))
-      );
-      if (slot) {
-        totalSubjCount = Number(slot.questionCount) || totalSubjCount;
-      }
-    }
-
-    const printRows = matchingResults.filter(r => {
-      // Check if student actually took this subject by verifying they have answers for at least one question of this subject
-      const hasSubjectQuestions = subjectQuestions.some(q => 
-        (r.correctAnswers && q.id in r.correctAnswers) || 
-        (r.answers && q.id in r.answers)
-      );
-      return hasSubjectQuestions;
-    }).map(r => {
-      let correct = 0;
-      subjectQuestions.forEach(q => {
-        if (r.correctAnswers?.[q.id]) correct++;
-      });
-      const pct = Math.round((correct / totalSubjCount) * 100);
-
-      return {
-        id: r.studentId,
-        name: r.studentName,
-        class: selectedMultiClass !== "ALL" ? selectedMultiClass : ((r as any).classLevel || "All Classes"),
-        subject: selectedMultiSubject,
-        score: correct,
-        total: totalSubjCount,
-        percentage: pct,
-        passed: pct >= (exam.passingScore || 50)
-      };
+    const printRows = latestAttempts(matchingResults).flatMap(result => {
+      const row = resultBreakdown(result, questions, exam).find(row => row.subject.trim().toLowerCase() === selectedMultiSubject.trim().toLowerCase());
+      if (!row) return [];
+      const student = students?.find(s => studentKey(s.studentId) === studentKey(result.studentId) || s.id === result.studentId);
+      if (isQAUerOrTestRecord(result) || isQAUerOrTestRecord(student)) return [];
+      return [{ id: result.studentId, name: result.studentName, class: student?.classLevel || exam.classLevel,
+        subject: row.subject, score: row.correct, total: row.questions, percentage: row.percentage, passed: row.percentage >= exam.passingScore }];
     }).sort((a, b) => a.name.localeCompare(b.name));
+    if (!printRows.length) { toast({ title: "No subject breakdown available", description: "The saved results do not contain a verifiable breakdown for this subject." }); return; }
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -1003,7 +950,7 @@ export default function AdminResults() {
             session: "2025/2026 ACADEMIC SESSION"
           }}
           results={printRows}
-          onPrint={() => setTimeout(() => printWindow.print(), 500)}
+          onPrint={() => void printDocument(printWindow)}
         />
       );
       setIsMultiExamPrintModalOpen(false);
@@ -1030,26 +977,9 @@ export default function AdminResults() {
       );
 
       // Calculate breakdown (reuse logic effectively or simplify for now)
-      const breakdown: any[] = [];
-      if (questions && exam) {
-        const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
-        const subjects = Array.from(new Set(examQuestions.map(q => q.subject)));
-        subjects.forEach(subject => {
-          const subjectQuestions = examQuestions.filter(q => q.subject === subject);
-          let correctCount = 0;
-          subjectQuestions.forEach(q => {
-            if (result.correctAnswers && result.correctAnswers[q.id]) correctCount++;
-          });
-          breakdown.push({
-            subject,
-            questions: subjectQuestions.length,
-            correct: correctCount,
-            percentage: subjectQuestions.length > 0 ? (correctCount / subjectQuestions.length) * 100 : 0
-          });
-        });
-      }
+      const breakdown = resultBreakdown(result, questions || [], exam);
 
-      return {
+return {
         schoolName: "Faith Immaculate Academy",
         schoolLogoUrl: "/logo.png",
         examTitle: exam?.title || "Exam Result",
@@ -1096,7 +1026,7 @@ export default function AdminResults() {
             {/* Shared Print Button */}
             <div className="fixed top-6 right-6 z-50 print:hidden">
               <Button
-                onClick={() => printWindow.print()}
+                onClick={() => void printDocument(printWindow)}
                 className="shadow-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full px-6 transition-all hover:scale-105 flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" /> Print All ({printPayloads.length})
@@ -1231,7 +1161,7 @@ export default function AdminResults() {
           {/* Shared Print Button */}
           <div className="fixed top-6 right-6 z-50 print:hidden">
             <Button
-              onClick={() => printWindow.print()}
+              onClick={() => void printDocument(printWindow)}
               className="shadow-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold rounded-full px-6 py-2.5 transition-all hover:scale-105 flex items-center gap-2"
             >
               <Printer className="w-4 h-4" /> Print All Portfolios ({portfolios.length})
@@ -1340,7 +1270,7 @@ export default function AdminResults() {
 
   // --- 1. MISSING EXAM REPORT GENERATOR (4 Scopes) ---
   const handlePrintMissingExamReport = async () => {
-    if (!students || students.length === 0 || !exams || exams.length === 0) {
+    if (!students || !exams || !results || !examSessions) {
       toast({ title: "Data Loading", description: "Students or exams data is loading...", variant: "destructive" });
       return;
     }
@@ -1381,7 +1311,7 @@ export default function AdminResults() {
             department: student.department || 'General',
             subject: exam.subject,
             examTitle: exam.title,
-            status: 'No Result Found'
+            status: examSessions.some(session => session.examId === exam.id && studentKey(session.studentId) === studentKey(student.studentId) && !session.isTestAttempt) ? 'Incomplete' : 'Not Started'
           });
         }
       });
@@ -1418,7 +1348,7 @@ export default function AdminResults() {
           }}
           missingExamRows={missingRows}
           missingExamScope={missingScope}
-          onPrint={() => setTimeout(() => printWindow.print(), 500)}
+          onPrint={() => void printDocument(printWindow)}
         />
       );
     } catch (err) {
@@ -1430,7 +1360,7 @@ export default function AdminResults() {
 
   // --- 2. ADVANCED BROADSHEETS & POSITION RANKINGS GENERATOR ---
   const handlePrintAdvancedBroadsheet = async () => {
-    if (!results || results.length === 0 || !students) {
+    if (!results || results.length === 0 || !students || !exams || !questions || !reportSettings) {
       toast({ title: "No Results Found", description: "No results available to process.", variant: "destructive" });
       return;
     }
@@ -1449,57 +1379,26 @@ export default function AdminResults() {
       const root = createRoot(container);
 
       if (advancedPrintType === 'student-cumulative-broadsheet' || advancedPrintType === 'student-term-breakdown') {
-        const studentObj = students.find(s => s.id === selectedStudentForPrint || s.studentId === selectedStudentForPrint) || students[0];
+        const studentObj = students.find(s => s.id === selectedStudentForPrint || s.studentId === selectedStudentForPrint);
+        if (!studentObj) throw new Error("Select a student before generating a report.");
         const studentResults = results.filter(r => (r.studentId === studentObj.studentId || r.studentId === studentObj.id) && r.isTestAttempt !== true);
 
         if (advancedPrintType === 'student-cumulative-broadsheet') {
-          const subjectMap: Record<string, { term1?: number; term2?: number; term3?: number }> = {};
-          studentResults.forEach(r => {
-            const ex = exams?.find(e => e.id === r.examId);
-            const subj = ex?.subject || "General";
-            const term = ex?.term || "First Term";
-            if (!subjectMap[subj]) subjectMap[subj] = {};
-            if (term === "First Term") subjectMap[subj].term1 = r.percentage;
-            else if (term === "Second Term") subjectMap[subj].term2 = r.percentage;
-            else if (term === "Third Term") subjectMap[subj].term3 = r.percentage;
-          });
-
-          const peerResults = results.filter(r => {
-            if (r.isTestAttempt === true) return false;
-            const peerStudent = students.find(s => s.studentId === r.studentId || s.id === r.studentId);
-            if (rankingScope === 'department' && studentObj.department && peerStudent?.department !== studentObj.department) return false;
-            if (rankingScope === 'class' && peerStudent?.classLevel !== studentObj.classLevel) return false;
-            return true;
-          });
-
-          const cumulativeRows: any[] = Object.keys(subjectMap).map(subj => {
-            const entry = subjectMap[subj];
-            const pcts = [entry.term1, entry.term2, entry.term3].filter(p => p !== undefined && p !== null) as number[];
-            const cumPct = pcts.length > 0 ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0;
-            const grade = getLetterGrade(cumPct);
-
-            let positionStr = "—";
-            if (includePosition) {
-              const peerScores = peerResults.filter(r => {
-                const ex = exams?.find(e => e.id === r.examId);
-                return ex?.subject === subj;
-              }).map(r => r.percentage);
-
-              peerScores.push(cumPct);
-              peerScores.sort((a, b) => b - a);
-              const rankIdx = peerScores.indexOf(cumPct) + 1;
-              positionStr = `${formatRankPosition(rankIdx)} of ${peerScores.length}`;
-            }
-
-            return {
-              subject: subj,
-              term1Pct: entry.term1 ?? null,
-              term2Pct: entry.term2 ?? null,
-              term3Pct: entry.term3 ?? null,
-              cumulativePct: cumPct,
-              grade,
-              position: positionStr
-            };
+          const peerStudents = students.filter(peer => !isQAUerOrTestRecord(peer) && peer.classLevel === studentObj.classLevel &&
+            (rankingScope !== 'department' || peer.department === studentObj.department));
+          const cumulativeRows = annualScores(studentResults, exams || [], questions || []).map(row => {
+            const peerScores = peerStudents.flatMap(peer => {
+              const records = results.filter(r => studentKey(r.studentId) === studentKey(peer.studentId) || r.studentId === peer.id);
+              const match = annualScores(records, exams || [], questions || []).find(item => item.subject.toLowerCase() === row.subject.toLowerCase());
+              return match ? [match.percentage!] : [];
+            });
+            const pct = row.percentage!;
+            return { subject: row.subject,
+              term1Pct: row.rows.find(r => r.term === 'First Term')?.percentage ?? null,
+              term2Pct: row.rows.find(r => r.term === 'Second Term')?.percentage ?? null,
+              term3Pct: row.rows.find(r => r.term === 'Third Term')?.percentage ?? null,
+              cumulativePct: pct, grade: getLetterGrade(pct),
+              position: `${formatRankPosition(1 + peerScores.filter(score => score > pct).length)} of ${peerScores.length}` };
           });
 
           root.render(
@@ -1523,26 +1422,23 @@ export default function AdminResults() {
               }}
               cumulativeRows={cumulativeRows}
               includePosition={includePosition}
-              onPrint={() => setTimeout(() => printWindow.print(), 500)}
+              onPrint={() => void printDocument(printWindow)}
             />
           );
         } else {
           const termsList = ["First Term", "Second Term", "Third Term"];
           const termTablesData = termsList.map(tName => {
-            const tResults = studentResults.filter(r => {
-              const ex = exams?.find(e => e.id === r.examId);
-              return (ex?.term || "First Term") === tName;
-            }).map(r => {
-              const ex = exams?.find(e => e.id === r.examId);
-              return {
-                subject: ex?.subject || "General",
-                score: r.score,
-                total: r.totalPoints,
-                percentage: r.percentage,
-                grade: getLetterGrade(r.percentage),
-                position: "—"
-              };
-            });
+            const tResults = termScores(studentResults, exams || [], questions || [])
+              .filter(row => row.term === tName).map(row => {
+                const peers = students.filter(peer => !isQAUerOrTestRecord(peer) && peer.classLevel === studentObj.classLevel &&
+                  (rankingScope !== 'department' || peer.department === studentObj.department));
+                const scores = peers.flatMap(peer => {
+                  const records = results.filter(r => studentKey(r.studentId) === studentKey(peer.studentId) || r.studentId === peer.id);
+                  const match = termScores(records, exams, questions).find(item => item.term === tName && item.subject.toLowerCase() === row.subject.toLowerCase());
+                  return match ? [match.percentage] : [];
+                });
+                return { ...row, grade: getLetterGrade(row.percentage), position: `${formatRankPosition(1 + scores.filter(score => score > row.percentage).length)} of ${scores.length}` };
+              });
             return { term: tName, results: tResults };
           });
 
@@ -1567,7 +1463,7 @@ export default function AdminResults() {
               }}
               termTables={termTablesData}
               includePosition={includePosition}
-              onPrint={() => setTimeout(() => printWindow.print(), 500)}
+              onPrint={() => void printDocument(printWindow)}
             />
           );
         }
@@ -1595,35 +1491,21 @@ export default function AdminResults() {
         const studentGroupMap: Record<string, any> = {};
         const subjectSet = new Set<string>();
 
-        filteredList.forEach(r => {
-          const student = students.find(s => s.studentId === r.studentId || s.id === r.studentId);
-          const ex = exams?.find(e => e.id === r.examId);
-          const subj = ex?.subject || "General";
-          subjectSet.add(subj);
-
-          if (!studentGroupMap[r.studentId]) {
-            studentGroupMap[r.studentId] = {
-              studentId: r.studentId,
-              name: r.studentName,
-              class: student?.classLevel || "General",
-              department: student?.department || "General",
-              scores: {},
-              cumulativeTotalScore: 0,
-              cumulativeTotalPoints: 0,
-              cumulativePercentage: 0,
-              passed: true
-            };
-          }
-
-          // Only store highest score if exam has duplicate attempts (shouldn't happen but safe)
-          const existing = studentGroupMap[r.studentId].scores[subj];
-          if (!existing || r.percentage > existing.percentage) {
-            studentGroupMap[r.studentId].scores[subj] = {
-              score: r.score,
-              total: r.totalPoints,
-              percentage: r.percentage
-            };
-          }
+        const grouped = new Map<string, Result[]>();
+        for (const result of latestAttempts(filteredList)) {
+          const key = studentKey(result.studentId);
+          grouped.set(key, [...(grouped.get(key) || []), result]);
+        }
+        grouped.forEach((records, key) => {
+          const student = students.find(s => studentKey(s.studentId) === key || studentKey(s.id) === key)!;
+          const rows = broadsheetSelectedTerm === 'ALL'
+            ? annualScores(records, exams || [], questions || []).map(row => ({ subject: row.subject,
+                score: row.rows.reduce((n, r) => n + r.score, 0), total: row.rows.reduce((n, r) => n + r.total, 0), percentage: row.percentage! }))
+            : termScores(records, exams || [], questions || []).filter(row => row.term === broadsheetSelectedTerm);
+          const scores: Record<string, { score: number; total: number; percentage: number }> = {};
+          rows.forEach(row => { subjectSet.add(row.subject); scores[row.subject] = row; });
+          studentGroupMap[key] = { studentId: student.studentId, name: student.name, class: student.classLevel,
+            department: student.department, scores, cumulativeTotalScore: 0, cumulativeTotalPoints: 0, cumulativePercentage: 0, passed: false };
         });
 
         // Recalculate cumulative totals after deduplication
@@ -1639,7 +1521,7 @@ export default function AdminResults() {
           row.cumulativePercentage = scoreValues.length > 0
             ? scoreValues.reduce((a: number, b: any) => a + b.percentage, 0) / scoreValues.length
             : 0;
-          row.passed = row.cumulativePercentage >= 40;  // Pass threshold: 40%
+          row.passed = row.cumulativePercentage >= (reportSettings?.passingThreshold ?? 50);
           return row;
         });
 
@@ -1655,7 +1537,9 @@ export default function AdminResults() {
             } else {
               row.rank = i + 1;
             }
-            row.position = `${formatRankPosition(row.rank)} of ${matrixRows.length}`;
+            const peers = matrixRows.filter(peer => peer.class === row.class && (rankingScope !== 'department' || peer.department === row.department));
+            row.rank = 1 + peers.filter(peer => peer.cumulativePercentage > row.cumulativePercentage).length;
+            row.position = `${formatRankPosition(row.rank)} of ${peers.length}`;
           });
         } else {
           // Sort alphabetically when no position ranking
@@ -1683,7 +1567,7 @@ export default function AdminResults() {
             matrixHeaders={matrixHeaders}
             matrixRows={matrixRows}
             includePosition={includePosition}
-            onPrint={() => setTimeout(() => printWindow.print(), 500)}
+            onPrint={() => void printDocument(printWindow)}
           />
         );
       }

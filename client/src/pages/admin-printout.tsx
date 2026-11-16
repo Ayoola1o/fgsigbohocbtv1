@@ -1,3 +1,5 @@
+import { printDocument } from "@/lib/print-document";
+import { resultBreakdown, latestAttempts, termScores, annualScores, studentKey } from "@/lib/report-data";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +11,7 @@ import { Loader2 } from "lucide-react";
 
 export default function AdminPrintout() {
   const [selectedClassLevel, setSelectedClassLevel] = useState<string>("");
+  const [selectedExamId, setSelectedExamId] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
   const { data: students } = useQuery<any[]>({ queryKey: ["/api/students"] });
@@ -17,26 +20,12 @@ export default function AdminPrintout() {
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
 
   // Filter students by class level
-  const filteredStudents = students?.filter(s => !selectedClassLevel || s.classLevel === selectedClassLevel) || [];
+  const filteredStudents = students?.filter(s => selectedClassLevel && !s.isTestUser && s.classLevel === selectedClassLevel) || [];
 
   // Prepare data for printout
   const printoutData = filteredStudents.map(student => {
-    // Find the most recent result for this student? Or all results?
-    // For "General Printout", usually it's for a specific exam or term.
-    // But here we might just print whatever latest result they have, or all of them.
-    // Let's assume we want to print the latest result for each student for now, 
-    // or maybe we should also filter by Exam?
-    // The prompt says "general print out for all student and a condition for class level".
-    // It doesn't explicitly say "for a specific exam".
-    // But a report card usually contains multiple subjects (exams).
-
-    // If we want a "Report Card" style, we need to aggregate results from multiple exams.
-    // The template shows "Subject Breakdown" which implies one exam with multiple subjects OR a report card of multiple exams.
-    // The template has `examTitle: "Mid-Term Software Development Fundamentals"`.
-    // And `subjectBreakdown` inside it.
-
-    // Let's try to find the most recent result for the student.
-    const studentResults = results?.filter(r => r.studentId === student.studentId) || [];
+    // Latest completed attempt for the selected examination.
+    const studentResults = latestAttempts((results || []).filter(r => studentKey(r.studentId) === studentKey(student.studentId) && r.examId === selectedExamId));
     if (studentResults.length === 0) return null;
 
     // Sort by date desc
@@ -49,32 +38,9 @@ export default function AdminPrintout() {
     // BUT, the result doesn't store question IDs directly in a way that maps easily without fetching the exam's question list.
     // Actually `exam.questionIds` has the list.
 
-    const breakdown: any[] = [];
-    if (questions && exam) {
-      const examQuestions = questions.filter(q => exam.questionIds.includes(q.id));
-      const subjects = Array.from(new Set(examQuestions.map(q => q.subject)));
+    const breakdown = resultBreakdown(latestResult, questions || [], exam);
 
-      subjects.forEach(subject => {
-        const subjectQuestions = examQuestions.filter(q => q.subject === subject);
-        const totalQuestions = subjectQuestions.length;
-        let correctCount = 0;
-
-        subjectQuestions.forEach(q => {
-          if (latestResult.correctAnswers && latestResult.correctAnswers[q.id]) {
-            correctCount++;
-          }
-        });
-
-        breakdown.push({
-          subject,
-          questions: totalQuestions,
-          correct: correctCount,
-          percentage: totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
-        });
-      });
-    }
-
-      return {
+return {
       schoolName: "Faith Immaculate Academy",
       schoolLogoUrl: "/logo.png", // Placeholder (unused by template)
       examTitle: exam?.title || "Exam Result",
@@ -97,6 +63,7 @@ export default function AdminPrintout() {
 
   return (
     <div className="space-y-8">
+      <style>{`@media print { .no-print, nav, aside, header { display: none !important; } .report-page { break-after: page; } .report-page:last-child { break-after: auto; } }`}</style>
       <div className="no-print">
         <h1 className="mb-2 text-3xl font-bold">General Printout</h1>
         <p className="text-muted-foreground mb-6">
@@ -110,7 +77,7 @@ export default function AdminPrintout() {
           <CardContent className="flex gap-4 items-end">
             <div className="w-64 space-y-2">
               <label className="text-sm font-medium">Class Level</label>
-              <Select value={selectedClassLevel} onValueChange={setSelectedClassLevel}>
+              <Select value={selectedClassLevel} onValueChange={value => { setSelectedClassLevel(value); setSelectedExamId(""); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select Class" />
                 </SelectTrigger>
@@ -128,32 +95,31 @@ export default function AdminPrintout() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="w-64 space-y-2"><label>Examination / Term</label>
+              <Select value={selectedExamId} onValueChange={setSelectedExamId}><SelectTrigger><SelectValue placeholder="Select examination" /></SelectTrigger><SelectContent>
+                {exams?.filter(exam => exam.classLevel === selectedClassLevel).map(exam => <SelectItem key={exam.id} value={exam.id}>{exam.title} — {exam.term}</SelectItem>)}
+              </SelectContent></Select></div>
             <Button
-              onClick={() => {
-                setIsGenerating(true);
-                setTimeout(() => {
-                  window.print();
-                  setIsGenerating(false);
-                }, 500);
-              }}
-              disabled={!selectedClassLevel || printoutData.length === 0}
+              onClick={async () => { setIsGenerating(true); try { await printDocument(window); } finally { setIsGenerating(false); } }}
+              disabled={!selectedClassLevel || !selectedExamId || !questions || !results || isGenerating || printoutData.length === 0}
             >
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "🖨️ Print All Results"}
             </Button>
           </CardContent>
         </Card>
 
-        {selectedClassLevel && printoutData.length === 0 && (
+        {selectedClassLevel && selectedExamId && results && printoutData.length === 0 && (
           <div className="mt-4 text-center text-muted-foreground">
             No results found for students in {selectedClassLevel}.
           </div>
         )}
       </div>
 
+      {selectedClassLevel && selectedExamId && results && <p className="no-print">{printoutData.length} result slips available; {filteredStudents.length - printoutData.length} students have no result for this examination.</p>}
       {/* Print Preview Area */}
       <div className="print-area">
         {printoutData.map((data: any, idx) => (
-          <div key={idx}>
+          <div key={idx} className="report-page">
             <PrintReportTemplate
               reportType="result-report"
               schoolInfo={{

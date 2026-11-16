@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { SystemSettings } from "@shared/schema";
 import React from 'react';
 import { Printer, BookOpen, AlertCircle, Compass, FileText, CheckCircle2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -24,6 +27,7 @@ export const PrintStudyGuideTemplate: React.FC<PrintStudyGuideTemplateProps> = (
     onPrint,
     showPrintButton = true
 }) => {
+    const { data: settings, isPending, isError } = useQuery<SystemSettings>({ queryKey: ["/api/settings"], queryFn: () => apiRequest("GET", "/api/settings") }, queryClient);
     const handlePrint = () => {
         if (onPrint) {
             onPrint();
@@ -96,7 +100,7 @@ export const PrintStudyGuideTemplate: React.FC<PrintStudyGuideTemplateProps> = (
                     </div>
 
                     <Button
-                        onClick={handlePrint}
+                        onClick={handlePrint} disabled={isPending || isError}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-md transition-transform active:scale-95"
                     >
                         <Printer size={18} /> Print Study Guide
@@ -105,15 +109,15 @@ export const PrintStudyGuideTemplate: React.FC<PrintStudyGuideTemplateProps> = (
             )}
 
             {/* Main Document Layout */}
-            <div className="w-full max-w-[210mm] bg-white shadow-2xl print:shadow-none p-[10mm] sm:p-[15mm] border border-gray-200 print:border-none min-h-[297mm] flex flex-col mx-auto text-slate-800">
+            <div className="w-full max-w-[210mm] bg-white shadow-2xl print:shadow-none p-[10mm] sm:p-[15mm] border border-gray-200 print:border-none min-h-[297mm] print:min-h-0 flex flex-col mx-auto text-slate-800">
                 {/* School Header */}
                 <div className="flex items-center border-b-4 border-indigo-900 pb-4 mb-5">
                     <div className="w-20 h-20 bg-indigo-900 rounded-lg flex items-center justify-center text-white font-black text-2xl border-2 border-indigo-900 shadow-sm shrink-0">
-                        FIA
+                        {settings?.schoolLogo ? <img src={settings.schoolLogo} alt="School logo" className="h-full w-full object-contain" /> : "School"}
                     </div>
                     <div className="flex-1 text-center pr-20">
-                        <h1 className="text-xl sm:text-2xl font-black text-indigo-900 tracking-tight leading-none mb-1 uppercase">FAITH IMMACULATE ACADEMY</h1>
-                        <p className="text-[10px] sm:text-xs font-bold text-gray-550 tracking-[0.1em] mb-1">KNOWLEDGE AND GODLINESS • IGBOHO, OYO STATE</p>
+                        <h1 className="text-xl sm:text-2xl font-black text-indigo-900 tracking-tight leading-none mb-1 uppercase">{settings?.schoolName || "School"}</h1>
+                        <p className="text-[10px] sm:text-xs font-bold text-gray-550 tracking-[0.1em] mb-1">{settings?.schoolAddress || ""}</p>
                         <span className="text-[9px] font-extrabold text-indigo-700 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-3 py-0.5 rounded-full">
                             Cognitive Diagnosis & Remediation Engine
                         </span>
@@ -123,7 +127,7 @@ export const PrintStudyGuideTemplate: React.FC<PrintStudyGuideTemplateProps> = (
                 {/* Title */}
                 <div className="bg-indigo-950 text-white text-center py-1.5 mb-5 rounded">
                     <h2 className="text-xs sm:text-sm font-black tracking-widest uppercase">
-                        AI-DRIVEN PERSONALIZED REMEDIATION STUDY GUIDE
+                        PERSONALIZED STUDY GUIDE
                     </h2>
                 </div>
 
@@ -134,7 +138,7 @@ export const PrintStudyGuideTemplate: React.FC<PrintStudyGuideTemplateProps> = (
                         <span className="font-extrabold text-indigo-950">{student.name}</span>
                     </div>
                     <div className="flex justify-between border-b border-slate-200 pb-1 pl-2">
-                        <span className="text-slate-500 font-bold uppercase tracking-wider">Access Passcode:</span>
+                        <span className="text-slate-500 font-bold uppercase tracking-wider">Student ID:</span>
                         <span className="font-mono font-bold text-slate-700">{student.studentId}</span>
                     </div>
                     <div className="flex justify-between border-b border-slate-200 pb-1 pr-2">

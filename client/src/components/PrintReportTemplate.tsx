@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { SystemSettings } from "@shared/schema";
 import React from 'react';
 import { Printer, FileText, Users, Calendar, Award, GraduationCap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -72,6 +75,7 @@ export interface PrintReportTemplateProps {
         percentage?: number;
         passed?: boolean;
         options?: string[];
+        imageUrl?: string | null;
         position?: string;
     }>;
     matrixHeaders?: string[];
@@ -98,8 +102,8 @@ export interface PrintReportTemplateProps {
 
 export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     reportType,
-    schoolInfo,
-    metadata,
+    schoolInfo: suppliedSchoolInfo,
+    metadata: suppliedMetadata,
     results = [],
     matrixHeaders = [],
     matrixRows = [],
@@ -111,15 +115,19 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     onPrint,
     showPrintButton = true
 }) => {
-    const omitExamTitlesSetting = localStorage.getItem("fia_cbt_settings_remove_title") === "true";
-    const principalSignatureSetting = localStorage.getItem("fia_cbt_settings_report_signature") !== "false";
-    const schoolSloganSetting = localStorage.getItem("fia_cbt_settings_school_motto") !== "false";
-    const scoreFormatSetting = localStorage.getItem("fia_cbt_settings_score_format") || "percentage";
-
-    // Load signature image assets
-    const principalSigBase64 = localStorage.getItem("fia_cbt_settings_signature_principal") || "";
-    const teacherSigBase64 = localStorage.getItem("fia_cbt_settings_signature_teacher") || "";
-    const officerSigBase64 = localStorage.getItem("fia_cbt_settings_signature_officer") || "";
+    const { data: settings, isPending, isError } = useQuery<SystemSettings>({
+        queryKey: ['/api/settings'], queryFn: () => apiRequest('GET', '/api/settings'),
+    }, queryClient);
+    const schoolInfo = { ...suppliedSchoolInfo, name: settings?.schoolName || suppliedSchoolInfo.name,
+        address: settings?.schoolAddress || '', logoUrl: settings?.schoolLogo || undefined };
+    const metadata = { ...suppliedMetadata, session: settings?.currentSession || 'Not configured' };
+    const omitExamTitlesSetting = settings?.omitExamTitles ?? false;
+    const principalSignatureSetting = settings?.reportSignature ?? true;
+    const schoolSloganSetting = settings?.schoolMotto ?? true;
+    const scoreFormatSetting = settings?.scoreFormat || 'percentage';
+    const principalSigBase64 = settings?.signaturePrincipal || '';
+    const teacherSigBase64 = settings?.signatureTeacher || '';
+    const officerSigBase64 = settings?.signatureOfficer || '';
 
     const handlePrint = () => {
         if (onPrint) {
@@ -147,7 +155,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     };
 
     return (
-        <div className="min-h-screen bg-transparent p-0 sm:p-2 flex flex-col items-center font-sans print:p-0">
+        <div data-print-ready={!isPending && !isError ? "true" : "false"} className="min-h-screen bg-transparent p-0 sm:p-2 flex flex-col items-center font-sans print:p-0">
             {/* Control Panel - Hidden during print */}
             {showPrintButton && (
                 <div className="w-full max-w-4xl bg-white mb-6 p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap items-center justify-between gap-4 print:hidden mx-auto">
@@ -159,6 +167,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
 
                     <Button
                         onClick={handlePrint}
+                        disabled={isPending || isError}
                         className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-md transition-transform active:scale-95"
                     >
                         <Printer size={18} /> Print Official Document
@@ -167,7 +176,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
             )}
 
             {/* Official Report Card Canvas */}
-            <div className="w-full max-w-4xl bg-white p-6 sm:p-10 border border-gray-300 shadow-lg rounded-none print:shadow-none print:border-none print:w-full print:p-0 my-0 mx-auto flex flex-col min-h-[1050px]">
+            <div className="w-full max-w-4xl bg-white p-6 sm:p-10 border border-gray-300 shadow-lg rounded-none print:shadow-none print:border-none print:w-full print:p-0 my-0 mx-auto flex flex-col min-h-[1050px] print:min-h-0">
                 
                 {/* Header / School Crest */}
                 <div className="border-b-2 border-gray-800 pb-4 mb-6 text-center relative">
@@ -233,6 +242,9 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                     )}
                 </div>
 
+                {(isPending || isError) && <p role="alert">{isError ? 'School settings could not load. Retry before printing.' : 'Loading school settings…'}</p>}
+                {reportType.includes('broadsheet') || reportType === 'student-term-breakdown' ? <p className="text-xs mb-4">Latest completed attempt per exam. Scores within each term use earned points / available points. Annual percentages equally weight available terms; missing results are N/A and excluded. Positions compare students in the selected cohort.</p> : null}
+                {reportType === 'exam-paper' && <ol className="space-y-6">{results.map((question, index) => <li key={question.id} className="break-inside-avoid"><p>{index + 1}. {question.name}</p>{question.imageUrl && <img src={question.imageUrl} alt="Question illustration" className="max-h-48 max-w-full object-contain" />}{question.options?.map((option, i) => <p key={i}>{String.fromCharCode(65 + i)}. {option}</p>)}</li>)}</ol>}
                 {/* CONTENT AREA BASED ON REPORT TYPE */}
                 <div className="flex-1">
 
@@ -410,7 +422,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                                 const sData = mRow.scores[hdr];
                                                 return (
                                                     <td key={hIdx} className="p-1.5 border border-gray-300 text-center font-mono">
-                                                        {sData ? `${sData.percentage.toFixed(0)}%` : <span className="text-gray-300">—</span>}
+                                                        {sData ? (scoreFormatSetting === 'percentage' ? `${sData.percentage.toFixed(0)}%` : `${sData.score} / ${sData.total}`) : <span className="text-gray-500">N/A</span>}
                                                     </td>
                                                 );
                                             })}
@@ -447,7 +459,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                     <tr key={index} className="hover:bg-gray-50">
                                         <td className="border border-gray-300 p-2 text-center font-mono">{index + 1}</td>
                                         <td className="border border-gray-300 p-2 font-bold uppercase text-gray-900">{res.name}</td>
-                                        <td className="border border-gray-300 p-2 font-mono text-gray-600">{reportType === 'score-sheet' ? res.id : res.total || '-'}</td>
+                                        <td className="border border-gray-300 p-2 font-mono text-gray-600">{reportType === 'score-sheet' ? res.id : res.total ?? '—'}</td>
                                         <td className="border border-gray-300 p-2 uppercase font-semibold text-blue-900">{reportType === 'score-sheet' ? (omitExamTitlesSetting ? '____________________' : res.subject) : res.score}</td>
                                         <td className={`border border-gray-300 p-2 text-center font-bold ${res.percentage !== undefined ? (res.percentage >= 40 ? 'text-green-700' : 'text-red-600') : (res.score >= 40 ? 'text-green-700' : 'text-red-600')}`}>
                                             {reportType === 'score-sheet'
@@ -456,7 +468,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                                     : (res.total !== undefined && res.total > 0 ? `${res.score} / ${res.total}` : `${res.score}`)
                                                   )
                                                 : (scoreFormatSetting === 'percentage'
-                                                    ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : ((res.score / (res.total || 1)) * 100).toFixed(0)}%`
+                                                    ? `${res.percentage !== undefined ? res.percentage.toFixed(0) : (res.total ? ((res.score / res.total) * 100).toFixed(0) : 'N/A')}%`
                                                     : `${res.score}/${res.total ?? '-'}`
                                                   )
                                             }
@@ -499,7 +511,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                                 principalSigBase64 ? (
                                     <img src={principalSigBase64} alt="Principal Signature" className="max-h-12 max-w-full object-contain" />
                                 ) : (
-                                    <span className="italic font-serif text-blue-900 font-bold text-[10px] sm:text-sm">Approved</span>
+                                    <span className="text-xs">Signature pending</span>
                                 )
                             ) : (
                                 <div className="h-6" />
@@ -513,7 +525,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
                 {/* Branding Footer */}
                 <div className="mt-auto border-t border-gray-200 pt-2 flex justify-between items-center text-[8px] sm:text-[10px] text-gray-400 italic">
                     <span>Official Document - {schoolInfo.name} CBT Portal • {new Date().toLocaleDateString()}</span>
-                    <span>Page 1 of 1</span>
+                    <span></span>
                 </div>
             </div>
 
@@ -521,7 +533,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
 @media print {
     @page {
         size: A4;
-        margin: 0;
+        margin: 12mm;
     }
     body {
         background: white !important;
@@ -530,7 +542,11 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    .print-hidden {
+    thead { display: table-header-group; }
+    tr, img { break-inside: avoid; }
+    .page-break:last-child { break-after: auto !important; page-break-after: auto !important; }
+    .overflow-x-auto { overflow: visible !important; }
+    .print-hidden, .no-print {
         display: none !important;
         }
 }
