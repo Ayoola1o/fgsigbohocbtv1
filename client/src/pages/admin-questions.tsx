@@ -1,3 +1,5 @@
+import { parseTextToQuestions } from "@shared/question-text-parser";
+import { parseCsv, questionCsv, importQuestionErrors } from "@shared/question-import";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -93,133 +95,6 @@ export default function AdminQuestions() {
   const [examDuration, setExamDuration] = useState(30);
   const [examPassingScore, setExamPassingScore] = useState(50);
 
-  const extractSameLineOptions = (text: string) => {
-    // 1. Try parenthesized: (a) OptionText (b) OptionText...
-    let matches = Array.from(text.matchAll(/\(([a-eA-E])\)\s*([^\s].*?)(?=\s+\(([a-eA-E])\)|$)/g));
-    if (matches.length > 0) {
-      return matches.map(m => ({
-        letter: m[1],
-        val: m[2],
-        full: m[0]
-      }));
-    }
-
-    // 2. Try bracketed: a) OptionText b) OptionText...
-    matches = Array.from(text.matchAll(/(?:\s|^)([a-eA-E])\)\s*([^\s].*?)(?=\s+[a-eA-E]\)|$)/g));
-    if (matches.length > 0) {
-      return matches.map(m => ({
-        letter: m[1],
-        val: m[2],
-        full: m[0].trim()
-      }));
-    }
-
-    // 3. Try dotted: a. OptionText b. OptionText...
-    // Resilient: \.\s* instead of \.\s+
-    matches = Array.from(text.matchAll(/(?:\s|^)([a-eA-E])\.\s*([^\s].*?)(?=\s+[a-eA-E]\.|$)/g));
-    if (matches.length > 0) {
-      return matches.map(m => ({
-        letter: m[1],
-        val: m[2],
-        full: m[0].trim()
-      }));
-    }
-
-    return [];
-  };
-
-  const parseTextToQuestions = (text: string) => {
-    const lines = text.split(/\r?\n/);
-    const questionsList: any[] = [];
-    let currentQuestion: any = null;
-
-    for (let line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      // Check for Question start: "1. ", "Question 1: ", "1) "
-      const questionMatch = trimmed.match(/^(?:question\s*(\d+)[:.]?|(\d+)[\s.)\]:-]+)\s*(.+)/i);
-      if (questionMatch) {
-        if (currentQuestion) {
-          questionsList.push(currentQuestion);
-        }
-        
-        const restOfText = questionMatch[3].trim();
-        currentQuestion = {
-          questionText: restOfText,
-          options: [] as string[],
-          correctAnswer: "",
-          questionType: "multiple-choice",
-          difficulty: "medium",
-          points: 1,
-        };
-
-        // Check for same-line options using sequential parser
-        const optMatches = extractSameLineOptions(restOfText);
-        if (optMatches.length > 0) {
-          const firstOptIndex = restOfText.indexOf(optMatches[0].full);
-          currentQuestion.questionText = restOfText.substring(0, firstOptIndex).trim();
-          for (const m of optMatches) {
-            currentQuestion.options.push(`(${m.letter.toLowerCase()}) ${m.val.trim()}`);
-          }
-        }
-        continue;
-      }
-
-      if (!currentQuestion) continue;
-
-      // Check for correct answer start: "Answer: ", "Correct: ", "Ans. "
-      const answerMatch = trimmed.match(/^\s*(?:correct\s*|key\s*|correct\s*option\s*)?ans(?:wer)?\s*[:.=-]*\s*(.+)/i);
-      if (answerMatch) {
-        currentQuestion.correctAnswer = answerMatch[1].trim();
-        continue;
-      }
-
-      // Check for options start: "A. OptionText" or "(A) OptionText" or "A) OptionText"
-      // Extremely robust check to ensure it actually starts with a valid option prefix
-      const isOptionStart = /^\s*(?:\(([a-eA-E])\)|([a-eA-E])[.)\]:-]+)/i.test(trimmed);
-      if (isOptionStart) {
-        const optMatches = Array.from(trimmed.matchAll(/(?:\(?([a-eA-E])\)?[\s.)\]:-]+)\s*([^\s].*?)(?=\s+(?:\(?([a-eA-E])\)?[\s.)\]:-]+)|$)/g));
-        if (optMatches.length > 0) {
-          for (const m of optMatches) {
-            const letter = m[1].toUpperCase();
-            const optionVal = m[2].trim();
-            currentQuestion.options.push(`(${letter.toLowerCase()}) ${optionVal}`);
-          }
-          continue;
-        }
-      }
-
-      // Otherwise, treat as continuation of question text
-      if (currentQuestion.options.length === 0 && !currentQuestion.correctAnswer) {
-        currentQuestion.questionText += "\n" + trimmed;
-      }
-    }
-
-    if (currentQuestion) {
-      questionsList.push(currentQuestion);
-    }
-
-    // Normalize post-process
-    return questionsList.map(q => {
-      const lowerOpts = q.options.map((o: string) => o.toLowerCase());
-      const isTrueFalse = q.options.length === 2 &&
-        lowerOpts.some((o: string) => o.includes("true")) &&
-        lowerOpts.some((o: string) => o.includes("false"));
-
-      if (isTrueFalse) {
-        q.questionType = "true-false";
-        q.options = undefined;
-      } else if (q.options.length === 0) {
-        q.questionType = "theory";
-        q.options = undefined;
-        if (!q.correctAnswer) q.correctAnswer = "Theory Question";
-      }
-
-      return q;
-    });
-  };
-
   const handleAIParsing = async () => {
     if (!pastedText.trim()) {
       toast({
@@ -283,7 +158,7 @@ export default function AdminQuestions() {
         return {
           questionText: q.questionText,
           questionType: type,
-          correctAnswer: q.correctAnswer || (type === "theory" ? "Theory Question" : "Answer"),
+          correctAnswer: q.correctAnswer || "",
           options: opts,
           difficulty: q.difficulty || "medium",
           points: q.points || 1
@@ -379,13 +254,18 @@ export default function AdminQuestions() {
       if (!file) return;
       const text = await file.text();
       const rows: any[] = [];
-      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      let lines: string[][];
+      try { lines = parseCsv(text); } catch (error) {
+        toast({ title: "Invalid CSV", description: error instanceof Error ? error.message : "Cannot read CSV", variant: "destructive" });
+        input.value = "";
+        return;
+      }
       if (lines.length === 0) {
         toast({ title: "Error", description: "Empty CSV file", variant: "destructive" });
         return;
       }
       // detect header
-      const headerParts = lines[0].split(",").map((p) => p.trim());
+      const headerParts = lines[0].map(p => p.trim());
       const hasHeader = headerParts.some((h) =>
         /question/i.test(h) || /questionText/i.test(h) || /question_text/i.test(h) ||
         /class/i.test(h) || /subject/i.test(h)
@@ -409,35 +289,11 @@ export default function AdminQuestions() {
 
       const startIndex = hasHeader ? 1 : 0;
       for (let i = startIndex; i < lines.length; i++) {
-        // Handle CSV parsing more robustly strictly for commas
-        // Ideally use a library but for now we try to respect quotes if simple
-        const parts: string[] = [];
-        let current = '';
-        let inQuotes = false;
-        const line = lines[i];
-
-        for (let charIndex = 0; charIndex < line.length; charIndex++) {
-          const char = line[charIndex];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            parts.push(current.trim());
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-        parts.push(current.trim());
-
-
+        const parts = lines[i];
         if (parts.length === 0) continue;
         const obj: any = {};
         for (let c = 0; c < cols.length; c++) {
           let val = parts[c] ?? "";
-          // Remove surrounding quotes if present
-          if (val.startsWith('"') && val.endsWith('"')) {
-            val = val.substring(1, val.length - 1);
-          }
           obj[cols[c]] = val;
         }
 
@@ -463,7 +319,7 @@ export default function AdminQuestions() {
         if (obj.options && typeof obj.options === "string") {
           const v = obj.options;
           // Check for (a) ... (b) ... pattern
-          if (/\([a-e]\)/.test(v)) {
+          if (!v.trim().startsWith("[") && /\([a-e]\)/.test(v)) {
             // Split by looking ahead for next option like (b)
             // We want to keep the delimiter. 
             // Regex strategy: match (x) and everything until next (y) or end
@@ -549,7 +405,7 @@ export default function AdminQuestions() {
       rowQuestionType = "theory";
       rowOptions = undefined; // No options for theory
       if (!rowCorrectAnswer || String(rowCorrectAnswer).trim() === "") {
-        rowCorrectAnswer = "Theory Question"; // Default if missing
+        rowCorrectAnswer = ""; // Theory is manually graded
       }
     } else if (rowOptions?.length > 0 && rowCorrectAnswer) {
       // Validation/Normalization for Objective/Multiple Choice
@@ -673,6 +529,8 @@ export default function AdminQuestions() {
       };
     });
 
+    const invalid = rows.flatMap((row, index) => importQuestionErrors(row).map(error => `Row ${index + 1}: ${error}`));
+    if (invalid.length) { toast({ title: 'Correct import rows', description: invalid.join('; '), variant: 'destructive' }); return; }
     const chunkSize = opts?.chunkSize ?? 100;
     let uploaded = 0;
     setUploadProgress({ uploaded, total: rows.length });
@@ -757,8 +615,10 @@ export default function AdminQuestions() {
         )
       );
 
-      // 2. Perform bulk upload
-      const uploadedQuestions = await apiRequest<Question[]>("POST", "/api/questions/bulk", questionsToUpload);
+      const invalid = questionsToUpload.flatMap((row, index) => importQuestionErrors(row).map(error => `Question ${index + 1}: ${error}`));
+      if (invalid.length) throw new Error(invalid.join('; '));
+      const uploadResponse = await apiRequest<{ inserted: Question[]; insertedCount: number }>("POST", "/api/questions/bulk", questionsToUpload);
+      const uploadedQuestions = uploadResponse.inserted;
       
       toast({
         title: "Questions Imported",
@@ -1114,27 +974,12 @@ export default function AdminQuestions() {
                               
                               if (file.name.toLowerCase().endsWith(".docx") || file.name.toLowerCase().endsWith(".doc")) {
                                 try {
-                                  const arrayBuffer = await file.arrayBuffer();
-                                  let mammothLib = (window as any).mammoth;
-                                  if (!mammothLib) {
-                                    try {
-                                      await new Promise<void>((resolve, reject) => {
-                                        const script = document.createElement("script");
-                                        script.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js";
-                                        script.onload = () => resolve();
-                                        script.onerror = () => reject(new Error("Failed to load local Word library or external CDN."));
-                                        document.head.appendChild(script);
-                                      });
-                                      mammothLib = (window as any).mammoth;
-                                    } catch (err) {
-                                      throw new Error("Word parser library not yet loaded. Please ensure you have internet access to download the parser or copy-paste your text directly.");
-                                    }
-                                  }
-                                  if (!mammothLib) {
-                                    throw new Error("Word parser library not yet loaded. Please try again in a moment.");
-                                  }
-                                  const result = await mammothLib.extractRawText({ arrayBuffer });
-                                  const text = result.value;
+                                  const form = new FormData(); form.append('file', file);
+                                  const response = await fetch('/api/questions/extract-document', { method: 'POST', body: form });
+                                  const extracted = await response.json();
+                                  if (!response.ok) throw new Error(extracted.error || 'Document extraction failed');
+                                  const text = extracted.text;
+                                  toast({ title: 'Review document images', description: extracted.warnings?.join(' ') });
                                   setPastedText(text);
                                   setImporterTab('paste');
                                   toast({
@@ -1145,7 +990,7 @@ export default function AdminQuestions() {
                                   console.error("Error reading Word file:", error);
                                   toast({
                                     title: "Error Reading Word Document",
-                                    description: error.message || "Failed to extract text. If it is an old binary .doc file, please convert it to .docx first or copy-paste the text directly.",
+                                    description: error.message || "Failed to extract text. Check that the Word file is readable and not password protected, or paste the text.",
                                     variant: "destructive",
                                   });
                                 }
@@ -1300,7 +1145,11 @@ export default function AdminQuestions() {
                 <div className="lg:col-span-7 flex flex-col h-full border border-slate-100 dark:border-slate-800/80 rounded-2xl overflow-hidden bg-slate-50/30 dark:bg-slate-950/20">
                   <div className="bg-slate-50/80 dark:bg-slate-950/60 px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 flex justify-between items-center flex-shrink-0">
                     <span className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                      Live Preview <Badge variant="secondary" className="font-bold bg-indigo-50 text-indigo-700 border-indigo-200">{parsedQuestions.length} parsed</Badge>
+                      <Button type="button" size="sm" onClick={() => {
+                        const rows = parsedQuestions.map(q => normalizeQuestion(q, csvClassLevel, csvSubject, csvTerm, csvExamType, csvDepartment));
+                        const url = URL.createObjectURL(new Blob([questionCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+                        const link = document.createElement('a'); link.href = url; link.download = 'cbt-questions.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      }}>Export CSV</Button> Live Preview <Badge variant="secondary" className="font-bold bg-indigo-50 text-indigo-700 border-indigo-200">{parsedQuestions.length} parsed</Badge>
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Updates in real-time</span>
                   </div>
@@ -1310,6 +1159,15 @@ export default function AdminQuestions() {
                       parsedQuestions.map((q, idx) => (
                         <Card key={idx} className="border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow duration-200 rounded-xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850">
                           <CardContent className="p-4 space-y-3">
+                            <Label>Question text</Label><Textarea value={q.questionText} onChange={e => setParsedQuestions(previous => previous.map((row, i) => i === idx ? { ...row, questionText: e.target.value } : row))} />
+                            <Label>Correct answer (review before importing)</Label><Input value={q.correctAnswer || ''} onChange={e => setParsedQuestions(previous => previous.map((row, i) => i === idx ? { ...row, correctAnswer: e.target.value } : row))} />
+                            <Label>Question type</Label>
+                            <select className="w-full rounded border p-2" value={q.questionType} onChange={e => setParsedQuestions(previous => previous.map((row, i) => i === idx ? { ...row, questionType: e.target.value } : row))}>
+                              {['multiple-choice', 'true-false', 'short-answer', 'theory'].map(type => <option key={type} value={type}>{type}</option>)}
+                            </select>
+                            <Label>Points</Label><Input type="number" min={1} value={q.points} onChange={e => setParsedQuestions(previous => previous.map((row, i) => i === idx ? { ...row, points: Number(e.target.value) } : row))} />
+                            {q.questionType === 'multiple-choice' && <div className="space-y-2"><Label>Options</Label>{(q.options || []).map((option: string, optionIndex: number) => <Textarea key={optionIndex} aria-label={`Option ${optionIndex + 1}`} value={option} onChange={e => setParsedQuestions(previous => previous.map((row, i) => i === idx ? { ...row, options: row.options.map((value: string, j: number) => j === optionIndex ? e.target.value : value) } : row))} />)}
+                            <Button type="button" variant="outline" size="sm" onClick={() => setParsedQuestions(previous => previous.map((row, i) => i === idx ? { ...row, options: [...(row.options || []), ''] } : row))}>Add option</Button></div>}
                             <div className="flex items-start justify-between gap-2">
                               <div className="text-xs font-bold text-slate-400 flex items-center gap-2">
                                 <span className="text-indigo-650">Q{idx + 1}.</span>

@@ -691,7 +691,7 @@ const printData = {
                                  class: printData.candidate.gradeLevel,
                                  exam: printData.examTitle,
                                  date: printData.candidate.date,
-                                 session: "2025/2026 ACADEMIC SESSION",
+                                 session: result.academicSession || "Unassigned historical session",
                                  studentName: printData.candidate.name,
                                  studentId: printData.candidate.studentId,
                              }}

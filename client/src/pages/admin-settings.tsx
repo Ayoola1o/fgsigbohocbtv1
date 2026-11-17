@@ -438,6 +438,18 @@ export default function AdminSettings() {
                     />
                   </div>
 
+                  <div className="space-y-3">
+                    <h3 className="font-bold">School Calendar</h3>
+                    <p className="text-sm">Keep previous sessions here for historical reports. Dates use Nigeria time. Terms must not overlap.</p>
+                    {(formData.academicCalendar || []).map((row, index) => <div key={index} className="grid grid-cols-5 gap-2">
+                      <Input aria-label="Academic session" value={row.session} onChange={e => updateField('academicCalendar', formData.academicCalendar.map((r, i) => i === index ? { ...r, session: e.target.value } : r))} />
+                      <select aria-label="Term" value={row.term} onChange={e => updateField('academicCalendar', formData.academicCalendar.map((r, i) => i === index ? { ...r, term: e.target.value as typeof row.term } : r))}>{['First Term','Second Term','Third Term','Others'].map(term => <option key={term}>{term}</option>)}</select>
+                      <Input aria-label="Start date" type="date" value={row.start} onChange={e => updateField('academicCalendar', formData.academicCalendar.map((r, i) => i === index ? { ...r, start: e.target.value } : r))} />
+                      <Input aria-label="End date" type="date" value={row.end} onChange={e => updateField('academicCalendar', formData.academicCalendar.map((r, i) => i === index ? { ...r, end: e.target.value } : r))} />
+                      <Button type="button" variant="outline" onClick={() => updateField('academicCalendar', formData.academicCalendar.filter((_, i) => i !== index))}>Remove</Button>
+                    </div>)}
+                    <Button type="button" variant="outline" onClick={() => updateField('academicCalendar', [...(formData.academicCalendar || []), { session: formData.currentSession, term: 'First Term', start: formData.termStart || '', end: formData.termEnd || '' }])}>Add calendar term</Button>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Academic Session</label>

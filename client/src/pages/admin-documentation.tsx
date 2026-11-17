@@ -301,23 +301,20 @@ export default function AdminDocumentation() {
               <li><strong>Short Answer / Theory:</strong> Input the grading outline (correct key phrase criteria).</li>
             </ul>
 
-            <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">B. AI-Powered Smart Question Importer</h3>
-            <p>
-              To bypass tedious manual inputs, administrators can leverage the advanced **Smart Question Importer**:
-            </p>
-            <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800/40 space-y-2">
-              <span className="font-extrabold text-indigo-650 dark:text-indigo-400 text-xs block flex items-center gap-1">
-                <Sparkles className="h-4 w-4 animate-pulse" /> Gemini AI Document Ingestion Engine
-              </span>
-              <p className="text-xs text-slate-505">
-                The smart importer supports **direct file uploads** as well as raw text copy-pasting. Teachers can upload Microsoft Word (`.docx`) exam papers or text files (`.txt`).
-              </p>
-              <ul className="list-decimal pl-4.5 text-xs text-slate-505 dark:text-slate-405 space-y-1">
-                <li><strong>Raw Extraction:</strong> If a `.docx` file is selected, the server uses <code>mammoth.js</code> to extract clean text.</li>
-                <li><strong>Structured AI Parsing:</strong> The text is submitted to Google Gemini API using structured JSON schemas, which extract question texts, options, difficulty indices, correct answers, and marks.</li>
-                <li><strong>Validation Grid Editor:</strong> Before items are written to Firestore, they are rendered in an interactive dialog list. Here, instructors can view parsed values, click inputs to edit text or adjust fields, use the trash button to prune items, and confirm validation.</li>
-                <li><strong>Database Batch Write:</strong> Clicking <strong>"Commit Questions"</strong> performs a clean batch write to update the catalog.</li>
-              </ul>
+            <h3 id="word-to-cbt" className="scroll-mt-24 text-sm font-extrabold text-slate-800 dark:text-slate-200 mt-4">B. Word Document to CBT Workflow</h3>
+            <p>Open <strong>Questions → Smart Importer</strong> to turn a Word exam paper into editable CBT questions or a reusable CSV file.</p>
+            <ol className="list-decimal pl-5 space-y-3 text-xs">
+              <li><strong>Prepare the paper.</strong> Number each question and label choices A, B, C and so on. Supply an answer line such as <code>Answer: B</code>, or a separate <code>Answer key:</code> section with entries such as <code>1. B</code>. Missing answer keys must be completed during review.</li>
+              <li><strong>Load the document.</strong> Upload Microsoft Word <code>.doc</code> or <code>.docx</code>, up to <strong>5 MB</strong>, or paste the text directly. Check the extracted text against the original paper.</li>
+              <li><strong>Set the destination.</strong> Choose the class, subject, department, term and exam type before importing. Confirm these settings even when the source paper contains its own headings.</li>
+              <li><strong>Choose a parser.</strong> The manual parser works best with clearly numbered questions and labelled options and needs no AI key. Gemini AI can interpret less regular layouts and requires a configured Gemini key. AI requests accept up to <strong>50,000 characters</strong>; split larger papers into smaller sections. If AI times out or is unavailable, retry a smaller section or select the manual parser.</li>
+              <li><strong>Review every question.</strong> In Live Preview, edit the question text, question type, options, points and correct answer; remove unwanted rows. Check the question count and source answer key. Multiple-choice answers must match an option, true/false answers must be true or false, and short answers need a key. Theory questions are manually graded. AI output always needs teacher review.</li>
+              <li><strong>Export or import.</strong> Select <strong>Export CSV</strong> to download the preview for later use, or import the reviewed questions into the question bank. CSV preserves quoted text, commas, line breaks and options. An exported draft can still contain unfinished answers; validation blocks invalid rows when you import it.</li>
+              <li><strong>Check the saved questions.</strong> Open the relevant class and term in the question bank, confirm the saved content, then assign the questions to an examination. If using automatic exam creation, configure that session and term in School Settings first.</li>
+            </ol>
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-2xl border border-amber-200 dark:border-amber-900 space-y-2 text-xs">
+              <p className="font-bold">Images, equations and unreadable files</p>
+              <p>Word extraction transfers text only. Attach diagrams separately and compare equations and tables with the original. Scanned pages require OCR first. For encrypted or damaged files, save a readable copy or paste the text. Neither parser should be relied on to invent missing answers.</p>
             </div>
 
             <h3 className="text-sm font-extrabold text-slate-805 dark:text-slate-200 mt-4">C. Question Filters (Class, Term Cards)</h3>

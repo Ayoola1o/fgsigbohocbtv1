@@ -119,6 +119,56 @@ var init_firebase = __esm({
 import express2 from "express";
 import compression from "compression";
 
+// shared/question-text-parser.ts
+function splitAnswerKey(text2) {
+  const match = /^\s*(?:answer\s*key|answers|marking\s*scheme)\s*:?[ \t]*$/im.exec(text2);
+  const body = match ? text2.slice(0, match.index) : text2;
+  const keyText = match ? text2.slice(match.index + match[0].length) : "";
+  const answerKey = {};
+  for (const entry of Array.from(keyText.matchAll(/(?:^|[\s,;])(\d+)\s*[.):=\-]\s*([a-e]|true|false)(?=$|[\s,;])/gi))) answerKey[entry[1]] = entry[2];
+  return { body, keyText, answerKey };
+}
+
+// shared/school-calendar.ts
+import { z } from "zod";
+var date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value, "Invalid calendar date");
+var schoolCalendarSchema = z.array(z.object({
+  session: z.string().trim().min(1),
+  term: z.enum(["First Term", "Second Term", "Third Term", "Others"]),
+  start: date,
+  end: date
+})).superRefine((rows, ctx) => {
+  rows.forEach((row, i) => {
+    if (row.end < row.start) ctx.addIssue({ code: "custom", path: [i, "end"], message: "End must follow start" });
+    rows.slice(0, i).forEach((previous) => {
+      if (previous.session === row.session && previous.term === row.term) ctx.addIssue({ code: "custom", path: [i], message: "Duplicate session and term" });
+      if (row.start <= previous.end && previous.start <= row.end) ctx.addIssue({ code: "custom", path: [i], message: "Term dates overlap" });
+    });
+  });
+});
+function calendarAssignment(value, calendar) {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return void 0;
+  return calendar.find((row) => time >= Date.parse(row.start + "T00:00:00+01:00") && time < Date.parse(row.end + "T00:00:00+01:00") + 864e5);
+}
+
+// shared/question-import.ts
+function importQuestionErrors(row) {
+  const errors = [];
+  if (!row || typeof row !== "object") return ["Invalid question"];
+  if (typeof row.questionText !== "string" || !row.questionText.trim()) errors.push("Question text is required");
+  const answer = typeof row.correctAnswer === "string" ? row.correctAnswer.trim() : "";
+  const options = Array.isArray(row.options) ? row.options.filter((option) => typeof option === "string") : [];
+  if (!["multiple-choice", "true-false", "short-answer", "theory"].includes(row.questionType)) errors.push("Invalid question type");
+  if (!Number.isInteger(Number(row.points)) || Number(row.points) <= 0) errors.push("Points must be a positive integer");
+  if (row.questionType === "multiple-choice") {
+    if (options.length < 2 || options.length !== row.options?.length || options.some((option) => !option.trim())) errors.push("At least two nonempty text options are required");
+    if (!answer || !options.some((option) => option.trim().toLowerCase() === answer.toLowerCase())) errors.push("Choose a correct answer from the options");
+  } else if (row.questionType === "true-false" && !["true", "false"].includes(answer.toLowerCase())) errors.push("Correct answer must be true or false");
+  else if (row.questionType === "short-answer" && !answer) errors.push("Correct answer is required");
+  return errors;
+}
+
 // server/routes.ts
 import { createServer } from "http";
 
@@ -156,7 +206,7 @@ __export(schema_exports, {
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z as z2 } from "zod";
 var questionTypes = ["multiple-choice", "true-false", "short-answer", "theory"];
 var difficultyLevels = ["easy", "medium", "hard"];
 var termOptions = ["First Term", "Second Term", "Third Term", "Others"];
@@ -192,16 +242,18 @@ var questions = pgTable("questions", {
 var insertQuestionSchema = createInsertSchema(questions).omit({
   id: true
 }).extend({
-  questionType: z.enum(questionTypes),
-  difficulty: z.enum(difficultyLevels),
-  options: z.array(z.string()).optional(),
-  points: z.number().min(1).default(1),
-  classLevel: z.enum(classLevels),
-  term: z.enum(termOptions).default("First Term"),
-  imageUrl: z.string().optional(),
-  department: z.string().optional()
+  questionType: z2.enum(questionTypes),
+  difficulty: z2.enum(difficultyLevels),
+  options: z2.array(z2.string()).optional(),
+  points: z2.number().min(1).default(1),
+  classLevel: z2.enum(classLevels),
+  term: z2.enum(termOptions).default("First Term"),
+  imageUrl: z2.string().optional(),
+  department: z2.string().optional()
 });
 var exams = pgTable("exams", {
+  academicSession: text("academic_session"),
+  academicTerm: text("academic_term"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   description: text("description"),
@@ -230,22 +282,24 @@ var insertExamSchema = createInsertSchema(exams).omit({
   createdAt: true,
   totalPoints: true
 }).extend({
-  duration: z.number().min(1),
-  passingScore: z.number().min(0).max(100),
-  theoryInstructions: z.string().optional(),
-  questionIds: z.array(z.string()).optional(),
-  numberOfQuestionsToDisplay: z.number().optional(),
-  classLevel: z.enum(classLevels),
-  term: z.enum(termOptions).default("First Term"),
-  examType: z.enum(examTypeOptions).default("Objectives"),
-  department: z.enum(departments).optional(),
-  theoryConfig: z.any().optional(),
-  subjectConfig: z.record(z.number()).optional(),
-  subjectSlots: z.any().optional(),
-  enableCalculator: z.boolean().optional(),
-  enableFormulaSheet: z.boolean().optional()
+  duration: z2.number().min(1),
+  passingScore: z2.number().min(0).max(100),
+  theoryInstructions: z2.string().optional(),
+  questionIds: z2.array(z2.string()).optional(),
+  numberOfQuestionsToDisplay: z2.number().optional(),
+  classLevel: z2.enum(classLevels),
+  term: z2.enum(termOptions).default("First Term"),
+  examType: z2.enum(examTypeOptions).default("Objectives"),
+  department: z2.enum(departments).optional(),
+  theoryConfig: z2.any().optional(),
+  subjectConfig: z2.record(z2.number()).optional(),
+  subjectSlots: z2.any().optional(),
+  enableCalculator: z2.boolean().optional(),
+  enableFormulaSheet: z2.boolean().optional()
 });
 var examSessions = pgTable("exam_sessions", {
+  academicSession: text("academic_session"),
+  academicTerm: text("academic_term"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   examId: varchar("exam_id").notNull(),
   studentName: text("student_name").notNull(),
@@ -273,12 +327,14 @@ var insertExamSessionSchema = createInsertSchema(examSessions).omit({
   endedAt: true,
   isCompleted: true
 }).extend({
-  answers: z.record(z.string()).default({}),
-  currentQuestionIndex: z.number().default(0),
-  sessionQuestionIds: z.array(z.string()).optional(),
-  isTestAttempt: z.boolean().optional()
+  answers: z2.record(z2.string()).default({}),
+  currentQuestionIndex: z2.number().default(0),
+  sessionQuestionIds: z2.array(z2.string()).optional(),
+  isTestAttempt: z2.boolean().optional()
 });
 var results = pgTable("results", {
+  academicSession: text("academic_session"),
+  academicTerm: text("academic_term"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sessionId: varchar("session_id").notNull().unique(),
   examId: varchar("exam_id").notNull(),
@@ -299,8 +355,8 @@ var insertResultSchema = createInsertSchema(results).omit({
   id: true,
   completedAt: true
 }).extend({
-  submissionType: z.enum(["student", "auto"]).optional(),
-  isTestAttempt: z.boolean().optional()
+  submissionType: z2.enum(["student", "auto"]).optional(),
+  isTestAttempt: z2.boolean().optional()
 });
 var students = pgTable("students", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -323,19 +379,19 @@ var students = pgTable("students", {
 var insertStudentSchema = createInsertSchema(students).omit({
   id: true
 }).extend({
-  classLevel: z.enum(classLevels),
-  sex: z.enum(["M", "F"]).optional(),
-  department: z.enum(departments).optional(),
-  blockedExams: z.array(z.string()).optional(),
-  averageScore: z.number().optional(),
-  academicStanding: z.string().optional(),
-  strengths: z.array(z.string()).optional(),
-  weaknesses: z.array(z.string()).optional(),
-  academicTrajectory: z.string().optional(),
-  diagnosis: z.string().optional(),
-  actionPlan: z.array(z.string()).optional(),
-  lastAnalyzed: z.string().optional(),
-  isTestUser: z.boolean().optional()
+  classLevel: z2.enum(classLevels),
+  sex: z2.enum(["M", "F"]).optional(),
+  department: z2.enum(departments).optional(),
+  blockedExams: z2.array(z2.string()).optional(),
+  averageScore: z2.number().optional(),
+  academicStanding: z2.string().optional(),
+  strengths: z2.array(z2.string()).optional(),
+  weaknesses: z2.array(z2.string()).optional(),
+  academicTrajectory: z2.string().optional(),
+  diagnosis: z2.string().optional(),
+  actionPlan: z2.array(z2.string()).optional(),
+  lastAnalyzed: z2.string().optional(),
+  isTestUser: z2.boolean().optional()
 });
 var users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -352,6 +408,7 @@ var systemSettings = pgTable("system_settings", {
   schoolLogo: text("school_logo"),
   schoolAddress: text("school_address"),
   schoolContact: text("school_contact"),
+  academicCalendar: jsonb("academic_calendar").$type().notNull().default([]),
   currentSession: text("current_session").notNull().default("2025/2026"),
   termStart: text("term_start"),
   termEnd: text("term_end"),
@@ -422,6 +479,7 @@ var defaultSystemSettings = {
   schoolLogo: "",
   schoolAddress: "123 Academy Way, Faith City",
   schoolContact: "+234 800 123 4567",
+  academicCalendar: [],
   currentSession: "2025/2026",
   termStart: "",
   termEnd: "",
@@ -474,65 +532,66 @@ var defaultSystemSettings = {
     General: ["Mathematics", "English Language", "Civic Education"]
   }
 };
-var systemSettingsSchema = z.object({
-  schoolName: z.string().min(1, "School Name is required").default(defaultSystemSettings.schoolName),
-  schoolLogo: z.string().optional().default(defaultSystemSettings.schoolLogo),
-  schoolAddress: z.string().optional().default(defaultSystemSettings.schoolAddress),
-  schoolContact: z.string().optional().default(defaultSystemSettings.schoolContact),
-  currentSession: z.string().min(1, "Current Session is required").default(defaultSystemSettings.currentSession),
-  termStart: z.string().optional().default(defaultSystemSettings.termStart),
-  termEnd: z.string().optional().default(defaultSystemSettings.termEnd),
-  defaultDuration: z.number().min(1, "Default duration must be at least 1 minute").default(defaultSystemSettings.defaultDuration),
-  defaultGradingScale: z.array(z.object({
-    grade: z.string(),
-    minScore: z.number().min(0).max(100),
-    maxScore: z.number().min(0).max(100)
+var systemSettingsSchema = z2.object({
+  schoolName: z2.string().min(1, "School Name is required").default(defaultSystemSettings.schoolName),
+  schoolLogo: z2.string().optional().default(defaultSystemSettings.schoolLogo),
+  schoolAddress: z2.string().optional().default(defaultSystemSettings.schoolAddress),
+  schoolContact: z2.string().optional().default(defaultSystemSettings.schoolContact),
+  academicCalendar: schoolCalendarSchema.default([]),
+  currentSession: z2.string().min(1, "Current Session is required").default(defaultSystemSettings.currentSession),
+  termStart: z2.string().optional().default(defaultSystemSettings.termStart),
+  termEnd: z2.string().optional().default(defaultSystemSettings.termEnd),
+  defaultDuration: z2.number().min(1, "Default duration must be at least 1 minute").default(defaultSystemSettings.defaultDuration),
+  defaultGradingScale: z2.array(z2.object({
+    grade: z2.string(),
+    minScore: z2.number().min(0).max(100),
+    maxScore: z2.number().min(0).max(100)
   })).default(defaultSystemSettings.defaultGradingScale),
-  defaultNegativeMarkingEnabled: z.boolean().default(defaultSystemSettings.defaultNegativeMarkingEnabled),
-  defaultNegativeMarkingValue: z.number().min(0).default(defaultSystemSettings.defaultNegativeMarkingValue),
-  defaultAttempts: z.number().min(1, "Default attempts must be at least 1").default(defaultSystemSettings.defaultAttempts),
-  defaultRandomizationEnabled: z.boolean().default(defaultSystemSettings.defaultRandomizationEnabled),
-  resultApprovalRequired: z.boolean().default(defaultSystemSettings.resultApprovalRequired),
-  rankingMethod: z.enum(["class-wide", "subject-wide"]).default(defaultSystemSettings.rankingMethod),
-  omitExamTitles: z.boolean().default(defaultSystemSettings.omitExamTitles),
-  scoreFormat: z.string().default(defaultSystemSettings.scoreFormat),
-  showResultButton: z.boolean().default(defaultSystemSettings.showResultButton),
-  hideCompleted: z.boolean().default(defaultSystemSettings.hideCompleted),
-  passingThreshold: z.number().min(0).max(100).default(defaultSystemSettings.passingThreshold),
-  reportSignature: z.boolean().default(defaultSystemSettings.reportSignature),
-  schoolMotto: z.boolean().default(defaultSystemSettings.schoolMotto),
-  signaturePrincipal: z.string().optional().default(defaultSystemSettings.signaturePrincipal),
-  signatureTeacher: z.string().optional().default(defaultSystemSettings.signatureTeacher),
-  signatureOfficer: z.string().optional().default(defaultSystemSettings.signatureOfficer),
-  minPasswordLength: z.number().min(4, "Password must be at least 4 characters").default(defaultSystemSettings.minPasswordLength),
-  passwordComplexityRequired: z.boolean().default(defaultSystemSettings.passwordComplexityRequired),
-  sessionTimeoutAdmin: z.number().min(1, "Timeout must be at least 1 minute").default(defaultSystemSettings.sessionTimeoutAdmin),
-  sessionTimeoutStudent: z.number().min(1, "Timeout must be at least 1 minute").default(defaultSystemSettings.sessionTimeoutStudent),
-  twoFactorAdminEnabled: z.boolean().default(defaultSystemSettings.twoFactorAdminEnabled),
-  ipWhitelist: z.string().optional().default(defaultSystemSettings.ipWhitelist),
-  emailNotificationsEnabled: z.boolean().default(defaultSystemSettings.emailNotificationsEnabled),
-  smsNotificationsEnabled: z.boolean().default(defaultSystemSettings.smsNotificationsEnabled),
-  notificationTemplates: z.record(z.string()).default(defaultSystemSettings.notificationTemplates),
-  disconnectGracePeriod: z.number().min(0).default(defaultSystemSettings.disconnectGracePeriod),
-  heartbeatInterval: z.number().min(1).default(defaultSystemSettings.heartbeatInterval),
-  tabSwitchDetectionEnabled: z.boolean().default(defaultSystemSettings.tabSwitchDetectionEnabled),
-  autoSubmitOnExpiryGracePeriod: z.number().min(0).default(defaultSystemSettings.autoSubmitOnExpiryGracePeriod),
-  dataRetentionPeriodDays: z.number().min(1).default(defaultSystemSettings.dataRetentionPeriodDays),
-  backupFrequency: z.enum(["daily", "weekly", "monthly", "none"]).default(defaultSystemSettings.backupFrequency),
-  testModeEnabled: z.boolean().default(defaultSystemSettings.testModeEnabled),
-  auditLogVerbosity: z.enum(["basic", "verbose", "debug"]).default(defaultSystemSettings.auditLogVerbosity),
-  auditLogRetentionDays: z.number().min(1).default(defaultSystemSettings.auditLogRetentionDays),
-  auditLogRoles: z.array(z.string()).default(defaultSystemSettings.auditLogRoles),
-  analysisMode: z.string().default(defaultSystemSettings.analysisMode),
-  timerWarning: z.number().min(1).max(60).default(defaultSystemSettings.timerWarning),
-  conceptStrengthThreshold: z.number().min(1).max(100).default(defaultSystemSettings.conceptStrengthThreshold),
-  conceptFocusThreshold: z.number().min(1).max(100).default(defaultSystemSettings.conceptFocusThreshold),
-  termWeights: z.object({
-    term1: z.number().min(0).max(100),
-    term2: z.number().min(0).max(100),
-    term3: z.number().min(0).max(100)
+  defaultNegativeMarkingEnabled: z2.boolean().default(defaultSystemSettings.defaultNegativeMarkingEnabled),
+  defaultNegativeMarkingValue: z2.number().min(0).default(defaultSystemSettings.defaultNegativeMarkingValue),
+  defaultAttempts: z2.number().min(1, "Default attempts must be at least 1").default(defaultSystemSettings.defaultAttempts),
+  defaultRandomizationEnabled: z2.boolean().default(defaultSystemSettings.defaultRandomizationEnabled),
+  resultApprovalRequired: z2.boolean().default(defaultSystemSettings.resultApprovalRequired),
+  rankingMethod: z2.enum(["class-wide", "subject-wide"]).default(defaultSystemSettings.rankingMethod),
+  omitExamTitles: z2.boolean().default(defaultSystemSettings.omitExamTitles),
+  scoreFormat: z2.string().default(defaultSystemSettings.scoreFormat),
+  showResultButton: z2.boolean().default(defaultSystemSettings.showResultButton),
+  hideCompleted: z2.boolean().default(defaultSystemSettings.hideCompleted),
+  passingThreshold: z2.number().min(0).max(100).default(defaultSystemSettings.passingThreshold),
+  reportSignature: z2.boolean().default(defaultSystemSettings.reportSignature),
+  schoolMotto: z2.boolean().default(defaultSystemSettings.schoolMotto),
+  signaturePrincipal: z2.string().optional().default(defaultSystemSettings.signaturePrincipal),
+  signatureTeacher: z2.string().optional().default(defaultSystemSettings.signatureTeacher),
+  signatureOfficer: z2.string().optional().default(defaultSystemSettings.signatureOfficer),
+  minPasswordLength: z2.number().min(4, "Password must be at least 4 characters").default(defaultSystemSettings.minPasswordLength),
+  passwordComplexityRequired: z2.boolean().default(defaultSystemSettings.passwordComplexityRequired),
+  sessionTimeoutAdmin: z2.number().min(1, "Timeout must be at least 1 minute").default(defaultSystemSettings.sessionTimeoutAdmin),
+  sessionTimeoutStudent: z2.number().min(1, "Timeout must be at least 1 minute").default(defaultSystemSettings.sessionTimeoutStudent),
+  twoFactorAdminEnabled: z2.boolean().default(defaultSystemSettings.twoFactorAdminEnabled),
+  ipWhitelist: z2.string().optional().default(defaultSystemSettings.ipWhitelist),
+  emailNotificationsEnabled: z2.boolean().default(defaultSystemSettings.emailNotificationsEnabled),
+  smsNotificationsEnabled: z2.boolean().default(defaultSystemSettings.smsNotificationsEnabled),
+  notificationTemplates: z2.record(z2.string()).default(defaultSystemSettings.notificationTemplates),
+  disconnectGracePeriod: z2.number().min(0).default(defaultSystemSettings.disconnectGracePeriod),
+  heartbeatInterval: z2.number().min(1).default(defaultSystemSettings.heartbeatInterval),
+  tabSwitchDetectionEnabled: z2.boolean().default(defaultSystemSettings.tabSwitchDetectionEnabled),
+  autoSubmitOnExpiryGracePeriod: z2.number().min(0).default(defaultSystemSettings.autoSubmitOnExpiryGracePeriod),
+  dataRetentionPeriodDays: z2.number().min(1).default(defaultSystemSettings.dataRetentionPeriodDays),
+  backupFrequency: z2.enum(["daily", "weekly", "monthly", "none"]).default(defaultSystemSettings.backupFrequency),
+  testModeEnabled: z2.boolean().default(defaultSystemSettings.testModeEnabled),
+  auditLogVerbosity: z2.enum(["basic", "verbose", "debug"]).default(defaultSystemSettings.auditLogVerbosity),
+  auditLogRetentionDays: z2.number().min(1).default(defaultSystemSettings.auditLogRetentionDays),
+  auditLogRoles: z2.array(z2.string()).default(defaultSystemSettings.auditLogRoles),
+  analysisMode: z2.string().default(defaultSystemSettings.analysisMode),
+  timerWarning: z2.number().min(1).max(60).default(defaultSystemSettings.timerWarning),
+  conceptStrengthThreshold: z2.number().min(1).max(100).default(defaultSystemSettings.conceptStrengthThreshold),
+  conceptFocusThreshold: z2.number().min(1).max(100).default(defaultSystemSettings.conceptFocusThreshold),
+  termWeights: z2.object({
+    term1: z2.number().min(0).max(100),
+    term2: z2.number().min(0).max(100),
+    term3: z2.number().min(0).max(100)
   }).default(defaultSystemSettings.termWeights),
-  departmentSubjectMappings: z.record(z.array(z.string())).default(defaultSystemSettings.departmentSubjectMappings)
+  departmentSubjectMappings: z2.record(z2.array(z2.string())).default(defaultSystemSettings.departmentSubjectMappings)
 });
 var adminUsers = pgTable("admin_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -752,6 +811,8 @@ var MemStorage = class {
       }
     }
     const exam = {
+      academicSession: insertExam.academicSession ?? null,
+      academicTerm: insertExam.academicTerm ?? null,
       id,
       title: insertExam.title,
       description: insertExam.description ?? null,
@@ -804,6 +865,8 @@ var MemStorage = class {
     const id = randomUUID();
     const session = {
       ...insertSession,
+      academicSession: insertSession.academicSession ?? null,
+      academicTerm: insertSession.academicTerm ?? null,
       id,
       startedAt: /* @__PURE__ */ new Date(),
       endedAt: null,
@@ -856,6 +919,8 @@ var MemStorage = class {
     const id = randomUUID();
     const result = {
       ...insertResult,
+      academicSession: insertResult.academicSession ?? null,
+      academicTerm: insertResult.academicTerm ?? null,
       id,
       submissionType: insertResult.submissionType ?? null,
       completedAt: /* @__PURE__ */ new Date(),
@@ -1468,7 +1533,7 @@ var storage = process.env.DATABASE_URL ? new DatabaseStorage() : new MemStorage(
 
 // server/admin-dashboard.ts
 import { and as and2, count, eq as eq2 } from "drizzle-orm";
-import { z as z2 } from "zod";
+import { z as z3 } from "zod";
 
 // shared/admin-dashboard.ts
 var passRate = ({ passed, total }) => total ? Math.round(1e3 * passed / total) / 10 : 0;
@@ -1505,7 +1570,7 @@ function summarizeDashboard(results2) {
 }
 
 // server/admin-dashboard.ts
-var bannerSchema = z2.string().max(Math.ceil(5 * 1024 * 1024 / 3) * 4 + 23).regex(
+var bannerSchema = z3.string().max(Math.ceil(5 * 1024 * 1024 / 3) * 4 + 23).regex(
   /^(?:data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2})?$/
 );
 function registerAdminDashboard(app2, requireAdmin2) {
@@ -1645,24 +1710,27 @@ function readAuthCookie(req) {
 }
 
 // server/routes.ts
-import { z as z3 } from "zod";
+import { z as z4 } from "zod";
 import multer from "multer";
-import path2 from "path";
+import path3 from "path";
 import express from "express";
-import fs3 from "fs";
+import fs2 from "fs";
 
 // server/docx-reader.ts
-import fs2 from "fs";
+import path2 from "path";
 import mammoth from "mammoth";
-async function extractTextFromFile(filePath) {
-  if (filePath.endsWith(".txt") || filePath.endsWith(".csv")) {
-    return fs2.promises.readFile(filePath, "utf8");
-  } else if (filePath.endsWith(".docx")) {
-    const result = await mammoth.extractRawText({ path: filePath });
-    return result.value;
-  } else {
-    throw new Error("Unsupported file format. Please upload .txt, .csv or .docx");
-  }
+import WordExtractor from "word-extractor";
+async function extractDocument(buffer, filename) {
+  const ext = path2.extname(filename).toLowerCase();
+  if (buffer.length > 5 * 1024 * 1024) throw new Error("Document exceeds 5 MB.");
+  let text2;
+  if (ext === ".doc") text2 = (await new WordExtractor().extract(buffer)).getBody();
+  else if (ext === ".docx") text2 = (await mammoth.extractRawText({ buffer })).value;
+  else if (ext === ".txt" || ext === ".csv") text2 = buffer.toString("utf8");
+  else throw new Error("Supported formats: .doc, .docx, .txt and .csv");
+  if (!text2.trim()) throw new Error("No readable text found. Scanned documents need OCR before import.");
+  if (text2.length > 25e4) throw new Error("Document text is too large; split the paper into smaller files.");
+  return text2;
 }
 
 // server/routes.ts
@@ -2207,15 +2275,15 @@ async function refreshStudentAnalysis(result) {
 var upload = multer({
   storage: process.env.VERCEL ? multer.memoryStorage() : multer.diskStorage({
     destination: (req, file, cb) => {
-      const uploadDir = path2.join(process.cwd(), "uploads");
-      if (!fs3.existsSync(uploadDir)) {
-        fs3.mkdirSync(uploadDir, { recursive: true });
+      const uploadDir = path3.join(process.cwd(), "uploads");
+      if (!fs2.existsSync(uploadDir)) {
+        fs2.mkdirSync(uploadDir, { recursive: true });
       }
       cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
       const timestamp2 = Date.now();
-      const ext = path2.extname(file.originalname);
+      const ext = path3.extname(file.originalname);
       cb(null, `${timestamp2}-${file.originalname}`);
     }
   }),
@@ -2226,7 +2294,7 @@ var upload = multer({
 });
 async function registerRoutes(app2) {
   registerAdminDashboard(app2, requireAdmin);
-  app2.use("/uploads", express.static(path2.join(process.cwd(), "uploads")));
+  app2.use("/uploads", express.static(path3.join(process.cwd(), "uploads")));
   app2.post("/api/upload", upload.single("file"), (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
@@ -2328,7 +2396,7 @@ async function registerRoutes(app2) {
       const question = await storage.createQuestion(validatedData);
       res.status(201).json(question);
     } catch (error) {
-      if (error instanceof z3.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create question" });
@@ -2352,6 +2420,11 @@ async function registerRoutes(app2) {
             raw.options = raw.options.split("|").map((p) => p.trim()).filter(Boolean);
           }
         }
+        const validationErrors = importQuestionErrors(raw);
+        if (validationErrors.length) {
+          errors.push({ row: i, reason: validationErrors.join("; ") });
+          continue;
+        }
         const parsed = insertQuestionSchema.safeParse(raw);
         if (!parsed.success) {
           errors.push({ row: i, reason: JSON.stringify(parsed.error.errors) });
@@ -2359,6 +2432,7 @@ async function registerRoutes(app2) {
         }
         successes.push(parsed.data);
       }
+      if (errors.length) return res.status(400).json({ error: "Correct invalid rows before import", errors });
       const created = [];
       const chunkSize = 200;
       for (let i = 0; i < successes.length; i += chunkSize) {
@@ -2371,7 +2445,21 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to import questions" });
     }
   });
-  app2.post("/api/questions/import-ai", upload.single("file"), async (req, res) => {
+  const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+  app2.post("/api/questions/extract-document", (req, res, next) => {
+    if (requireAdmin(req, res)) next();
+  }, documentUpload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Choose a document." });
+      const text2 = await extractDocument(req.file.buffer, req.file.originalname);
+      res.json({ text: text2, warnings: ["Text extraction does not preserve diagrams or mathematical layout. Review the source document and attach required images before import."] });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Document extraction failed" });
+    }
+  });
+  app2.post("/api/questions/import-ai", (req, res, next) => {
+    if (requireAdmin(req, res)) next();
+  }, documentUpload.single("file"), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
       const defaultMeta = {
@@ -2384,19 +2472,19 @@ async function registerRoutes(app2) {
       let rawText = "";
       if (req.file) {
         console.log("AI Importer: Extracting text from file:", req.file.path);
-        rawText = await extractTextFromFile(req.file.path);
+        rawText = await extractDocument(req.file.buffer, req.file.originalname);
       } else if (req.body.rawText) {
         console.log("AI Importer: Extracting text from direct JSON request body.");
         rawText = req.body.rawText;
       } else {
         return res.status(400).json({ error: "No file uploaded and no direct rawText provided" });
       }
-      console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
+      if (typeof rawText !== "string" || !rawText.trim() || rawText.length > 5e4) return res.status(400).json({ error: "Provide 1\u201350,000 characters; split larger papers before AI import." });
+      const aiDeadline = AbortSignal.timeout(45e3);
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        console.warn("AI Importer: process.env.GEMINI_API_KEY is not defined. Falling back to local smart regex parser!");
-        const parsed = fallbackParseQuestions(rawText, defaultMeta);
-        return res.json(parsed);
+        console.warn("AI importer is not configured.");
+        return res.status(503).json({ error: "AI is not configured. Select the manual parser instead." });
       }
       const examTypeStr = String(defaultMeta.examType || "").toLowerCase();
       const isObjectives = examTypeStr.includes("objective") || examTypeStr.includes("obj");
@@ -2465,7 +2553,7 @@ Instructions:
 1. Extract ALL multiple choice questions.
 2. Extract or infer the academic term (e.g., 'First Term', 'Second Term') for each question from the document or context headers. If the term is not discernible from the document, fallback to "${defaultMeta.term}". If classLevel/subject metadata is missing, use classLevel="${defaultMeta.classLevel}" and subject="${defaultMeta.subject}".
 3. Parse the options carefully. Group each option into an array of strings formatted like: ["A) Option Text", "B) Option Text", ...]. E.g. ["A) Apple", "B) Banana", "C) Orange"].
-4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, or by reasoning through the question if not explicitly marked.
+4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, Never guess or solve a missing answer. Return an empty correctAnswer if the source does not supply a key.
 5. Do NOT include any answer lines, correct answer labels, or explanation lines (such as "Answer: B", "Ans: B", or "*B*") in the options array. The options array must strictly contain only the choices/options (A, B, C, D, etc.).
 6. questionType: Must be strictly 'multiple_choice'.
 7. examType: Must be strictly 'Objectives'.
@@ -2490,7 +2578,8 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 `;
       const targetChunkSize = 7e3;
       const textChunks = [];
-      const lines = rawText.split(/\r?\n/);
+      const { body: questionBody, keyText } = splitAnswerKey(rawText);
+      const lines = questionBody.split(/\r?\n/);
       let currentChunk = [];
       let currentLength = 0;
       for (const line of lines) {
@@ -2523,22 +2612,26 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 Document Content to Parse (Chunk ${chunkIndex + 1} of ${textChunks.length}):
 ---
 ${chunkText}
----`,
+---
+Answer key context (do not emit as questions):
+${keyText}`,
               config: {
+                abortSignal: aiDeadline,
                 responseMimeType: "application/json",
                 responseSchema: isObjectives ? objectivesSchema : theorySchema,
                 temperature: 0.1
               }
             });
             const parsed = JSON.parse(response.text || "{}");
-            const questions2 = parsed.questions || [];
+            if (!Array.isArray(parsed.questions) || parsed.questions.some((q) => !q || typeof q.questionText !== "string" || q.options !== void 0 && (!Array.isArray(q.options) || q.options.some((o) => typeof o !== "string")))) throw new Error("AI returned invalid questions; retry or use manual parsing.");
+            const questions2 = parsed.questions;
             console.log(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} parsed successfully. Found ${questions2.length} questions.`);
             return questions2;
           } catch (err) {
             attempt++;
             const errMsg = err instanceof Error ? err.message : String(err);
             const isNetworkError = errMsg.includes("fetch failed") || err.code === "ECONNRESET" || err.code === "ETIMEDOUT" || err.status === 429 || err.status >= 500;
-            if (attempt >= maxRetries || !isNetworkError) {
+            if (aiDeadline.aborted || attempt >= maxRetries || !isNetworkError) {
               console.error(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} failed permanently on attempt ${attempt}:`, errMsg);
               throw err;
             }
@@ -2548,8 +2641,10 @@ ${chunkText}
           }
         }
       };
-      const chunkPromises = textChunks.map((chunk, idx) => processChunk(chunk, idx));
-      const chunkResults = await Promise.all(chunkPromises);
+      const chunkResults = [];
+      for (let i = 0; i < textChunks.length; i += 2) {
+        chunkResults.push(...await Promise.all(textChunks.slice(i, i + 2).map((chunk, offset) => processChunk(chunk, i + offset))));
+      }
       const allQuestions = [];
       for (const questions2 of chunkResults) {
         allQuestions.push(...questions2);
@@ -2559,7 +2654,7 @@ ${chunkText}
     } catch (error) {
       console.error("AI Importer Error:", error);
       try {
-        fs3.writeFileSync(path2.join(process.cwd(), "server-error.log"), error instanceof Error ? `${error.message}
+        fs2.writeFileSync(path3.join(process.cwd(), "server-error.log"), error instanceof Error ? `${error.message}
 ${error.stack}` : String(error));
       } catch (logErr) {
         console.error("Failed to write server-error.log", logErr);
@@ -2570,57 +2665,6 @@ ${error.stack}` : String(error));
       });
     }
   });
-  function fallbackParseQuestions(text2, defaultMeta) {
-    const questions2 = [];
-    const lines = text2.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    let currentQuestion = null;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const questionMatch = line.match(/^(\d+)[\.\):]?\s*(.*)/);
-      if (questionMatch) {
-        if (currentQuestion) {
-          questions2.push(currentQuestion);
-        }
-        currentQuestion = {
-          classLevel: defaultMeta.classLevel || "SS3",
-          term: defaultMeta.term || "First Term",
-          examType: defaultMeta.examType || "Examination",
-          subject: defaultMeta.subject || "Biology",
-          questionText: questionMatch[2],
-          questionType: "multiple_choice",
-          difficulty: "Medium",
-          points: 1,
-          correctAnswer: "",
-          options: []
-        };
-      } else if (currentQuestion) {
-        const optionMatch = line.match(/^[\[\(]?([A-Da-d])[\.\]\)]\s*(.*)/);
-        if (optionMatch) {
-          const optText = optionMatch[2].replace(/\(correct\)/i, "").replace(/\*/g, "").trim();
-          currentQuestion.options.push(optText);
-          if (line.toLowerCase().includes("(correct)") || line.toLowerCase().includes("*")) {
-            currentQuestion.correctAnswer = optText;
-          }
-        } else {
-          currentQuestion.questionText += " " + line;
-        }
-      }
-    }
-    if (currentQuestion) {
-      questions2.push(currentQuestion);
-    }
-    questions2.forEach((q) => {
-      if (q.options.length === 0) {
-        q.questionType = "fill_in_the_blank";
-        q.correctAnswer = q.correctAnswer || "Answer";
-      } else {
-        if (!q.correctAnswer) {
-          q.correctAnswer = q.options[0];
-        }
-      }
-    });
-    return { questions: questions2 };
-  }
   app2.patch("/api/questions/:id", async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
@@ -2764,10 +2808,13 @@ ${error.stack}` : String(error));
         questionIds = pool2.slice(0, validatedData.numberOfQuestionsToDisplay).map((q) => q.id);
       }
       const examData = { ...validatedData, questionIds };
-      const exam = await storage.createExam(examData);
+      const calendarSettings = await storage.getSystemSettings();
+      const period = calendarSettings.academicCalendar.find((row) => row.session === calendarSettings.currentSession && row.term === examData.term);
+      if (!period) return res.status(400).json({ error: "Configure this session and term in School Settings before creating an exam." });
+      const exam = await storage.createExam({ ...examData, academicSession: period.session, academicTerm: period.term });
       res.status(201).json(exam);
     } catch (error) {
-      if (error instanceof z3.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create exam" });
@@ -2806,7 +2853,17 @@ ${error.stack}` : String(error));
   app2.patch("/api/exams/:id", async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
-      const exam = await storage.updateExam(req.params.id, req.body);
+      const existing = await storage.getExam(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Exam not found" });
+      const { academicSession: requestedSession, academicTerm: _ignoredTerm, ...updates } = req.body;
+      if (requestedSession !== void 0 || updates.term !== void 0 && updates.term !== existing.term) {
+        const settings = await storage.getSystemSettings();
+        const period = settings.academicCalendar.find((row) => row.session === (requestedSession || existing.academicSession || settings.currentSession) && row.term === (updates.term || existing.term));
+        if (!period) return res.status(400).json({ error: "Configure this session and term in School Calendar first." });
+        updates.academicSession = period.session;
+        updates.academicTerm = period.term;
+      }
+      const exam = await storage.updateExam(req.params.id, updates);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
       }
@@ -2955,10 +3012,12 @@ ${error.stack}` : String(error));
         ...sessionInput,
         sessionQuestionIds
       };
-      const session = await storage.createExamSession(sessionData);
+      const calendarSettings = await storage.getSystemSettings();
+      const period = calendarAssignment(/* @__PURE__ */ new Date(), calendarSettings.academicCalendar);
+      const session = await storage.createExamSession({ ...sessionData, academicSession: exam.academicSession || (period?.term === exam.term ? period.session : null), academicTerm: exam.academicTerm || (period?.term === exam.term ? period.term : null) });
       res.status(201).json(session);
     } catch (error) {
-      if (error instanceof z3.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error("Error creating exam session:", error);
@@ -3055,6 +3114,8 @@ ${error.stack}` : String(error));
       });
       const submissionType = req.body.submissionType || "student";
       const result = await storage.createResult({
+        academicSession: session.academicSession,
+        academicTerm: session.academicTerm,
         sessionId: session.id,
         examId: exam.id,
         studentName: session.studentName,
@@ -3654,7 +3715,7 @@ Return JSON with:
           throw new Error("worker_threads not supported in this environment");
         }
         const { Worker } = wt;
-        const worker = new Worker(path2.join(process.cwd(), "workers", "psychometricWorker.js"), {
+        const worker = new Worker(path3.join(process.cwd(), "workers", "psychometricWorker.js"), {
           workerData: workerPayload
         });
         worker.on("message", (computedData) => {
@@ -3740,11 +3801,11 @@ app.use((req, _res, next) => {
 });
 app.use((req, res, next) => {
   const start = Date.now();
-  const path3 = req.path;
+  const path4 = req.path;
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path3.startsWith("/api")) {
-      console.log(`${req.method} ${path3} ${res.statusCode} in ${duration}ms`);
+    if (path4.startsWith("/api")) {
+      console.log(`${req.method} ${path4} ${res.statusCode} in ${duration}ms`);
     }
   });
   next();

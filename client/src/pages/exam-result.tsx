@@ -259,7 +259,7 @@ export default function ExamResult() {
               class: student?.classLevel || "General",
               exam: exam?.title || "Exam Result",
               date: new Date(result.completedAt).toLocaleDateString(),
-              session: "2025/2026 ACADEMIC SESSION",
+              session: result.academicSession || "Unassigned historical session",
               studentName: result.studentName,
               studentId: result.studentId,
             }}

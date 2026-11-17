@@ -1,3 +1,4 @@
+import { schoolCalendarSchema, type SchoolCalendar } from "./school-calendar";
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -69,6 +70,8 @@ export interface SubjectSlot {
 
 // Exams Table
 export const exams = pgTable("exams", {
+  academicSession: text("academic_session"),
+  academicTerm: text("academic_term"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   description: text("description"),
@@ -120,6 +123,8 @@ export type Exam = typeof exams.$inferSelect;
 
 // Exam Sessions Table
 export const examSessions = pgTable("exam_sessions", {
+  academicSession: text("academic_session"),
+  academicTerm: text("academic_term"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   examId: varchar("exam_id").notNull(),
   studentName: text("student_name").notNull(),
@@ -158,6 +163,8 @@ export type ExamSession = typeof examSessions.$inferSelect;
 
 // Results Table
 export const results = pgTable("results", {
+  academicSession: text("academic_session"),
+  academicTerm: text("academic_term"),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sessionId: varchar("session_id").notNull().unique(),
   examId: varchar("exam_id").notNull(),
@@ -250,6 +257,7 @@ export const systemSettings = pgTable("system_settings", {
   schoolLogo: text("school_logo"),
   schoolAddress: text("school_address"),
   schoolContact: text("school_contact"),
+  academicCalendar: jsonb("academic_calendar").$type<SchoolCalendar>().notNull().default([]),
   currentSession: text("current_session").notNull().default("2025/2026"),
   termStart: text("term_start"),
   termEnd: text("term_end"),
@@ -323,6 +331,7 @@ export const defaultSystemSettings = {
   schoolLogo: "",
   schoolAddress: "123 Academy Way, Faith City",
   schoolContact: "+234 800 123 4567",
+  academicCalendar: [] as SchoolCalendar,
   currentSession: "2025/2026",
   termStart: "",
   termEnd: "",
@@ -381,6 +390,7 @@ export const systemSettingsSchema = z.object({
   schoolLogo: z.string().optional().default(defaultSystemSettings.schoolLogo),
   schoolAddress: z.string().optional().default(defaultSystemSettings.schoolAddress),
   schoolContact: z.string().optional().default(defaultSystemSettings.schoolContact),
+  academicCalendar: schoolCalendarSchema.default([]),
   currentSession: z.string().min(1, "Current Session is required").default(defaultSystemSettings.currentSession),
   termStart: z.string().optional().default(defaultSystemSettings.termStart),
   termEnd: z.string().optional().default(defaultSystemSettings.termEnd),

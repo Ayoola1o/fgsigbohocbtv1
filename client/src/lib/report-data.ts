@@ -43,8 +43,8 @@ export function termScores(results: Result[], exams: Exam[], questions: Question
     const exam = exams.find(e => e.id === result.examId);
     if (!exam) continue;
     for (const row of resultBreakdown(result, questions, exam)) {
-      const key = JSON.stringify([row.subject.toLowerCase(), exam.term]);
-      const group = groups.get(key) || { subject: row.subject, term: exam.term, score: 0, total: 0, percentage: 0 };
+      const key = JSON.stringify([row.subject.toLowerCase(), (result.academicTerm || exam.term)]);
+      const group = groups.get(key) || { subject: row.subject, term: (result.academicTerm || exam.term), score: 0, total: 0, percentage: 0 };
       group.score += row.correct; group.total += row.questions;
       group.percentage = group.total ? group.score / group.total * 100 : 0;
       groups.set(key, group);

@@ -1,3 +1,6 @@
+import { splitAnswerKey } from "../shared/question-text-parser";
+import { calendarAssignment } from "../shared/school-calendar";
+import { importQuestionErrors } from "../shared/question-import";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -19,7 +22,7 @@ import multer from "multer";
 import path from "path";
 import express from "express";
 import fs from "fs";
-import { extractTextFromFile } from "./docx-reader";
+import { extractTextFromFile, extractDocument } from "./docx-reader";
 import { GoogleGenAI } from "@google/genai";
 // @ts-ignore
 import { calculatePsychometrics } from "../workers/psychometricWorker.js";
@@ -275,6 +278,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        const validationErrors = importQuestionErrors(raw);
+        if (validationErrors.length) { errors.push({ row: i, reason: validationErrors.join('; ') }); continue; }
         const parsed = insertQuestionSchema.safeParse(raw);
         if (!parsed.success) {
           errors.push({ row: i, reason: JSON.stringify(parsed.error.errors) });
@@ -283,6 +288,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         successes.push(parsed.data);
       }
+
+      if (errors.length) return res.status(400).json({ error: "Correct invalid rows before import", errors });
 
       // Insert valid rows in chunks to avoid huge single inserts
       const created: any[] = [];
@@ -299,8 +306,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+  app.post('/api/questions/extract-document', (req, res, next) => { if (requireAdmin(req, res)) next(); }, documentUpload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'Choose a document.' });
+      const text = await extractDocument(req.file.buffer, req.file.originalname);
+      res.json({ text, warnings: ['Text extraction does not preserve diagrams or mathematical layout. Review the source document and attach required images before import.'] });
+    } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : 'Document extraction failed' }); }
+  });
+
   // Smart AI Question Importer Route
-  app.post("/api/questions/import-ai", upload.single("file"), async (req, res) => {
+  app.post("/api/questions/import-ai", (req, res, next) => { if (requireAdmin(req, res)) next(); }, documentUpload.single("file"), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
       // Metadata fallback from query / body
@@ -315,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let rawText = "";
       if (req.file) {
         console.log("AI Importer: Extracting text from file:", req.file.path);
-        rawText = await extractTextFromFile(req.file.path);
+        rawText = await extractDocument(req.file.buffer, req.file.originalname);
       } else if (req.body.rawText) {
         console.log("AI Importer: Extracting text from direct JSON request body.");
         rawText = req.body.rawText;
@@ -323,13 +339,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file uploaded and no direct rawText provided" });
       }
 
-      console.log("AI Importer: Extracted text successfully. Length:", rawText.length);
+      if (typeof rawText !== "string" || !rawText.trim() || rawText.length > 50000) return res.status(400).json({ error: "Provide 1–50,000 characters; split larger papers before AI import." });
+      const aiDeadline = AbortSignal.timeout(45000);
 
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        console.warn("AI Importer: process.env.GEMINI_API_KEY is not defined. Falling back to local smart regex parser!");
-        const parsed = fallbackParseQuestions(rawText, defaultMeta);
-        return res.json(parsed);
+        console.warn("AI importer is not configured.");
+        return res.status(503).json({ error: "AI is not configured. Select the manual parser instead." });
       }
 
       const examTypeStr = String(defaultMeta.examType || "").toLowerCase();
@@ -403,7 +419,7 @@ Instructions:
 1. Extract ALL multiple choice questions.
 2. Extract or infer the academic term (e.g., 'First Term', 'Second Term') for each question from the document or context headers. If the term is not discernible from the document, fallback to "${defaultMeta.term}". If classLevel/subject metadata is missing, use classLevel="${defaultMeta.classLevel}" and subject="${defaultMeta.subject}".
 3. Parse the options carefully. Group each option into an array of strings formatted like: ["A) Option Text", "B) Option Text", ...]. E.g. ["A) Apple", "B) Banana", "C) Orange"].
-4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, or by reasoning through the question if not explicitly marked.
+4. Correct answers must be formatted as exactly the uppercase letter corresponding to the correct option, e.g. "A", "B", "C", "D" etc., deduced from key markings or downstream answers if present, Never guess or solve a missing answer. Return an empty correctAnswer if the source does not supply a key.
 5. Do NOT include any answer lines, correct answer labels, or explanation lines (such as "Answer: B", "Ans: B", or "*B*") in the options array. The options array must strictly contain only the choices/options (A, B, C, D, etc.).
 6. questionType: Must be strictly 'multiple_choice'.
 7. examType: Must be strictly 'Objectives'.
@@ -430,7 +446,8 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       // Split rawText into smaller chunks to prevent timeout issues (ECONNRESET) on large documents
       const targetChunkSize = 7000;
       const textChunks: string[] = [];
-      const lines = rawText.split(/\r?\n/);
+      const { body: questionBody, keyText } = splitAnswerKey(rawText);
+      const lines = questionBody.split(/\r?\n/);
       let currentChunk: string[] = [];
       let currentLength = 0;
 
@@ -465,8 +482,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
             console.log(`AI Importer: Sending chunk ${chunkIndex + 1}/${textChunks.length} to Gemini (Attempt ${attempt + 1})...`);
             const response = await ai.models.generateContent({
               model: "gemini-2.5-flash",
-              contents: `${prompt}\n\nDocument Content to Parse (Chunk ${chunkIndex + 1} of ${textChunks.length}):\n---\n${chunkText}\n---`,
+              contents: `${prompt}\n\nDocument Content to Parse (Chunk ${chunkIndex + 1} of ${textChunks.length}):\n---\n${chunkText}\n---\nAnswer key context (do not emit as questions):\n${keyText}`,
               config: {
+                abortSignal: aiDeadline,
                 responseMimeType: "application/json",
                 responseSchema: isObjectives ? objectivesSchema : theorySchema,
                 temperature: 0.1
@@ -474,7 +492,8 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
             });
 
             const parsed = JSON.parse(response.text || '{}');
-            const questions = parsed.questions || [];
+            if (!Array.isArray(parsed.questions) || parsed.questions.some((q: any) => !q || typeof q.questionText !== "string" || (q.options !== undefined && (!Array.isArray(q.options) || q.options.some((o: any) => typeof o !== "string"))))) throw new Error("AI returned invalid questions; retry or use manual parsing.");
+            const questions = parsed.questions;
             console.log(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} parsed successfully. Found ${questions.length} questions.`);
             return questions;
           } catch (err: any) {
@@ -486,7 +505,7 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
                                    err.status === 429 ||
                                    err.status >= 500;
 
-            if (attempt >= maxRetries || !isNetworkError) {
+            if (aiDeadline.aborted || attempt >= maxRetries || !isNetworkError) {
               console.error(`AI Importer: Chunk ${chunkIndex + 1}/${textChunks.length} failed permanently on attempt ${attempt}:`, errMsg);
               throw err;
             }
@@ -499,8 +518,10 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       };
 
       // Process all chunks in parallel
-      const chunkPromises = textChunks.map((chunk, idx) => processChunk(chunk, idx));
-      const chunkResults = await Promise.all(chunkPromises);
+      const chunkResults: any[][] = [];
+      for (let i = 0; i < textChunks.length; i += 2) {
+        chunkResults.push(...await Promise.all(textChunks.slice(i, i + 2).map((chunk, offset) => processChunk(chunk, i + offset))));
+      }
 
       const allQuestions: any[] = [];
       for (const questions of chunkResults) {
@@ -522,69 +543,6 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       });
     }
   });
-
-  // Local Smart Regex Fallback Parser
-  function fallbackParseQuestions(text: string, defaultMeta: any) {
-    const questions: any[] = [];
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    
-    let currentQuestion: any = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Match "1. What is...", "Q2: ...", "3) ..."
-      const questionMatch = line.match(/^(\d+)[\.\):]?\s*(.*)/);
-      
-      if (questionMatch) {
-        if (currentQuestion) {
-          questions.push(currentQuestion);
-        }
-        currentQuestion = {
-          classLevel: defaultMeta.classLevel || "SS3",
-          term: defaultMeta.term || "First Term",
-          examType: defaultMeta.examType || "Examination",
-          subject: defaultMeta.subject || "Biology",
-          questionText: questionMatch[2],
-          questionType: "multiple_choice",
-          difficulty: "Medium",
-          points: 1,
-          correctAnswer: "",
-          options: []
-        };
-      } else if (currentQuestion) {
-        // Match "A. Option", "b) Option", "[C] Option"
-        const optionMatch = line.match(/^[\[\(]?([A-Da-d])[\.\]\)]\s*(.*)/);
-        if (optionMatch) {
-          const optText = optionMatch[2].replace(/\(correct\)/i, "").replace(/\*/g, "").trim();
-          currentQuestion.options.push(optText);
-          if (line.toLowerCase().includes("(correct)") || line.toLowerCase().includes("*")) {
-            currentQuestion.correctAnswer = optText;
-          }
-        } else {
-          currentQuestion.questionText += " " + line;
-        }
-      }
-    }
-    
-    if (currentQuestion) {
-      questions.push(currentQuestion);
-    }
-    
-    // Clean up answers and options
-    questions.forEach(q => {
-      if (q.options.length === 0) {
-        q.questionType = "fill_in_the_blank";
-        q.correctAnswer = q.correctAnswer || "Answer";
-      } else {
-        if (!q.correctAnswer) {
-          q.correctAnswer = q.options[0];
-        }
-      }
-    });
-    
-    return { questions };
-  }
-
 
   app.patch("/api/questions/:id", async (req, res) => {
     try {
@@ -748,7 +706,10 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
       }
 
       const examData = { ...validatedData, questionIds } as any;
-      const exam = await storage.createExam(examData);
+      const calendarSettings = await storage.getSystemSettings();
+      const period = calendarSettings.academicCalendar.find(row => row.session === calendarSettings.currentSession && row.term === examData.term);
+      if (!period) return res.status(400).json({ error: 'Configure this session and term in School Settings before creating an exam.' });
+      const exam = await storage.createExam({ ...examData, academicSession: period.session, academicTerm: period.term });
       res.status(201).json(exam);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -799,7 +760,17 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
   app.patch("/api/exams/:id", async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
-      const exam = await storage.updateExam(req.params.id, req.body);
+      const existing = await storage.getExam(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Exam not found" });
+      const { academicSession: requestedSession, academicTerm: _ignoredTerm, ...updates } = req.body;
+      if (requestedSession !== undefined || (updates.term !== undefined && updates.term !== existing.term)) {
+        const settings = await storage.getSystemSettings();
+        const period = settings.academicCalendar.find(row => row.session === (requestedSession || existing.academicSession || settings.currentSession) && row.term === (updates.term || existing.term));
+        if (!period) return res.status(400).json({ error: "Configure this session and term in School Calendar first." });
+        updates.academicSession = period.session;
+        updates.academicTerm = period.term;
+      }
+      const exam = await storage.updateExam(req.params.id, updates);
       if (!exam) {
         return res.status(404).json({ error: "Exam not found" });
       }
@@ -979,7 +950,9 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
         sessionQuestionIds,
       }
 
-      const session = await storage.createExamSession(sessionData);
+      const calendarSettings = await storage.getSystemSettings();
+      const period = calendarAssignment(new Date(), calendarSettings.academicCalendar);
+      const session = await storage.createExamSession({ ...sessionData, academicSession: exam.academicSession || (period?.term === exam.term ? period.session : null), academicTerm: exam.academicTerm || (period?.term === exam.term ? period.term : null) });
       res.status(201).json(session);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1094,6 +1067,8 @@ Strictly adhere to the provided JSON schema. Ensure 100% of questions are extrac
 
       // Create result
       const result = await storage.createResult({
+        academicSession: session.academicSession,
+        academicTerm: session.academicTerm,
         sessionId: session.id,
         examId: exam.id,
         studentName: session.studentName,

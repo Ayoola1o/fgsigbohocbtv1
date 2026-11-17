@@ -1,3 +1,4 @@
+import { resultPeriod } from "@shared/school-calendar";
 import { printDocument } from "@/lib/print-document";
 import { resultBreakdown, latestAttempts, termScores, annualScores, studentKey } from "@/lib/report-data";
 import { useState, useEffect, useMemo } from "react";
@@ -203,7 +204,7 @@ export default function AdminResults() {
   };
 
 
-  const { data: results, isLoading: resultsLoading, error: resultsError } = useQuery<Result[]>({
+  const { data: allResults, isLoading: resultsLoading, error: resultsError } = useQuery<Result[]>({
     queryKey: ["/api/results"],
     queryFn: async () => {
       console.log("AdminResults: Fetching results...");
@@ -219,6 +220,10 @@ export default function AdminResults() {
   });
 
   const { data: reportSettings } = useQuery<typeof defaultSystemSettings>({ queryKey: ["/api/settings"] });
+  const [reportSession, setReportSession] = useState('');
+  const selectedReportSession = reportSession || reportSettings?.currentSession || '';
+  const results = useMemo(() => allResults?.filter(result => resultPeriod(result, reportSettings?.academicCalendar || [])?.session === selectedReportSession).map(result => ({ ...result, academicSession: selectedReportSession, academicTerm: resultPeriod(result, reportSettings?.academicCalendar || [])?.term || null })), [allResults, reportSettings, selectedReportSession]);
+  const unresolvedResults = allResults?.filter(result => !resultPeriod(result, reportSettings?.academicCalendar || [])).length || 0;
   const { data: exams } = useQuery<Exam[]>({
     queryKey: ["/api/exams"],
   });
@@ -276,7 +281,7 @@ export default function AdminResults() {
         const dateMatch = (!dateRange.from || completedDate >= dateRange.from) &&
           (!dateRange.to || completedDate <= dateRange.to);
 
-        const examTerm = exam?.term || (result as any).term || "First Term";
+        const examTerm = result.academicTerm || exam?.term || (result as any).term || "First Term";
         const termMatch = filterTerm === "ALL" || examTerm === filterTerm;
 
         return examMatch && searchMatch && classLevelMatch && departmentMatch && statusMatch && examTypeMatch && scoreRangeMatch && dateMatch && termMatch;
@@ -519,7 +524,7 @@ const printData = {
             class: printData.candidate.gradeLevel,
             exam: printData.examTitle,
             date: printData.candidate.date,
-            session: "2025/2026 ACADEMIC SESSION",
+            session: selectedReportSession,
             studentName: printData.candidate.name,
             studentId: printData.candidate.studentId,
           }}
@@ -598,7 +603,7 @@ const printData = {
             class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
             exam: exam?.title || "General Examination",
             date: new Date().toLocaleDateString(),
-            session: "2025/2026 ACADEMIC SESSION"
+            session: selectedReportSession
           }}
           results={studentResults}
           onPrint={() => {
@@ -719,7 +724,7 @@ const printData = {
             class: filterClassLevel === "ALL" ? "All Classes" : filterClassLevel,
             exam: searchQuery ? `Query: ${searchQuery}` : (filterExamId !== "ALL" ? getExamTitle(filterExamId) : "Multi-Exam Assessment"),
             date: new Date().toLocaleDateString(),
-            session: "2025/2026 ACADEMIC SESSION"
+            session: selectedReportSession
           }}
           matrixHeaders={matrixHeaders}
           matrixRows={matrixRows}
@@ -947,7 +952,7 @@ const printData = {
             class: selectedMultiClass === "ALL" ? "All Classes" : selectedMultiClass,
             exam: `${exam.title} — [Subject: ${selectedMultiSubject.toUpperCase()}]`,
             date: format(new Date(), "dd MMM, yyyy"),
-            session: "2025/2026 ACADEMIC SESSION"
+            session: selectedReportSession
           }}
           results={printRows}
           onPrint={() => void printDocument(printWindow)}
@@ -1048,7 +1053,7 @@ return {
                     class: data.candidate.gradeLevel,
                     exam: data.examTitle,
                     date: data.candidate.date,
-                    session: "2025/2026 ACADEMIC SESSION",
+                    session: selectedReportSession,
                     studentName: data.candidate.name,
                     studentId: data.candidate.studentId,
                   }}
@@ -1142,7 +1147,7 @@ return {
           studentId: studentId,
           classLevel: studentObj?.classLevel || "General",
           department: studentObj?.department || "General",
-          session: "2025/2026 ACADEMIC SESSION",
+          session: selectedReportSession,
           exams: group.results.map(r => ({
             id: r.examId,
             name: getExamTitle(r.examId),
@@ -1286,6 +1291,7 @@ return {
 
     targetStudents.forEach(student => {
       const expectedExams = exams.filter(e => {
+        if (e.academicSession !== selectedReportSession) return false;
         if (missingExamSelectionMode === 'custom') {
           if (!missingCustomExamIds.includes(e.id)) return false;
         } else {
@@ -1343,7 +1349,7 @@ return {
             class: missingSelectedClass === 'ALL' ? 'All Classes' : missingSelectedClass,
             exam: missingSelectedExamId === 'ALL' ? 'All Exams' : (exams.find(e => e.id === missingSelectedExamId)?.title || 'Selected Exam'),
             date: new Date().toLocaleDateString(),
-            session: "2025/2026 ACADEMIC SESSION",
+            session: selectedReportSession,
             term: missingSelectedTerm === 'ALL' ? 'All Terms' : missingSelectedTerm
           }}
           missingExamRows={missingRows}
@@ -1415,7 +1421,7 @@ return {
                 class: studentObj.classLevel,
                 exam: "Annual Academic Broadsheet",
                 date: new Date().toLocaleDateString(),
-                session: "2025/2026 ACADEMIC SESSION",
+                session: selectedReportSession,
                 studentName: studentObj.name,
                 studentId: studentObj.studentId,
                 department: studentObj.department || "General"
@@ -1456,7 +1462,7 @@ return {
                 class: studentObj.classLevel,
                 exam: "Term-by-Term Performance Breakdown",
                 date: new Date().toLocaleDateString(),
-                session: "2025/2026 ACADEMIC SESSION",
+                session: selectedReportSession,
                 studentName: studentObj.name,
                 studentId: studentObj.studentId,
                 department: studentObj.department || "General"
@@ -1480,7 +1486,7 @@ return {
           // Term filter — 'ALL' means include ALL terms (show full academic year)
           if (broadsheetSelectedTerm !== 'ALL') {
             const ex = exams?.find(e => e.id === r.examId);
-            if ((ex?.term || 'First Term') !== broadsheetSelectedTerm) return false;
+            if ((r.academicTerm || ex?.term || 'First Term') !== broadsheetSelectedTerm) return false;
           }
           // Subject eligibility — skip exams this student's department does not offer
           const ex = exams?.find(e => e.id === r.examId);
@@ -1560,7 +1566,7 @@ return {
               class: broadsheetSelectedClass === 'ALL' ? 'All Classes' : broadsheetSelectedClass,
               exam: "Official Class Academic Broadsheet",
               date: new Date().toLocaleDateString(),
-              session: "2025/2026 ACADEMIC SESSION",
+              session: selectedReportSession,
               department: broadsheetSelectedDept === 'ALL' ? 'All Departments' : broadsheetSelectedDept,
               term: broadsheetSelectedTerm === 'ALL' ? 'All Terms' : broadsheetSelectedTerm
             }}
@@ -1620,6 +1626,8 @@ return {
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>Results & Performance Analytics</span>
             </div>
+            <label className="block">Report academic session<select className="text-slate-900 ml-2" value={selectedReportSession} onChange={e => setReportSession(e.target.value)}>{Array.from(new Set([reportSettings?.currentSession || '', ...(reportSettings?.academicCalendar || []).map(row => row.session)])).filter(Boolean).map(session => <option key={session}>{session}</option>)}</select></label>
+            {unresolvedResults > 0 && <p>{unresolvedResults} results have no matching calendar period and are excluded. Add their historical term dates in School Settings.</p>}
             <h1 className="text-2.5xl sm:text-3.5xl font-black tracking-tight mt-1.5 leading-tight">
               Exam Results Overview
             </h1>

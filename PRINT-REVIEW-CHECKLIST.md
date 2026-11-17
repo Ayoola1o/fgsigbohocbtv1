@@ -7,7 +7,7 @@ Calculation policy: latest completed attempt per student/exam; equal weighting a
 - [x] 3. Require explicit student/exam selection; guard loading/error states; distinguish missing and incomplete attempts.
 - [x] 4. Use school settings for identity, academic session, signatures, score format and passing threshold.
 - [x] 5. Render exam-paper content and share reliable print preparation; correct pagination and page margins.
-- [ ] 6. Verify calculation edge cases, TypeScript and production build; record any remaining limitations.
+- [x] 6. Verify calculation edge cases, TypeScript and production build; record any remaining limitations.
 
 
 Validation and limitations
@@ -16,7 +16,7 @@ Validation and limitations
 - Production build passed. Final TypeScript validation recorded separately in the task response.
 - Browser/PDF visual inspection is still outstanding; page margins, repeated table headers and report boundaries are implemented but not visually certified.
 - Historical question details are not snapshotted. If recorded points cannot be reconciled, print the saved overall score rather than a fabricated subject breakdown.
-- Academic-year and branding snapshots do not exist on results. Headers use current school settings; annual reports aggregate recorded terms, and cannot distinguish multiple historical academic years without a schema/data migration.
+- Calendar migration adds session/term snapshots for new exams, attempts and results. Reports select one academic session; legacy results are matched by completion date only where the configured calendar covers them. Branding still uses current settings. Migration must precede deployment.
 - No production data or schema was changed.
 
 Remaining verification: visual print preview for all report types. Automated calculation checks and production build have passed.

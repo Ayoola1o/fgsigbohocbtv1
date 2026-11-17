@@ -275,6 +275,8 @@ export class MemStorage implements IStorage {
     }
 
     const exam: Exam = {
+      academicSession: insertExam.academicSession ?? null,
+      academicTerm: insertExam.academicTerm ?? null,
       id,
       title: insertExam.title,
       description: insertExam.description ?? null,
@@ -343,6 +345,8 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const session: ExamSession = {
       ...insertSession,
+      academicSession: insertSession.academicSession ?? null,
+      academicTerm: insertSession.academicTerm ?? null,
       id,
       startedAt: new Date(),
       endedAt: null,
@@ -406,6 +410,8 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const result: Result = {
       ...insertResult,
+      academicSession: insertResult.academicSession ?? null,
+      academicTerm: insertResult.academicTerm ?? null,
       id,
       submissionType: insertResult.submissionType ?? null,
       completedAt: new Date(),

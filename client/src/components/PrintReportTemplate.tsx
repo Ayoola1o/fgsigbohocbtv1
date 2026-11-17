@@ -120,7 +120,7 @@ export const PrintReportTemplate: React.FC<PrintReportTemplateProps> = ({
     }, queryClient);
     const schoolInfo = { ...suppliedSchoolInfo, name: settings?.schoolName || suppliedSchoolInfo.name,
         address: settings?.schoolAddress || '', logoUrl: settings?.schoolLogo || undefined };
-    const metadata = { ...suppliedMetadata, session: settings?.currentSession || 'Not configured' };
+    const metadata = { ...suppliedMetadata, session: suppliedMetadata.session || settings?.currentSession || 'Not configured' };
     const omitExamTitlesSetting = settings?.omitExamTitles ?? false;
     const principalSignatureSetting = settings?.reportSignature ?? true;
     const schoolSloganSetting = settings?.schoolMotto ?? true;

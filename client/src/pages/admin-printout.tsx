@@ -1,3 +1,5 @@
+import { resultPeriod } from "@shared/school-calendar";
+import type { SystemSettings } from "@shared/schema";
 import { printDocument } from "@/lib/print-document";
 import { resultBreakdown, latestAttempts, termScores, annualScores, studentKey } from "@/lib/report-data";
 import { useState } from "react";
@@ -19,13 +21,14 @@ export default function AdminPrintout() {
   const { data: exams } = useQuery<any[]>({ queryKey: ["/api/exams"] });
   const { data: questions } = useQuery<any[]>({ queryKey: ["/api/questions"] });
 
+  const { data: settings } = useQuery<SystemSettings>({ queryKey: ["/api/settings"] });
   // Filter students by class level
   const filteredStudents = students?.filter(s => selectedClassLevel && !s.isTestUser && s.classLevel === selectedClassLevel) || [];
 
   // Prepare data for printout
   const printoutData = filteredStudents.map(student => {
     // Latest completed attempt for the selected examination.
-    const studentResults = latestAttempts((results || []).filter(r => studentKey(r.studentId) === studentKey(student.studentId) && r.examId === selectedExamId));
+    const studentResults = latestAttempts((results || []).filter(r => studentKey(r.studentId) === studentKey(student.studentId) && r.examId === selectedExamId && resultPeriod(r, settings?.academicCalendar || [])?.session === settings?.currentSession));
     if (studentResults.length === 0) return null;
 
     // Sort by date desc
@@ -97,7 +100,7 @@ return {
             </div>
             <div className="w-64 space-y-2"><label>Examination / Term</label>
               <Select value={selectedExamId} onValueChange={setSelectedExamId}><SelectTrigger><SelectValue placeholder="Select examination" /></SelectTrigger><SelectContent>
-                {exams?.filter(exam => exam.classLevel === selectedClassLevel).map(exam => <SelectItem key={exam.id} value={exam.id}>{exam.title} — {exam.term}</SelectItem>)}
+                {exams?.filter(exam => exam.classLevel === selectedClassLevel && (!exam.academicSession || exam.academicSession === settings?.currentSession)).map(exam => <SelectItem key={exam.id} value={exam.id}>{exam.title} — {exam.term}</SelectItem>)}
               </SelectContent></Select></div>
             <Button
               onClick={async () => { setIsGenerating(true); try { await printDocument(window); } finally { setIsGenerating(false); } }}
@@ -133,7 +136,7 @@ return {
                 class: data.candidate.gradeLevel,
                 exam: data.examTitle,
                 date: data.candidate.date,
-                session: "2025/2026 ACADEMIC SESSION",
+                session: settings?.currentSession || "Unassigned",
                 studentName: data.candidate.name,
                 studentId: data.candidate.studentId,
               }}
